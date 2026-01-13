@@ -56,7 +56,6 @@ class Submission(Base):
     # Relationships
     student = relationship("User", back_populates="submissions")
     variant = relationship("TestVariant", back_populates="submissions")
-    test_variant = relationship("Test", secondary="test_variants", viewonly=True)
     answers = relationship(
         "Answer",
         back_populates="submission",

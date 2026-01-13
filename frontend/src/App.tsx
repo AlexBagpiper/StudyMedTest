@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import { useLocale } from './contexts/LocaleContext'
 
 // Layouts
 import MainLayout from './layouts/MainLayout'
@@ -14,6 +15,7 @@ import TestDetailPage from './pages/tests/TestDetailPage'
 import QuestionsPage from './pages/questions/QuestionsPage'
 import SubmissionsPage from './pages/submissions/SubmissionsPage'
 import ProfilePage from './pages/ProfilePage'
+import AdminPage from './pages/admin/AdminPage'
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,6 +34,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   const { user } = useAuth()
+  const { t } = useLocale()
 
   return (
     <Routes>
@@ -55,10 +58,11 @@ function App() {
         <Route path="/questions" element={<QuestionsPage />} />
         <Route path="/submissions" element={<SubmissionsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Route>
 
       {/* 404 */}
-      <Route path="*" element={<div>404 - Страница не найдена</div>} />
+      <Route path="*" element={<div>{t('common.notFound')}</div>} />
     </Routes>
   )
 }

@@ -1,21 +1,25 @@
 import { Outlet } from 'react-router-dom'
-import { Box, AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar, Menu, MenuItem } from '@mui/material'
+import { Box, AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar, Menu, MenuItem, Divider, ToggleButtonGroup, ToggleButton } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import QuizIcon from '@mui/icons-material/Quiz'
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer'
 import AssignmentIcon from '@mui/icons-material/Assignment'
+import LanguageIcon from '@mui/icons-material/Language'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocale, Locale } from '../contexts/LocaleContext'
 
 const DRAWER_WIDTH = 240
 
 export default function MainLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [langAnchorEl, setLangAnchorEl] = useState<null | HTMLElement>(null)
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { t, formatName, formatRole, locale, setLocale } = useLocale()
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
@@ -34,13 +38,32 @@ export default function MainLayout() {
     logout()
   }
 
+  const handleLangMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setLangAnchorEl(event.currentTarget)
+  }
+
+  const handleLangMenuClose = () => {
+    setLangAnchorEl(null)
+  }
+
+  const handleLocaleChange = (newLocale: Locale) => {
+    setLocale(newLocale)
+    handleLangMenuClose()
+  }
+
+  const displayName = user 
+    ? formatName(user.last_name, user.first_name, user.middle_name)
+    : ''
+
+  const displayRole = user ? formatRole(user.role) : ''
+
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-    { text: 'Тесты', icon: <QuizIcon />, path: '/tests' },
+    { text: t('nav.dashboard'), icon: <DashboardIcon />, path: '/' },
+    { text: t('nav.tests'), icon: <QuizIcon />, path: '/tests' },
     ...(user?.role !== 'student' ? [
-      { text: 'Вопросы', icon: <QuestionAnswerIcon />, path: '/questions' },
+      { text: t('nav.questions'), icon: <QuestionAnswerIcon />, path: '/questions' },
     ] : []),
-    { text: 'Результаты', icon: <AssignmentIcon />, path: '/submissions' },
+    { text: t('nav.submissions'), icon: <AssignmentIcon />, path: '/submissions' },
   ]
 
   const drawer = (
@@ -52,7 +75,7 @@ export default function MainLayout() {
       </Toolbar>
       <List>
         {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
+          <ListItem key={item.path} disablePadding>
             <ListItemButton onClick={() => navigate(item.path)}>
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
@@ -83,12 +106,35 @@ export default function MainLayout() {
             MedTest Platform
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Переключатель языка */}
+            <IconButton color="inherit" onClick={handleLangMenuOpen} size="small">
+              <LanguageIcon />
+            </IconButton>
+            <Menu
+              anchorEl={langAnchorEl}
+              open={Boolean(langAnchorEl)}
+              onClose={handleLangMenuClose}
+            >
+              <MenuItem 
+                onClick={() => handleLocaleChange('ru')}
+                selected={locale === 'ru'}
+              >
+                Русский
+              </MenuItem>
+              <MenuItem 
+                onClick={() => handleLocaleChange('en')}
+                selected={locale === 'en'}
+              >
+                English
+              </MenuItem>
+            </Menu>
+
             <Typography variant="body2">
-              {user?.full_name} ({user?.role})
+              {displayName} ({displayRole})
             </Typography>
             <IconButton onClick={handleProfileMenuOpen} size="small">
               <Avatar sx={{ width: 32, height: 32 }}>
-                {user?.full_name.charAt(0).toUpperCase()}
+                {user?.last_name?.charAt(0).toUpperCase()}
               </Avatar>
             </IconButton>
           </Box>
@@ -101,9 +147,9 @@ export default function MainLayout() {
         onClose={handleProfileMenuClose}
       >
         <MenuItem onClick={() => { navigate('/profile'); handleProfileMenuClose(); }}>
-          Профиль
+          {t('nav.profile')}
         </MenuItem>
-        <MenuItem onClick={handleLogout}>Выйти</MenuItem>
+        <MenuItem onClick={handleLogout}>{t('nav.logout')}</MenuItem>
       </Menu>
 
       <Box
@@ -148,4 +194,3 @@ export default function MainLayout() {
     </Box>
   )
 }
-

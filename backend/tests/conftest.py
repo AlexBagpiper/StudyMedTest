@@ -72,7 +72,9 @@ async def test_user(db: AsyncSession) -> User:
     user = User(
         email="test@example.com",
         password_hash=get_password_hash("testpassword"),
-        full_name="Test User",
+        last_name="Тестов",
+        first_name="Тест",
+        middle_name="Тестович",
         role="student",
         is_active=True,
     )
@@ -88,7 +90,9 @@ async def test_teacher(db: AsyncSession) -> User:
     user = User(
         email="teacher@example.com",
         password_hash=get_password_hash("teacherpassword"),
-        full_name="Test Teacher",
+        last_name="Учителев",
+        first_name="Учитель",
+        middle_name="Учителевич",
         role="teacher",
         is_active=True,
     )
@@ -104,7 +108,9 @@ async def test_admin(db: AsyncSession) -> User:
     user = User(
         email="admin@example.com",
         password_hash=get_password_hash("adminpassword"),
-        full_name="Test Admin",
+        last_name="Админов",
+        first_name="Админ",
+        middle_name="Админович",
         role="admin",
         is_active=True,
     )
@@ -129,3 +135,43 @@ def auth_headers_teacher(test_teacher: User) -> dict:
     token = create_access_token(str(test_teacher.id), additional_claims={"role": test_teacher.role})
     return {"Authorization": f"Bearer {token}"}
 
+
+@pytest.fixture
+def auth_headers_admin(test_admin: User) -> dict:
+    """Get auth headers for admin"""
+    from app.core.security import create_access_token
+    token = create_access_token(str(test_admin.id), additional_claims={"role": test_admin.role})
+    return {"Authorization": f"Bearer {token}"}
+
+
+# Aliases for test_admin_users.py compatibility
+@pytest.fixture
+async def async_client(client: AsyncClient) -> AsyncClient:
+    """Alias for client fixture"""
+    return client
+
+
+@pytest.fixture
+async def db_session(db: AsyncSession) -> AsyncSession:
+    """Alias for db fixture"""
+    return db
+
+
+@pytest.fixture
+async def admin_user(test_admin: User) -> User:
+    """Alias for test_admin fixture"""
+    return test_admin
+
+
+@pytest.fixture
+def admin_token(test_admin: User) -> str:
+    """Get admin token"""
+    from app.core.security import create_access_token
+    return create_access_token(str(test_admin.id), additional_claims={"role": test_admin.role})
+
+
+@pytest.fixture
+def teacher_token(test_teacher: User) -> str:
+    """Get teacher token"""
+    from app.core.security import create_access_token
+    return create_access_token(str(test_teacher.id), additional_claims={"role": test_teacher.role})

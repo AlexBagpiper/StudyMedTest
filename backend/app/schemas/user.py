@@ -16,25 +16,47 @@ class UserBase(BaseModel):
     Базовая схема пользователя
     """
     email: EmailStr
-    full_name: str = Field(..., min_length=1, max_length=255)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    first_name: str = Field(..., min_length=1, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=100)
     role: Role = Role.STUDENT
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
     """
     Схема для создания пользователя
     """
-    password: str = Field(..., min_length=8, max_length=100)
+    email: EmailStr
+    last_name: str = Field(..., min_length=1, max_length=100)
+    first_name: str = Field(..., min_length=1, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
+    role: Optional[Role] = Role.STUDENT
 
 
 class UserUpdate(BaseModel):
     """
-    Схема для обновления пользователя
+    Схема для обновления пользователя (email нельзя менять без подтверждения)
     """
-    email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    password: Optional[str] = Field(None, min_length=8, max_length=100)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    first_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=100)
+    password: Optional[str] = Field(None, min_length=6, max_length=100)
     is_active: Optional[bool] = None
+
+
+class EmailChangeRequest(BaseModel):
+    """
+    Запрос на смену email
+    """
+    new_email: EmailStr
+
+
+class EmailChangeConfirm(BaseModel):
+    """
+    Подтверждение смены email
+    """
+    code: str = Field(..., min_length=6, max_length=6)
 
 
 class UserInDB(UserBase):

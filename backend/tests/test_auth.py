@@ -15,7 +15,9 @@ async def test_register_student(client: AsyncClient):
         json={
             "email": "newstudent@example.com",
             "password": "password123",
-            "full_name": "New Student",
+            "last_name": "Студентов",
+            "first_name": "Новый",
+            "middle_name": "Студентович",
             "role": "student",
         },
     )
@@ -23,6 +25,8 @@ async def test_register_student(client: AsyncClient):
     data = response.json()
     assert data["email"] == "newstudent@example.com"
     assert data["role"] == "student"
+    assert data["last_name"] == "Студентов"
+    assert data["first_name"] == "Новый"
 
 
 @pytest.mark.asyncio
@@ -33,7 +37,8 @@ async def test_register_duplicate_email(client: AsyncClient, test_user):
         json={
             "email": test_user.email,
             "password": "password123",
-            "full_name": "Duplicate User",
+            "last_name": "Дубликатов",
+            "first_name": "Дублик",
             "role": "student",
         },
     )

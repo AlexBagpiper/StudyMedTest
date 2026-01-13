@@ -66,6 +66,7 @@ export const theme = createTheme({
           fontWeight: 500,
           borderRadius: 8,
         },
+
       },
     },
     MuiCard: {

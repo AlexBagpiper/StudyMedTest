@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Box, TextField, Button, Typography, Alert } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -9,6 +10,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
+  const { t } = useLocale()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -18,7 +20,7 @@ export default function LoginPage() {
     try {
       await login(email, password)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка входа. Проверьте email и пароль.')
+      setError(err.response?.data?.detail || t('common.error'))
     } finally {
       setLoading(false)
     }
@@ -31,7 +33,7 @@ export default function LoginPage() {
         required
         fullWidth
         id="email"
-        label="Email"
+        label={t('auth.email')}
         name="email"
         autoComplete="email"
         autoFocus
@@ -43,7 +45,7 @@ export default function LoginPage() {
         required
         fullWidth
         name="password"
-        label="Пароль"
+        label={t('auth.password')}
         type="password"
         id="password"
         autoComplete="current-password"
@@ -64,16 +66,15 @@ export default function LoginPage() {
         sx={{ mt: 3, mb: 2 }}
         disabled={loading}
       >
-        {loading ? 'Вход...' : 'Войти'}
+        {loading ? t('auth.loading') : t('auth.login')}
       </Button>
 
       <Typography variant="body2" align="center">
-        Нет аккаунта?{' '}
+        {t('auth.noAccount')}{' '}
         <Link to="/register" style={{ color: '#3B82F6', textDecoration: 'none' }}>
-          Зарегистрироваться
+          {t('auth.register')}
         </Link>
       </Typography>
     </Box>
   )
 }
-

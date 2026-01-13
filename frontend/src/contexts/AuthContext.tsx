@@ -5,7 +5,9 @@ import api from '../lib/api'
 interface User {
   id: string
   email: string
-  full_name: string
+  last_name: string
+  first_name: string
+  middle_name: string | null
   role: 'admin' | 'teacher' | 'student'
   is_active: boolean
 }
@@ -14,7 +16,7 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, fullName: string) => Promise<void>
+  register: (email: string, password: string, lastName: string, firstName: string, middleName?: string) => Promise<void>
   logout: () => void
 }
 
@@ -68,12 +70,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     navigate('/')
   }
 
-  const register = async (email: string, password: string, fullName: string) => {
-    await api.post('/auth/register', {
+  const register = async (email: string, password: string, lastName: string, firstName: string, middleName?: string) => {
+    const response = await api.post('/auth/register', {
       email,
       password,
-      full_name: fullName,
-      role: 'student',
+      last_name: lastName,
+      first_name: firstName,
+      middle_name: middleName || null,
     })
 
     // Auto-login after registration

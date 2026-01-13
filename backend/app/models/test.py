@@ -62,7 +62,6 @@ class Test(Base):
         back_populates="test",
         cascade="all, delete-orphan"
     )
-    submissions = relationship("Submission", back_populates="test_variant")
     
     def __repr__(self):
         return f"<Test {self.title} ({self.status})>"

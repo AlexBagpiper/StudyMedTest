@@ -1034,9 +1034,3 @@ submission_processing_time = Histogram('submission_processing_seconds', 'Submiss
 - Dashboard и аналитика
 
 9. **Testing & QA** (2-3 недели)
-
-- Unit + integration тесты
-- E2E тесты (Playwright)
-- Load testing (Locust)
-
-10. **Deployment & Documentation** (1-2 недели)

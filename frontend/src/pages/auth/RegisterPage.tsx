@@ -2,24 +2,52 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Box, TextField, Button, Typography, Alert } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLocale } from '../../contexts/LocaleContext'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
+  const { t } = useLocale()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    // Валидация
+    if (password.length < 6) {
+      setError(t('auth.passwordMin'))
+      return
+    }
+
+    if (lastName.length < 1) {
+      setError(t('auth.enterLastName'))
+      return
+    }
+
+    if (firstName.length < 1) {
+      setError(t('auth.enterFirstName'))
+      return
+    }
+
     setLoading(true)
 
     try {
-      await register(email, password, fullName)
+      await register(email, password, lastName, firstName, middleName || undefined)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка регистрации.')
+      const detail = err.response?.data?.detail
+      if (Array.isArray(detail)) {
+        setError(detail[0]?.msg || t('common.error'))
+      } else if (typeof detail === 'string') {
+        setError(detail)
+      } else {
+        setError(t('common.error'))
+      }
     } finally {
       setLoading(false)
     }
@@ -31,19 +59,38 @@ export default function RegisterPage() {
         margin="normal"
         required
         fullWidth
-        id="fullName"
-        label="Полное имя"
-        name="fullName"
+        id="lastName"
+        label={t('auth.lastName')}
+        name="lastName"
         autoFocus
-        value={fullName}
-        onChange={(e) => setFullName(e.target.value)}
+        value={lastName}
+        onChange={(e) => setLastName(e.target.value)}
+      />
+      <TextField
+        margin="normal"
+        required
+        fullWidth
+        id="firstName"
+        label={t('auth.firstName')}
+        name="firstName"
+        value={firstName}
+        onChange={(e) => setFirstName(e.target.value)}
+      />
+      <TextField
+        margin="normal"
+        fullWidth
+        id="middleName"
+        label={t('auth.middleName')}
+        name="middleName"
+        value={middleName}
+        onChange={(e) => setMiddleName(e.target.value)}
       />
       <TextField
         margin="normal"
         required
         fullWidth
         id="email"
-        label="Email"
+        label={t('auth.email')}
         name="email"
         autoComplete="email"
         value={email}
@@ -54,12 +101,14 @@ export default function RegisterPage() {
         required
         fullWidth
         name="password"
-        label="Пароль"
+        label={t('auth.password')}
         type="password"
         id="password"
         autoComplete="new-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        helperText={t('auth.passwordMin')}
+        error={password.length > 0 && password.length < 6}
       />
 
       {error && (
@@ -75,16 +124,15 @@ export default function RegisterPage() {
         sx={{ mt: 3, mb: 2 }}
         disabled={loading}
       >
-        {loading ? 'Регистрация...' : 'Зарегистрироваться'}
+        {loading ? t('auth.registering') : t('auth.register')}
       </Button>
 
       <Typography variant="body2" align="center">
-        Уже есть аккаунт?{' '}
+        {t('auth.hasAccount')}{' '}
         <Link to="/login" style={{ color: '#3B82F6', textDecoration: 'none' }}>
-          Войти
+          {t('auth.login')}
         </Link>
       </Typography>
     </Box>
   )
 }
-

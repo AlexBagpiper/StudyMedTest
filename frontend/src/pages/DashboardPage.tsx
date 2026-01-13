@@ -1,39 +1,45 @@
 import { Box, Typography, Grid, Card, CardContent, Button } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useLocale } from '../contexts/LocaleContext'
 import QuizIcon from '@mui/icons-material/Quiz'
 import AssignmentIcon from '@mui/icons-material/Assignment'
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer'
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { t, formatName } = useLocale()
   const navigate = useNavigate()
 
   const getWelcomeMessage = () => {
     switch (user?.role) {
       case 'admin':
-        return 'Добро пожаловать, администратор!'
+        return t('dashboard.welcome.admin')
       case 'teacher':
-        return 'Добро пожаловать, преподаватель!'
+        return t('dashboard.welcome.teacher')
       case 'student':
-        return 'Добро пожаловать, студент!'
+        return t('dashboard.welcome.student')
       default:
-        return 'Добро пожаловать!'
+        return t('dashboard.welcome.default')
     }
   }
+
+  const displayName = user 
+    ? formatName(user.last_name, user.first_name, user.middle_name)
+    : ''
 
   const quickActions = user?.role === 'student' 
     ? [
         {
-          title: 'Доступные тесты',
-          description: 'Пройдите новый тест',
+          title: t('dashboard.availableTests'),
+          description: t('dashboard.takeTest'),
           icon: <QuizIcon sx={{ fontSize: 40 }} />,
           action: () => navigate('/tests'),
           color: '#3B82F6',
         },
         {
-          title: 'Мои результаты',
-          description: 'Просмотрите ваши результаты',
+          title: t('dashboard.myResults'),
+          description: t('dashboard.viewResults'),
           icon: <AssignmentIcon sx={{ fontSize: 40 }} />,
           action: () => navigate('/submissions'),
           color: '#10B981',
@@ -41,22 +47,22 @@ export default function DashboardPage() {
       ]
     : [
         {
-          title: 'Создать тест',
-          description: 'Создайте новый тест для студентов',
+          title: t('dashboard.createTest'),
+          description: t('dashboard.createTestDesc'),
           icon: <QuizIcon sx={{ fontSize: 40 }} />,
           action: () => navigate('/tests'),
           color: '#3B82F6',
         },
         {
-          title: 'Создать вопрос',
-          description: 'Добавьте новый вопрос в базу',
+          title: t('dashboard.createQuestion'),
+          description: t('dashboard.createQuestionDesc'),
           icon: <QuestionAnswerIcon sx={{ fontSize: 40 }} />,
           action: () => navigate('/questions'),
           color: '#8B5CF6',
         },
         {
-          title: 'Результаты студентов',
-          description: 'Просмотрите результаты тестов',
+          title: t('dashboard.studentResults'),
+          description: t('dashboard.studentResultsDesc'),
           icon: <AssignmentIcon sx={{ fontSize: 40 }} />,
           action: () => navigate('/submissions'),
           color: '#10B981',
@@ -69,7 +75,7 @@ export default function DashboardPage() {
         {getWelcomeMessage()}
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        {user?.full_name}
+        {displayName}
       </Typography>
 
       <Grid container spacing={3}>
@@ -103,7 +109,7 @@ export default function DashboardPage() {
                   {action.description}
                 </Typography>
                 <Button variant="contained" sx={{ mt: 2 }}>
-                  Перейти
+                  {t('dashboard.go')}
                 </Button>
               </CardContent>
             </Card>
@@ -114,13 +120,12 @@ export default function DashboardPage() {
       {/* Статистика (можно добавить позже) */}
       <Box sx={{ mt: 4 }}>
         <Typography variant="h5" gutterBottom>
-          Статистика
+          {t('dashboard.statistics')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Здесь будет отображаться статистика и аналитика
+          {t('dashboard.statisticsDesc')}
         </Typography>
       </Box>
     </Box>
   )
 }
-

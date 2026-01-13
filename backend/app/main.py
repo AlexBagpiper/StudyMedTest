@@ -21,20 +21,20 @@ async def lifespan(app: FastAPI):
     Управление жизненным циклом приложения
     """
     # Startup
-    print("🚀 Starting MedTest Platform...")
+    print("[*] Starting MedTest Platform...")
     
     # Создание таблиц (в production использовать Alembic)
     # async with engine.begin() as conn:
     #     await conn.run_sync(Base.metadata.create_all)
     
-    print("✅ Application started successfully")
+    print("[+] Application started successfully")
     
     yield
     
     # Shutdown
-    print("🛑 Shutting down...")
+    print("[*] Shutting down...")
     await engine.dispose()
-    print("✅ Shutdown complete")
+    print("[+] Shutdown complete")
 
 
 # Создание FastAPI приложения
@@ -48,9 +48,26 @@ app = FastAPI(
 )
 
 # CORS Middleware
+if settings.ENVIRONMENT == "development":
+    # В development разрешаем типичные локальные origins
+    cors_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+    ]
+else:
+    cors_origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

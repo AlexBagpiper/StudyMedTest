@@ -58,11 +58,18 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
-    full_name = Column(String(255), nullable=False)
+    last_name = Column(String(100), nullable=False)  # Фамилия
+    first_name = Column(String(100), nullable=False)  # Имя
+    middle_name = Column(String(100), nullable=True)  # Отчество (опционально)
     role = Column(Enum(Role), nullable=False, default=Role.STUDENT, index=True)
     
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    
+    # Email change verification
+    pending_email = Column(String(255), nullable=True)  # Новый email ожидающий подтверждения
+    email_change_code = Column(String(6), nullable=True)  # 6-значный код
+    email_change_expires = Column(DateTime, nullable=True)  # Срок действия кода
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

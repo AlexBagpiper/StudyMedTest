@@ -52,7 +52,9 @@ async def register(
     user = User(
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
-        full_name=user_in.full_name,
+        last_name=user_in.last_name,
+        first_name=user_in.first_name,
+        middle_name=user_in.middle_name,
         role=user_in.role,
     )
     
@@ -71,11 +73,43 @@ async def login(
     """
     OAuth2 совместимая аутентификация (username = email)
     """
+    # #region agent log
+    import json
+    with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "A,D", "location": "auth.py:66", "message": "Login request received", "data": {"username": form_data.username, "password_length": len(form_data.password) if form_data.password else 0}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+    # #endregion
+    
     # Поиск пользователя
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
     
-    if not user or not verify_password(form_data.password, user.password_hash):
+    # #region agent log
+    with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "B", "location": "auth.py:77", "message": "User lookup result", "data": {"user_found": user is not None, "email_searched": form_data.username, "user_id": str(user.id) if user else None, "user_email": user.email if user else None}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+    # #endregion
+    
+    if not user:
+        # #region agent log
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "B", "location": "auth.py:84", "message": "User not found - 401", "data": {"attempted_email": form_data.username}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+        # #endregion
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # #region agent log
+    password_valid = verify_password(form_data.password, user.password_hash)
+    with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "C", "location": "auth.py:95", "message": "Password verification", "data": {"password_valid": password_valid, "password_hash_prefix": user.password_hash[:20] if user.password_hash else None, "password_provided_length": len(form_data.password)}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+    # #endregion
+    
+    if not password_valid:
+        # #region agent log
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "C", "location": "auth.py:102", "message": "Password invalid - 401", "data": {}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+        # #endregion
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -83,10 +117,19 @@ async def login(
         )
     
     if not user.is_active:
+        # #region agent log
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "B", "location": "auth.py:113", "message": "User inactive - 400", "data": {"is_active": user.is_active}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+        # #endregion
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user"
         )
+    
+    # #region agent log
+    with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "E", "location": "auth.py:123", "message": "Before token creation", "data": {"user_id": str(user.id), "user_role": user.role}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+    # #endregion
     
     # Создание токенов
     access_token = create_access_token(
@@ -95,10 +138,20 @@ async def login(
     )
     refresh_token = create_refresh_token(subject=str(user.id))
     
+    # #region agent log
+    with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "E", "location": "auth.py:137", "message": "Tokens created successfully", "data": {"access_token_length": len(access_token), "refresh_token_length": len(refresh_token)}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+    # #endregion
+    
     # Обновление last_login
     from datetime import datetime
     user.last_login = datetime.utcnow()
     await db.commit()
+    
+    # #region agent log
+    with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+        f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "E", "location": "auth.py:149", "message": "Login successful - returning tokens", "data": {"user_email": user.email}, "timestamp": __import__('datetime').datetime.now().timestamp() * 1000}) + '\n')
+    # #endregion
     
     return {
         "access_token": access_token,

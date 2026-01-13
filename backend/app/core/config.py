@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=True
+        case_sensitive=True,
+        extra='ignore'
     )
-    
     # API Settings
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "MedTest Platform"
@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin123"
+    MINIO_ROOT_USER: str = "minioadmin"
+    MINIO_ROOT_PASSWORD: str = "minioadmin123"
     MINIO_BUCKET: str = "medtest-storage"
     MINIO_SECURE: bool = False
     
@@ -107,17 +109,20 @@ class Settings(BaseSettings):
     MAX_IMAGE_DIMENSION: int = 8192  # 8K max
     
     # Admin User (для инициализации)
-    FIRST_ADMIN_EMAIL: EmailStr = "admin@medtest.local"
+    FIRST_ADMIN_EMAIL: EmailStr = "admin@example.com"
     FIRST_ADMIN_PASSWORD: str = "change_me_admin"
     FIRST_ADMIN_FULL_NAME: str = "System Administrator"
     
     # Logging
     LOG_LEVEL: str = "INFO"
     
+    # Frontend
+    REACT_APP_API_URL: str = "http://localhost:8000"
+    
     @property
     def async_database_url(self) -> str:
         """Database URL для async SQLAlchemy"""
-        return str(self.DATABASE_URL)
+        return str(self.DATABASE_URL)    
 
 
 # Singleton instance

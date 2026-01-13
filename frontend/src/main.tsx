@@ -7,6 +7,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material'
 import App from './App'
 import { theme } from './theme'
 import { AuthProvider } from './contexts/AuthContext'
+import { LocaleProvider } from './contexts/LocaleContext'
 
 // React Query client
 const queryClient = new QueryClient({
@@ -21,13 +22,20 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <QueryClientProvider client={queryClient}>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          <AuthProvider>
-            <App />
-          </AuthProvider>
+          <LocaleProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </LocaleProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </BrowserRouter>

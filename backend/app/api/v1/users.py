@@ -2,6 +2,8 @@
 Users endpoints
 """
 
+import secrets
+from datetime import datetime, timedelta
 from typing import List
 from uuid import UUID
 
@@ -12,7 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user, get_password_hash
 from app.models.user import User, Role
-from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.user import UserCreate, UserResponse, UserUpdate, EmailChangeRequest, EmailChangeConfirm
+from app.services.email_service import send_email_change_code
 
 router = APIRouter()
 
@@ -42,15 +45,6 @@ async def update_current_user(
     if "password" in update_data:
         update_data["password_hash"] = get_password_hash(update_data.pop("password"))
     
-    # Проверка уникальности email
-    if "email" in update_data and update_data["email"] != current_user.email:
-        result = await db.execute(select(User).where(User.email == update_data["email"]))
-        if result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-    
     for field, value in update_data.items():
         setattr(current_user, field, value)
     
@@ -58,6 +52,122 @@ async def update_current_user(
     await db.refresh(current_user)
     
     return current_user
+
+
+@router.post("/me/request-email-change")
+async def request_email_change(
+    request: EmailChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Запрос на смену email. Отправляет код подтверждения на новый email.
+    """
+    new_email = request.new_email
+    
+    # Проверяем что новый email не занят
+    result = await db.execute(select(User).where(User.email == new_email))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Генерируем 6-значный код
+    code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
+    
+    # Сохраняем pending email и код
+    current_user.pending_email = new_email
+    current_user.email_change_code = code
+    current_user.email_change_expires = datetime.utcnow() + timedelta(minutes=15)
+    
+    await db.commit()
+    
+    # Отправляем код на новый email
+    await send_email_change_code(new_email, code)
+    
+    # В dev режиме возвращаем код в ответе для удобства тестирования
+    from app.core.config import settings
+    response = {"message": "Confirmation code sent to new email", "email": new_email}
+    if settings.ENVIRONMENT == "development":
+        response["dev_code"] = code
+    
+    return response
+
+
+@router.post("/me/confirm-email-change")
+async def confirm_email_change(
+    request: EmailChangeConfirm,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Подтверждение смены email по коду из письма.
+    """
+    # Проверяем что есть pending email
+    if not current_user.pending_email or not current_user.email_change_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No pending email change request"
+        )
+    
+    # Проверяем срок действия
+    if current_user.email_change_expires and current_user.email_change_expires < datetime.utcnow():
+        # Очищаем просроченный запрос
+        current_user.pending_email = None
+        current_user.email_change_code = None
+        current_user.email_change_expires = None
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation code expired"
+        )
+    
+    # Проверяем код
+    if current_user.email_change_code != request.code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid confirmation code"
+        )
+    
+    # Ещё раз проверяем что email не занят (на случай race condition)
+    result = await db.execute(select(User).where(User.email == current_user.pending_email))
+    if result.scalar_one_or_none():
+        current_user.pending_email = None
+        current_user.email_change_code = None
+        current_user.email_change_expires = None
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Меняем email
+    old_email = current_user.email
+    current_user.email = current_user.pending_email
+    current_user.pending_email = None
+    current_user.email_change_code = None
+    current_user.email_change_expires = None
+    
+    await db.commit()
+    
+    return {"message": "Email changed successfully", "old_email": old_email, "new_email": current_user.email}
+
+
+@router.delete("/me/cancel-email-change")
+async def cancel_email_change(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Отмена запроса на смену email.
+    """
+    current_user.pending_email = None
+    current_user.email_change_code = None
+    current_user.email_change_expires = None
+    await db.commit()
+    
+    return {"message": "Email change request cancelled"}
 
 
 @router.get("/", response_model=List[UserResponse])
@@ -120,7 +230,9 @@ async def create_user(
     user = User(
         email=user_in.email,
         password_hash=get_password_hash(user_in.password),
-        full_name=user_in.full_name,
+        last_name=user_in.last_name,
+        first_name=user_in.first_name,
+        middle_name=user_in.middle_name,
         role=user_in.role,
         is_active=True,
     )
