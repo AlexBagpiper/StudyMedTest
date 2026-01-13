@@ -88,8 +88,6 @@ todos:
 └─────────────┘ └──────────┘ └─────────────────┘
 ```
 
-
-
 ### 1.2 Точки масштабирования
 
 - **Горизонтальное**: Несколько инстансов backend за Nginx/HAProxy
@@ -150,8 +148,6 @@ backend/
 ├── tests/                # Тесты
 └── requirements.txt
 ```
-
-
 
 ### 2.3 Асинхронность
 
@@ -292,8 +288,6 @@ AGGREGATE_PROMPT = """
 """
 ```
 
-
-
 ### 3.4 Контроль качества и стоимости
 
 - **Кэширование**: Redis для идентичных вопросов (hash(question + answer))
@@ -334,8 +328,6 @@ AGGREGATE_PROMPT = """
 }
 ```
 
-
-
 ### 4.2 Алгоритмы оценки
 
 **Метрики:**
@@ -348,9 +340,6 @@ def calculate_iou(pred_mask, gt_mask):
     return intersection / union if union > 0 else 0
 ```
 
-
-
-
 2. **Precision / Recall**
 ```python
 def calculate_precision_recall(pred_polygons, gt_polygons, iou_threshold=0.5):
@@ -358,9 +347,6 @@ def calculate_precision_recall(pred_polygons, gt_polygons, iou_threshold=0.5):
     # False Positive: pred без соответствия в gt
     # False Negative: gt без соответствия в pred
 ```
-
-
-
 
 3. **Coverage (Полнота аннотации)**
 ```python
@@ -389,8 +375,6 @@ class AnnotationScorer:
         }
         return score
 ```
-
-
 
 ### 4.3 Python-библиотеки
 
@@ -473,8 +457,6 @@ interface AnnotationEditor {
 }
 ```
 
-
-
 ### 5.3 UX-паттерны по ролям
 
 **Студент:**
@@ -491,8 +473,6 @@ interface AnnotationEditor {
 │  [← Назад]        [Пропустить] [Далее →]│
 └─────────────────────────────────────────┘
 ```
-
-
 
 - Минималистичный интерфейс без отвлечений
 - Автосохранение каждые 30 сек
@@ -513,8 +493,6 @@ interface AnnotationEditor {
 └──────────────────────────────────────────────┘
 ```
 
-
-
 - Rich Editor для вопросов (TinyMCE / Quill)
 - Drag-and-drop для создания тестов
 - Превью теста глазами студента
@@ -533,8 +511,6 @@ interface AnnotationEditor {
 │ Управление: [Юзеры] [Роли] [Логи]           │
 └──────────────────────────────────────────────┘
 ```
-
-
 
 ### 5.4 "Ультрасовременный" UI
 
@@ -640,8 +616,6 @@ async def create_question(
     # Только teacher и admin могут создавать вопросы
     ...
 ```
-
-
 
 ### 6.3 Защита данных студентов
 
@@ -775,8 +749,6 @@ erDiagram
     }
 ```
 
-
-
 ### 7.2 Что хранится где
 
 **PostgreSQL (транзакционные данные):**
@@ -882,8 +854,6 @@ services:
             - ./certs:/etc/nginx/certs
 ```
 
-
-
 ### 8.2 CI/CD Pipeline
 
 **GitLab CI / GitHub Actions:**
@@ -910,8 +880,6 @@ deploy:
         - docker-compose up -d --no-deps --build
         - docker-compose exec backend alembic upgrade head
 ```
-
-
 
 ### 8.3 Мониторинг и логирование
 

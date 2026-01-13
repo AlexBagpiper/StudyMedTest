@@ -5,6 +5,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
+import EmailIcon from '@mui/icons-material/Email'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocale } from '../contexts/LocaleContext'
 import api from '../lib/api'
@@ -18,13 +19,19 @@ export default function ProfilePage() {
   const [lastName, setLastName] = useState(user?.last_name || '')
   const [firstName, setFirstName] = useState(user?.first_name || '')
   const [middleName, setMiddleName] = useState(user?.middle_name || '')
-  const [email, setEmail] = useState(user?.email || '')
   
   // Состояния смены пароля
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  
+  // Состояния смены email
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailStep, setEmailStep] = useState<'request' | 'confirm'>('request')
+  const [newEmail, setNewEmail] = useState('')
+  const [emailCode, setEmailCode] = useState('')
+  const [devCode, setDevCode] = useState('')  // Для режима разработки
   
   // UI состояния
   const [loading, setLoading] = useState(false)
@@ -42,7 +49,6 @@ export default function ProfilePage() {
       setLastName(user.last_name)
       setFirstName(user.first_name)
       setMiddleName(user.middle_name || '')
-      setEmail(user.email)
     }
     setIsEditing(!isEditing)
     setError('')
@@ -59,7 +65,6 @@ export default function ProfilePage() {
         last_name: lastName,
         first_name: firstName,
         middle_name: middleName || null,
-        email: email,
       })
       
       setSuccess(t('profile.saved'))
@@ -129,6 +134,95 @@ export default function ProfilePage() {
     }
   }
 
+  const handleEmailDialogOpen = () => {
+    setEmailDialogOpen(true)
+    setEmailStep('request')
+    setNewEmail('')
+    setEmailCode('')
+    setDevCode('')
+    setError('')
+  }
+
+  const handleEmailDialogClose = () => {
+    setEmailDialogOpen(false)
+    setError('')
+  }
+
+  const handleRequestEmailChange = async () => {
+    if (!newEmail || !newEmail.includes('@')) {
+      setError('Введите корректный email')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      const response = await api.post('/users/me/request-email-change', {
+        new_email: newEmail,
+      })
+      
+      // Сохраняем dev код если он есть
+      if (response.data.dev_code) {
+        setDevCode(response.data.dev_code)
+      }
+      
+      setEmailStep('confirm')
+      setSuccess('Код подтверждения отправлен на новый email')
+    } catch (err: any) {
+      const detail = err.response?.data?.detail
+      if (typeof detail === 'string') {
+        setError(detail)
+      } else {
+        setError('Ошибка при отправке кода')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConfirmEmailChange = async () => {
+    if (!emailCode || emailCode.length !== 6) {
+      setError('Введите 6-значный код')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await api.post('/users/me/confirm-email-change', {
+        code: emailCode,
+      })
+      
+      setSuccess('Email успешно изменен')
+      handleEmailDialogClose()
+      
+      // Перезагружаем страницу для обновления данных
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    } catch (err: any) {
+      const detail = err.response?.data?.detail
+      if (typeof detail === 'string') {
+        setError(detail)
+      } else {
+        setError('Неверный код подтверждения')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelEmailChange = async () => {
+    try {
+      await api.delete('/users/me/cancel-email-change')
+      handleEmailDialogClose()
+    } catch (err) {
+      handleEmailDialogClose()
+    }
+  }
+
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -183,12 +277,21 @@ export default function ProfilePage() {
 
               <Divider sx={{ my: 2 }} />
 
-              <Button 
-                variant="outlined" 
-                onClick={handlePasswordDialogOpen}
-              >
-                {t('profile.changePassword')}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button 
+                  variant="outlined" 
+                  onClick={handlePasswordDialogOpen}
+                >
+                  {t('profile.changePassword')}
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  startIcon={<EmailIcon />}
+                  onClick={handleEmailDialogOpen}
+                >
+                  {t('profile.changeEmail')}
+                </Button>
+              </Box>
             </>
           ) : (
             // Режим редактирования
@@ -222,16 +325,6 @@ export default function ProfilePage() {
                     label={t('auth.middleName')}
                     value={middleName}
                     onChange={(e) => setMiddleName(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label={t('auth.email')}
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
                   />
                 </Grid>
               </Grid>
@@ -296,6 +389,88 @@ export default function ProfilePage() {
           >
             {loading ? t('common.loading') : t('profile.save')}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Диалог смены email */}
+      <Dialog open={emailDialogOpen} onClose={handleEmailDialogClose} maxWidth="sm" fullWidth>
+        <DialogTitle>{t('profile.changeEmail')}</DialogTitle>
+        <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          {success && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {success}
+            </Alert>
+          )}
+          
+          {emailStep === 'request' ? (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 2 }}>
+                Текущий email: <strong>{user?.email}</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Введите новый email. На него будет отправлен код подтверждения.
+              </Typography>
+              <TextField
+                fullWidth
+                margin="normal"
+                label="Новый email"
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                autoFocus
+              />
+            </>
+          ) : (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 2 }}>
+                Код подтверждения отправлен на: <strong>{newEmail}</strong>
+              </Typography>
+              {devCode && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  DEV режим - код: <strong>{devCode}</strong>
+                </Alert>
+              )}
+              <TextField
+                fullWidth
+                margin="normal"
+                label="Код подтверждения (6 цифр)"
+                value={emailCode}
+                onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                inputProps={{ maxLength: 6, pattern: '[0-9]*' }}
+                autoFocus
+              />
+              <Typography variant="caption" color="text.secondary">
+                Код действителен 15 минут
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={emailStep === 'confirm' ? handleCancelEmailChange : handleEmailDialogClose}>
+            {t('profile.cancel')}
+          </Button>
+          {emailStep === 'request' ? (
+            <Button 
+              onClick={handleRequestEmailChange} 
+              variant="contained"
+              disabled={loading || !newEmail}
+            >
+              {loading ? t('common.loading') : 'Отправить код'}
+            </Button>
+          ) : (
+            <Button 
+              onClick={handleConfirmEmailChange} 
+              variant="contained"
+              disabled={loading || emailCode.length !== 6}
+            >
+              {loading ? t('common.loading') : 'Подтвердить'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

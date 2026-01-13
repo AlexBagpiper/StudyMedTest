@@ -6,6 +6,7 @@ import QuizIcon from '@mui/icons-material/Quiz'
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer'
 import AssignmentIcon from '@mui/icons-material/Assignment'
 import LanguageIcon from '@mui/icons-material/Language'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -64,6 +65,9 @@ export default function MainLayout() {
       { text: t('nav.questions'), icon: <QuestionAnswerIcon />, path: '/questions' },
     ] : []),
     { text: t('nav.submissions'), icon: <AssignmentIcon />, path: '/submissions' },
+    ...(user?.role === 'admin' ? [
+      { text: t('nav.admin'), icon: <AdminPanelSettingsIcon />, path: '/admin' },
+    ] : []),
   ]
 
   const drawer = (
