@@ -36,12 +36,19 @@ class Test(Base):
     
     # Настройки теста
     settings = Column(JSONB, nullable=False, default={})
-    # settings содержит:
-    # - time_limit_minutes: int
-    # - max_attempts: int
-    # - shuffle_questions: bool
-    # - show_results_immediately: bool
-    # - passing_score: float
+    
+    # Структура теста (правила генерации)
+    structure = Column(JSONB, nullable=True)
+    # structure содержит список правил:
+    # [
+    #   {
+    #     "topic_id": str(UUID),
+    #     "question_type": str(QuestionType),
+    #     "count": int,
+    #     "difficulty": int
+    #   },
+    #   ...
+    # ]
     
     status = Column(Enum(TestStatus), default=TestStatus.DRAFT, nullable=False, index=True)
     
@@ -78,7 +85,6 @@ class TestQuestion(Base):
     question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id"), nullable=False)
     
     order = Column(Integer, nullable=False)  # Порядок вопроса в тесте
-    weight = Column(Integer, default=1, nullable=False)  # Вес вопроса для подсчёта баллов
     
     # Relationships
     test = relationship("Test", back_populates="test_questions")

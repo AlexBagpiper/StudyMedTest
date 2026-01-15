@@ -31,8 +31,13 @@ class Question(Base):
     author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     
     type = Column(Enum(QuestionType), nullable=False, index=True)
-    title = Column(String(500), nullable=False)
     content = Column(Text, nullable=False)  # Текст вопроса (может содержать HTML)
+    
+    # Тема/раздел вопроса
+    topic_id = Column(UUID(as_uuid=True), ForeignKey("topics.id"), nullable=True, index=True)
+    
+    # Сложность вопроса (1-5)
+    difficulty = Column(Integer, default=1, nullable=False, index=True)
     
     # Эталонные данные для оценки
     reference_data = Column(JSONB, nullable=True)  # Эталонный ответ или аннотации
@@ -48,6 +53,7 @@ class Question(Base):
     
     # Relationships
     author = relationship("User", back_populates="created_questions")
+    topic = relationship("Topic", back_populates="questions")
     image = relationship("ImageAsset", back_populates="questions")
     test_questions = relationship("TestQuestion", back_populates="question")
     

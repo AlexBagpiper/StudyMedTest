@@ -57,23 +57,6 @@ async def start_submission(
             detail="Test is not published"
         )
     
-    # Проверка лимита попыток
-    max_attempts = variant.test.settings.get("max_attempts", 999)
-    result = await db.execute(
-        select(Submission)
-        .where(
-            Submission.student_id == current_user.id,
-            Submission.variant_id == submission_in.variant_id
-        )
-    )
-    existing_submissions = result.scalars().all()
-    
-    if len(existing_submissions) >= max_attempts:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Maximum attempts ({max_attempts}) reached"
-        )
-    
     # Создание submission
     submission = Submission(
         student_id=current_user.id,

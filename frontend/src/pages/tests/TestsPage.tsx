@@ -1,15 +1,58 @@
-import { Box, Typography, Button, Grid, Card, CardContent, CardActions, Chip } from '@mui/material'
+import {
+  Box,
+  Typography,
+  Button,
+  Grid,
+  Card,
+  CardContent,
+  CardActions,
+  Chip,
+  CircularProgress,
+  Alert,
+} from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useTests, useDeleteTest } from '../../lib/api/hooks'
+import type { Test, TestStatus } from '../../types'
 import AddIcon from '@mui/icons-material/Add'
+import DeleteIcon from '@mui/icons-material/Delete'
+import EditIcon from '@mui/icons-material/Edit'
 
 export default function TestsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const isStudent = user?.role === 'student'
 
-  // TODO: Загрузка тестов через React Query
-  const tests = [] // Placeholder
+  const { data: tests = [], isLoading, error } = useTests()
+  const deleteTest = useDeleteTest()
+
+  const handleDelete = async (testId: string) => {
+    if (window.confirm('Вы уверены, что хотите удалить этот тест?')) {
+      try {
+        await deleteTest.mutateAsync(testId)
+      } catch (error) {
+        console.error('Failed to delete test:', error)
+      }
+    }
+  }
+
+  const getStatusLabel = (status: TestStatus) => {
+    const statusMap: Record<TestStatus, string> = {
+      draft: 'Черновик',
+      published: 'Опубликован',
+      archived: 'Архивирован',
+    }
+    return statusMap[status]
+  }
+
+  const getStatusColor = (status: TestStatus): 'default' | 'primary' | 'success' | 'warning' => {
+    const colorMap: Record<TestStatus, 'default' | 'primary' | 'success' | 'warning'> = {
+      draft: 'default',
+      published: 'success',
+      archived: 'warning',
+    }
+    return colorMap[status]
+  }
 
   return (
     <Box>
@@ -28,7 +71,17 @@ export default function TestsPage() {
         )}
       </Box>
 
-      {tests.length === 0 ? (
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Ошибка загрузки тестов: {error instanceof Error ? error.message : 'Неизвестная ошибка'}
+        </Alert>
+      )}
+
+      {isLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      ) : tests.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: 'center', py: 6 }}>
             <Typography variant="h6" color="text.secondary">
@@ -48,7 +101,7 @@ export default function TestsPage() {
         </Card>
       ) : (
         <Grid container spacing={3}>
-          {tests.map((test: any) => (
+          {tests.map((test: Test) => (
             <Grid item xs={12} md={6} key={test.id}>
               <Card>
                 <CardContent>
@@ -56,17 +109,47 @@ export default function TestsPage() {
                     {test.title}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" paragraph>
-                    {test.description}
+                    {test.description || 'Без описания'}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                    <Chip label={test.status} size="small" color="primary" />
-                    <Chip label={`${test.questions_count} вопросов`} size="small" variant="outlined" />
+                    <Chip
+                      label={getStatusLabel(test.status)}
+                      size="small"
+                      color={getStatusColor(test.status)}
+                    />
+                    {test.test_questions && (
+                      <Chip
+                        label={`${test.test_questions.length} вопросов`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    )}
                   </Box>
                 </CardContent>
                 <CardActions>
                   <Button size="small" onClick={() => navigate(`/tests/${test.id}`)}>
                     {isStudent ? 'Начать тест' : 'Просмотр'}
                   </Button>
+                  {!isStudent && (
+                    <>
+                      <Button
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={() => navigate(`/tests/${test.id}/edit`)}
+                      >
+                        Редактировать
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        onClick={() => handleDelete(test.id)}
+                        disabled={deleteTest.isPending}
+                      >
+                        Удалить
+                      </Button>
+                    </>
+                  )}
                 </CardActions>
               </Card>
             </Grid>

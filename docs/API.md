@@ -90,7 +90,7 @@ username=student@example.com&password=securepassword
 ```json
 {
   "type": "text",
-  "title": "Строение сердца",
+  "difficulty": 3,
   "content": "Опишите анатомическое строение человеческого сердца",
   "reference_data": {
     "reference_answer": "Сердце состоит из четырёх камер..."
@@ -110,7 +110,7 @@ username=student@example.com&password=securepassword
   "id": "uuid",
   "author_id": "uuid",
   "type": "text",
-  "title": "Строение сердца",
+  "difficulty": 3,
   "content": "Опишите анатомическое строение...",
   "reference_data": {...},
   "scoring_criteria": {...},
@@ -152,16 +152,20 @@ username=student@example.com&password=securepassword
   "description": "Тест по модулю 1",
   "settings": {
     "time_limit_minutes": 60,
-    "max_attempts": 3,
-    "shuffle_questions": true,
-    "show_results_immediately": false,
     "passing_score": 60.0
   },
+  "structure": [
+    {
+      "topic_id": "uuid",
+      "question_type": "text",
+      "count": 5,
+      "difficulty": 3
+    }
+  ],
   "questions": [
     {
       "question_id": "uuid",
-      "order": 1,
-      "weight": 1
+      "order": 1
     }
   ]
 }

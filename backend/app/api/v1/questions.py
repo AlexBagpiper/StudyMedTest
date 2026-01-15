@@ -2,12 +2,13 @@
 Questions endpoints
 """
 
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -38,7 +39,10 @@ async def list_questions(
             detail="Students cannot view questions"
         )
     
-    query = select(Question)
+    query = select(Question).options(
+        selectinload(Question.topic),
+        selectinload(Question.image)
+    )
     
     # Teacher видит только свои вопросы
     if current_user.role == Role.TEACHER:
@@ -50,6 +54,14 @@ async def list_questions(
     query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     questions = result.scalars().all()
+    
+    # Генерация presigned URLs
+    for question in questions:
+        if question.image:
+            question.image.presigned_url = storage_service.get_presigned_url(
+                question.image.storage_path.split("/", 1)[1],
+                expires_seconds=3600
+            )
     
     return questions
 
@@ -69,19 +81,44 @@ async def create_question(
             detail="Not enough permissions"
         )
     
+    question_data = question_in.model_dump(mode='json')
+    
+    if question_in.type == QuestionType.IMAGE_ANNOTATION:
+        if not question_in.image_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image is required for image annotation questions"
+            )
+        
+        # Проверка наличия аннотаций у изображения
+        result = await db.execute(select(ImageAsset).where(ImageAsset.id == question_in.image_id))
+        image_asset = result.scalar_one_or_none()
+        if not image_asset or not image_asset.coco_annotations:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Selected image must have annotations before it can be attached to a question"
+            )
+
     question = Question(
         author_id=current_user.id,
         type=question_in.type,
-        title=question_in.title,
         content=question_in.content,
-        reference_data=question_in.reference_data,
-        scoring_criteria=question_in.scoring_criteria,
+        topic_id=question_in.topic_id,
+        difficulty=question_in.difficulty,
+        reference_data=question_data.get("reference_data"),
+        scoring_criteria=question_data.get("scoring_criteria"),
         image_id=question_in.image_id,
     )
     
     db.add(question)
     await db.commit()
-    await db.refresh(question)
+    await db.refresh(question, ["topic", "image"])
+    
+    if question.image:
+        question.image.presigned_url = storage_service.get_presigned_url(
+            question.image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
     
     return question
 
@@ -95,7 +132,14 @@ async def get_question(
     """
     Получение вопроса по ID
     """
-    result = await db.execute(select(Question).where(Question.id == question_id))
+    result = await db.execute(
+        select(Question)
+        .options(
+            selectinload(Question.topic),
+            selectinload(Question.image)
+        )
+        .where(Question.id == question_id)
+    )
     question = result.scalar_one_or_none()
     
     if not question:
@@ -109,6 +153,13 @@ async def get_question(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
+        )
+    
+    # Генерация presigned URL если есть изображение
+    if question.image:
+        question.image.presigned_url = storage_service.get_presigned_url(
+            question.image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
         )
     
     return question
@@ -141,12 +192,52 @@ async def update_question(
         )
     
     update_data = question_update.model_dump(exclude_unset=True)
+    
+    # Валидация при обновлении на тип IMAGE_ANNOTATION
+    new_type = update_data.get('type', question.type)
+    new_image_id = update_data.get('image_id', question.image_id)
+    
+    if new_type == QuestionType.IMAGE_ANNOTATION:
+        if not new_image_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image is required for image annotation questions"
+            )
+        
+        result = await db.execute(select(ImageAsset).where(ImageAsset.id == new_image_id))
+        image_asset = result.scalar_one_or_none()
+        if not image_asset or not image_asset.coco_annotations:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Selected image must have annotations"
+            )
+
     for field, value in update_data.items():
+        if field in ['reference_data', 'scoring_criteria'] and value is not None:
+            import json
+            # Конвертируем только JSONB поля в JSON-совместимый вид
+            value = json.loads(json.dumps(value, default=str))
         setattr(question, field, value)
     
     await db.commit()
-    await db.refresh(question)
     
+    # Получаем обновленный вопрос со всеми связями
+    result = await db.execute(
+        select(Question)
+        .options(
+            selectinload(Question.topic),
+            selectinload(Question.image)
+        )
+        .where(Question.id == question_id)
+    )
+    question = result.scalar_one()
+    
+    if question.image:
+        question.image.presigned_url = storage_service.get_presigned_url(
+            question.image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
+        
     return question
 
 
@@ -246,7 +337,16 @@ async def upload_image(
     await db.commit()
     await db.refresh(image_asset)
     
-    return image_asset
+    # Генерация presigned URL для ответа
+    presigned_url = storage_service.get_presigned_url(
+        image_asset.storage_path.split("/", 1)[1],
+        expires_seconds=3600
+    )
+    
+    response = ImageAssetResponse.model_validate(image_asset)
+    response.presigned_url = presigned_url
+    
+    return response
 
 
 @router.get("/images/{image_id}", response_model=ImageAssetResponse)
@@ -278,3 +378,124 @@ async def get_image(
     
     return response
 
+
+def parse_coco_for_image(coco_data: dict, filename: str) -> dict:
+    """
+    Парсит COCO данные и оставляет только те, что относятся к конкретному изображению.
+    """
+    import os
+    
+    # 1. Находим изображение в 'images'
+    target_image = None
+    
+    # Сначала ищем по точному совпадению file_name
+    for img in coco_data.get('images', []):
+        if img.get('file_name') == filename:
+            target_image = img
+            break
+    
+    # Если не нашли, ищем по базовому имени файла (без пути)
+    if not target_image:
+        base_filename = os.path.basename(filename)
+        for img in coco_data.get('images', []):
+            if os.path.basename(img.get('file_name', '')) == base_filename:
+                target_image = img
+                break
+                
+    if not target_image:
+        return None
+        
+    image_id = target_image.get('id')
+    
+    # 2. Фильтруем аннотации
+    relevant_annotations = [
+        ann for ann in coco_data.get('annotations', [])
+        if ann.get('image_id') == image_id
+    ]
+    
+    # 3. Сохраняем все категории (согласно требованию)
+    all_categories = coco_data.get('categories', [])
+    
+    return {
+        "images": [target_image],
+        "annotations": relevant_annotations,
+        "categories": all_categories
+    }
+
+
+@router.post("/images/{image_id}/annotations", response_model=ImageAssetResponse)
+async def upload_annotations(
+    image_id: UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Загрузка файла аннотаций для существующего изображения
+    """
+    if current_user.role not in [Role.TEACHER, Role.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # 1. Ищем изображение
+    result = await db.execute(select(ImageAsset).where(ImageAsset.id == image_id))
+    image_asset = result.scalar_one_or_none()
+    
+    if not image_asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image not found"
+        )
+    
+    # 2. Валидация JSON
+    if not file.filename.endswith(".json"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Annotations file must be a JSON file"
+        )
+    
+    try:
+        import json
+        content = await file.read()
+        coco_data = json.loads(content)
+        
+        # 3. Парсинг и проверка соответствия
+        parsed_annotations = parse_coco_for_image(coco_data, image_asset.filename)
+        
+        if not parsed_annotations:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No annotations found for image '{image_asset.filename}' in the provided file. "
+                       f"Make sure 'file_name' in JSON matches the uploaded image name."
+            )
+            
+        # 4. Обновление в БД
+        image_asset.coco_annotations = parsed_annotations
+        await db.commit()
+        await db.refresh(image_asset)
+        
+        # Генерация presigned URL для ответа
+        presigned_url = storage_service.get_presigned_url(
+            image_asset.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
+        
+        response = ImageAssetResponse.model_validate(image_asset)
+        response.presigned_url = presigned_url
+        
+        return response
+        
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON in annotations file"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error processing annotations: {str(e)}"
+        )

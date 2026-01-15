@@ -18,6 +18,7 @@ const translations = {
     'nav.profile': 'Профиль',
     'nav.logout': 'Выйти',
     'nav.admin': 'Админ-панель',
+    'nav.topics': 'Темы',
     
     // Авторизация
     'auth.login': 'Войти',
@@ -145,6 +146,68 @@ const translations = {
     'admin.create': 'Создать',
     'admin.confirmDelete': 'Подтверждение удаления',
     'admin.deleteConfirmMessage': 'Вы уверены, что хотите удалить',
+
+    // Темы
+    'topics.title': 'Темы',
+    'topics.create': 'Создать тему',
+    'topics.edit': 'Редактировать тему',
+    'topics.delete': 'Удалить тему',
+    'topics.noTopics': 'Темы отсутствуют',
+    'topics.createFirst': 'Создать первую тему',
+    'topics.name': 'Название темы',
+    'topics.description': 'Описание (опционально)',
+    'topics.deleteConfirm': 'Вы уверены, что хотите удалить эту тему?',
+    'topics.saving': 'Сохранение...',
+    'topics.update': 'Обновить',
+    'topics.error.deleteWithQuestions': 'Нельзя удалить тему, к которой привязаны вопросы',
+    'topics.error.alreadyExists': 'Тема с таким названием уже существует',
+    'topics.error.notFound': 'Тема не найдена',
+    'topics.accessDenied': 'Доступ запрещен',
+    'topics.accessDeniedDesc': 'Студенты не имеют доступа к этой странице.',
+    'topics.loadError': 'Ошибка загрузки тем',
+
+    // Ошибки
+    'error.notEnoughPermissions': 'Недостаточно прав',
+    'error.unexpected': 'Произошла непредвиденная ошибка',
+
+    // Вопросы
+    'questions.title': 'Вопросы',
+    'questions.create': 'Создать вопрос',
+    'questions.edit': 'Редактировать вопрос',
+    'questions.view': 'Просмотр вопроса',
+    'questions.type': 'Тип вопроса',
+    'questions.type.text': 'Текстовый ответ',
+    'questions.type.imageAnnotation': 'Графическая аннотация',
+    'questions.topic': 'Тема',
+    'questions.noTopic': 'Без темы',
+    'questions.content': 'Текст вопроса',
+    'questions.referenceAnswer': 'Эталонный ответ',
+    'questions.referenceAnswerDesc': 'Ответ, с которым будут сравниваться ответы студентов',
+    'questions.imageAnnotationInfo': 'Для графических вопросов студенты будут размечать изображения. Загрузка изображений пока не реализована - будет добавлена позже.',
+    'questions.enterContent': 'Введите текст вопроса',
+    'questions.enterReferenceAnswer': 'Введите эталонный ответ',
+    'questions.difficulty': 'Сложность',
+    'questions.selectType': 'Выберите тип вопроса',
+    'questions.bank': 'Банк вопросов',
+    'questions.searchPlaceholder': 'Поиск по названию или содержанию...',
+    'questions.allTopics': 'Все темы',
+    'questions.allTypes': 'Все типы',
+    'questions.emptyBank': 'Банк вопросов пуст',
+    'questions.noResults': 'Вопросы не найдены',
+    'questions.createFirst': 'Создать первый вопрос',
+    'questions.date': 'Дата',
+    'questions.deleteConfirm': 'Вы уверены, что хотите удалить этот вопрос?',
+    'questions.viewTitle': 'Просмотр',
+    'questions.editTitle': 'Редактировать',
+    'questions.deleteTitle': 'Удалить',
+    'questions.uploadImageAndAnnotations': 'Загрузите изображение и (опционально) файл аннотаций',
+    'questions.annotationsLoaded': 'Аннотации загружены',
+    'questions.imageRequired': 'Изображение обязательно',
+    'questions.selectImageAndAnnotations': 'Пожалуйста, выберите изображение вместе с файлом аннотаций',
+    'questions.supportedFormats': 'Поддерживаются JPG, PNG и JSON (COCO format)',
+    'questions.uploading': 'Загрузка...',
+    'questions.chooseFiles': 'Выбрать файлы',
+    'questions.annotationsRequired': 'Для графического вопроса наличие аннотаций обязательно',
   },
   en: {
     // Roles
@@ -160,6 +223,7 @@ const translations = {
     'nav.profile': 'Profile',
     'nav.logout': 'Logout',
     'nav.admin': 'Admin Panel',
+    'nav.topics': 'Topics',
     
     // Auth
     'auth.login': 'Login',
@@ -287,6 +351,68 @@ const translations = {
     'admin.create': 'Create',
     'admin.confirmDelete': 'Confirm Delete',
     'admin.deleteConfirmMessage': 'Are you sure you want to delete',
+
+    // Topics
+    'topics.title': 'Topics',
+    'topics.create': 'Create Topic',
+    'topics.edit': 'Edit Topic',
+    'topics.delete': 'Delete Topic',
+    'topics.noTopics': 'No topics',
+    'topics.createFirst': 'Create first topic',
+    'topics.name': 'Topic Name',
+    'topics.description': 'Description (optional)',
+    'topics.deleteConfirm': 'Are you sure you want to delete this topic?',
+    'topics.saving': 'Saving...',
+    'topics.update': 'Update',
+    'topics.error.deleteWithQuestions': 'Cannot delete topic with associated questions',
+    'topics.error.alreadyExists': 'Topic with this name already exists',
+    'topics.error.notFound': 'Topic not found',
+    'topics.accessDenied': 'Access Denied',
+    'topics.accessDeniedDesc': 'Students do not have access to this page.',
+    'topics.loadError': 'Error loading topics',
+
+    // Errors
+    'error.notEnoughPermissions': 'Not enough permissions',
+    'error.unexpected': 'An unexpected error occurred',
+
+    // Questions
+    'questions.title': 'Questions',
+    'questions.create': 'Create Question',
+    'questions.edit': 'Edit Question',
+    'questions.view': 'View Question',
+    'questions.type': 'Question Type',
+    'questions.type.text': 'Text Answer',
+    'questions.type.imageAnnotation': 'Image Annotation',
+    'questions.topic': 'Topic',
+    'questions.noTopic': 'No Topic',
+    'questions.content': 'Question Content',
+    'questions.referenceAnswer': 'Reference Answer',
+    'questions.referenceAnswerDesc': 'The answer that student answers will be compared to',
+    'questions.imageAnnotationInfo': 'For image questions, students will annotate images. Image uploading is not yet implemented - it will be added later.',
+    'questions.enterContent': 'Enter question content',
+    'questions.enterReferenceAnswer': 'Enter reference answer',
+    'questions.difficulty': 'Difficulty',
+    'questions.selectType': 'Select question type',
+    'questions.bank': 'Question Bank',
+    'questions.searchPlaceholder': 'Search by content...',
+    'questions.allTopics': 'All Topics',
+    'questions.allTypes': 'All Types',
+    'questions.emptyBank': 'Question bank is empty',
+    'questions.noResults': 'No questions found',
+    'questions.createFirst': 'Create first question',
+    'questions.date': 'Date',
+    'questions.deleteConfirm': 'Are you sure you want to delete this question?',
+    'questions.viewTitle': 'View',
+    'questions.editTitle': 'Edit',
+    'questions.deleteTitle': 'Delete',
+    'questions.uploadImageAndAnnotations': 'Upload image and (optional) annotation file',
+    'questions.annotationsLoaded': 'Annotations loaded',
+    'questions.imageRequired': 'Image is required',
+    'questions.selectImageAndAnnotations': 'Please select an image along with the annotation file',
+    'questions.supportedFormats': 'Supported formats: JPG, PNG and JSON (COCO format)',
+    'questions.uploading': 'Uploading...',
+    'questions.chooseFiles': 'Choose files',
+    'questions.annotationsRequired': 'Annotations are required for image questions',
   },
 }
 
@@ -296,6 +422,7 @@ interface LocaleContextType {
   locale: Locale
   setLocale: (locale: Locale) => void
   t: (key: TranslationKey) => string
+  translateError: (detail: any) => string
   formatName: (lastName: string, firstName: string, middleName?: string | null) => string
   formatRole: (role: string) => string
 }
@@ -319,6 +446,31 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     return translations[locale][key] || key
   }, [locale])
 
+  // Перевод ошибок API
+  const translateError = useCallback((detail: any): string => {
+    if (typeof detail !== 'string') {
+      return translations[locale]['common.error'] || 'Error'
+    }
+
+    const errorMap: Record<string, TranslationKey> = {
+      'Not enough permissions': 'error.notEnoughPermissions',
+      'Topic with this name already exists': 'topics.error.alreadyExists',
+      'Topic not found': 'topics.error.notFound',
+      'Cannot delete topic with associated questions': 'topics.error.deleteWithQuestions',
+      'Incorrect email or password': 'auth.invalidCredentials',
+      'User not found': 'auth.userNotFound',
+      'Inactive user': 'auth.accountInactive',
+      'Email already registered': 'profile.emailAlreadyRegistered',
+    }
+
+    const key = errorMap[detail]
+    if (key && translations[locale][key]) {
+      return translations[locale][key]
+    }
+
+    return detail
+  }, [locale])
+
   // Форматирование ФИО: "Фамилия И.О." или "LastName F.M."
   const formatName = useCallback((lastName: string, firstName: string, middleName?: string | null): string => {
     const firstInitial = firstName ? firstName.charAt(0).toUpperCase() + '.' : ''
@@ -337,6 +489,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     locale,
     setLocale,
     t,
+    translateError,
     formatName,
     formatRole,
   }

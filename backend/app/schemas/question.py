@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.models.question import QuestionType
+from app.schemas.topic import TopicResponse
 
 
 class ImageAssetResponse(BaseModel):
@@ -21,6 +22,7 @@ class ImageAssetResponse(BaseModel):
     width: int
     height: int
     file_size: int
+    coco_annotations: Optional[Any] = None  # COCO аннотации
     presigned_url: Optional[str] = None  # Временная URL для доступа
 
     model_config = {"from_attributes": True}
@@ -31,8 +33,9 @@ class QuestionBase(BaseModel):
     Базовая схема вопроса
     """
     type: QuestionType
-    title: str = Field(..., min_length=1, max_length=500)
     content: str = Field(..., min_length=1)
+    topic_id: Optional[UUID] = None
+    difficulty: int = Field(default=1, ge=1, le=5)
     reference_data: Optional[Dict[str, Any]] = None
     scoring_criteria: Optional[Dict[str, Any]] = None
 
@@ -48,8 +51,9 @@ class QuestionUpdate(BaseModel):
     """
     Схема для обновления вопроса
     """
-    title: Optional[str] = Field(None, min_length=1, max_length=500)
     content: Optional[str] = Field(None, min_length=1)
+    topic_id: Optional[UUID] = None
+    difficulty: Optional[int] = Field(None, ge=1, le=5)
     reference_data: Optional[Dict[str, Any]] = None
     scoring_criteria: Optional[Dict[str, Any]] = None
     image_id: Optional[UUID] = None
@@ -61,6 +65,7 @@ class QuestionResponse(QuestionBase):
     """
     id: UUID
     author_id: UUID
+    topic: Optional[TopicResponse] = None
     image_id: Optional[UUID] = None
     image: Optional[ImageAssetResponse] = None
     created_at: datetime

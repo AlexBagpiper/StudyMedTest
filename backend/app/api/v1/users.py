@@ -39,7 +39,7 @@ async def update_current_user(
     """
     Обновление профиля текущего пользователя
     """
-    update_data = user_update.model_dump(exclude_unset=True)
+    update_data = user_update.model_dump(exclude_unset=True, mode='json')
     
     # Хеширование пароля если он изменяется
     if "password" in update_data:

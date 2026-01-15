@@ -12,8 +12,11 @@ import RegisterPage from './pages/auth/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import TestsPage from './pages/tests/TestsPage'
 import TestDetailPage from './pages/tests/TestDetailPage'
+import TestFormPage from './pages/tests/TestFormPage'
+import TopicsPage from './pages/topics/TopicsPage'
 import QuestionsPage from './pages/questions/QuestionsPage'
 import SubmissionsPage from './pages/submissions/SubmissionsPage'
+import TakeTestPage from './pages/submissions/TakeTestPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/admin/AdminPage'
 
@@ -73,9 +76,13 @@ function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="/tests" element={<TestsPage />} />
+        <Route path="/tests/create" element={<TestFormPage />} />
+        <Route path="/tests/:testId/edit" element={<TestFormPage />} />
         <Route path="/tests/:id" element={<TestDetailPage />} />
+        <Route path="/topics" element={<TopicsPage />} />
         <Route path="/questions" element={<QuestionsPage />} />
         <Route path="/submissions" element={<SubmissionsPage />} />
+        <Route path="/submissions/:id" element={<TakeTestPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route
           path="/admin"

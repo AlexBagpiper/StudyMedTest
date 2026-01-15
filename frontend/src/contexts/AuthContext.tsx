@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import api from '../lib/api'
 
 interface User {
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     // Проверка текущего пользователя при загрузке
@@ -35,6 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       setIsLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadUser = async () => {
@@ -45,6 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Failed to load user:', error)
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
+      // Очистка кеша при ошибке авторизации
+      queryClient.clear()
     } finally {
       setIsLoading(false)
     }
@@ -66,12 +71,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('access_token', access_token)
     localStorage.setItem('refresh_token', refresh_token)
 
+    // Очистка кеша при смене пользователя
+    queryClient.clear()
+
     await loadUser()
     navigate('/')
   }
 
   const register = async (email: string, password: string, lastName: string, firstName: string, middleName?: string) => {
-    const response = await api.post('/auth/register', {
+    await api.post('/auth/register', {
       email,
       password,
       last_name: lastName,
@@ -87,6 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     setUser(null)
+    
+    // Очистка всего кеша React Query
+    queryClient.clear()
+    
     navigate('/login')
   }
 

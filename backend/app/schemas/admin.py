@@ -12,6 +12,7 @@ from app.models.user import Role
 from app.models.question import QuestionType
 from app.models.test import TestStatus
 from app.models.submission import SubmissionStatus
+from app.schemas.topic import TopicResponse
 
 
 T = TypeVar('T')
@@ -91,7 +92,6 @@ class AdminUserResponse(BaseModel):
 
 class AdminQuestionUpdate(BaseModel):
     """Обновление вопроса админом"""
-    title: Optional[str] = Field(None, min_length=1, max_length=500)
     content: Optional[str] = None
     type: Optional[QuestionType] = None
     reference_data: Optional[Dict[str, Any]] = None
@@ -127,8 +127,9 @@ class AdminQuestionResponse(BaseModel):
     author_id: UUID
     author: Optional[AdminQuestionAuthor] = None
     type: QuestionType
-    title: str
     content: str
+    topic_id: Optional[UUID] = None
+    topic: Optional[TopicResponse] = None
     reference_data: Optional[Dict[str, Any]] = None
     scoring_criteria: Optional[Dict[str, Any]] = None
     image_id: Optional[UUID] = None

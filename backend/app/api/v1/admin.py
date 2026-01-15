@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user, get_password_hash
+from app.core.storage import storage_service
 from app.models.user import User, Role
 from app.models.question import Question, ImageAsset
 from app.models.test import Test, TestQuestion, TestVariant, TestStatus
@@ -208,7 +209,7 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    update_data = user_update.model_dump(exclude_unset=True)
+    update_data = user_update.model_dump(exclude_unset=True, mode='json')
     
     # Проверка уникальности email
     if "email" in update_data and update_data["email"] != user.email:
@@ -263,12 +264,15 @@ async def list_questions(
     db: AsyncSession = Depends(get_db)
 ):
     """Список всех вопросов"""
-    query = select(Question).options(selectinload(Question.author), selectinload(Question.image))
+    query = select(Question).options(
+        selectinload(Question.author), 
+        selectinload(Question.image),
+        selectinload(Question.topic)
+    )
     count_query = select(func.count(Question.id))
     
     if search:
         search_filter = or_(
-            Question.title.ilike(f"%{search}%"),
             Question.content.ilike(f"%{search}%"),
         )
         query = query.where(search_filter)
@@ -284,6 +288,14 @@ async def list_questions(
     result = await db.execute(query)
     questions = result.scalars().all()
     
+    # Генерация presigned URLs
+    for question in questions:
+        if question.image:
+            question.image.presigned_url = storage_service.get_presigned_url(
+                question.image.storage_path.split("/", 1)[1],
+                expires_seconds=3600
+            )
+            
     return PaginatedResponse(items=questions, total=total or 0, skip=skip, limit=limit)
 
 
@@ -296,7 +308,11 @@ async def get_question(
     """Получение вопроса по ID"""
     result = await db.execute(
         select(Question)
-        .options(selectinload(Question.author), selectinload(Question.image))
+        .options(
+            selectinload(Question.author), 
+            selectinload(Question.image),
+            selectinload(Question.topic)
+        )
         .where(Question.id == question_id)
     )
     question = result.scalar_one_or_none()
@@ -304,6 +320,13 @@ async def get_question(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     
+    # Генерация presigned URL
+    if question.image:
+        question.image.presigned_url = storage_service.get_presigned_url(
+            question.image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
+        
     return question
 
 
@@ -328,12 +351,32 @@ async def update_question(
     update_data = question_update.model_dump(exclude_unset=True)
     
     for field, value in update_data.items():
+        if field in ['reference_data', 'scoring_criteria'] and value is not None:
+            import json
+            value = json.loads(json.dumps(value, default=str))
         setattr(question, field, value)
     
     await log_admin_action(db, admin, "update", "question", question_id, update_data)
     await db.commit()
-    await db.refresh(question)
     
+    # Получаем обновленный вопрос
+    result = await db.execute(
+        select(Question)
+        .options(
+            selectinload(Question.author), 
+            selectinload(Question.image),
+            selectinload(Question.topic)
+        )
+        .where(Question.id == question_id)
+    )
+    question = result.scalar_one()
+    
+    if question.image:
+        question.image.presigned_url = storage_service.get_presigned_url(
+            question.image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
+        
     return question
 
 
@@ -432,7 +475,7 @@ async def update_test(
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
     
-    update_data = test_update.model_dump(exclude_unset=True)
+    update_data = test_update.model_dump(exclude_unset=True, mode='json')
     
     # Обновление published_at при изменении статуса
     if "status" in update_data:
@@ -559,6 +602,13 @@ async def list_images(
     query = select(ImageAsset).order_by(ImageAsset.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     images = result.scalars().all()
+    
+    # Генерация presigned URLs
+    for image in images:
+        image.presigned_url = storage_service.get_presigned_url(
+            image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
     
     return PaginatedResponse(items=images, total=total or 0, skip=skip, limit=limit)
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { 
   Box, Typography, Card, CardContent, Avatar, Chip, 
-  TextField, Button, Alert, Divider, Grid, IconButton,
+  TextField, Button, Alert, Divider, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
@@ -12,7 +12,7 @@ import api from '../lib/api'
 
 export default function ProfilePage() {
   const { user } = useAuth()
-  const { t, formatName, formatRole } = useLocale()
+  const { t, formatRole } = useLocale()
   
   // Состояния редактирования профиля
   const [isEditing, setIsEditing] = useState(false)
@@ -22,7 +22,6 @@ export default function ProfilePage() {
   
   // Состояния смены пароля
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
-  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   
@@ -40,7 +39,6 @@ export default function ProfilePage() {
 
   if (!user) return null
 
-  const displayName = formatName(user.last_name, user.first_name, user.middle_name)
   const displayRole = formatRole(user.role)
 
   const handleEditToggle = () => {
@@ -88,7 +86,6 @@ export default function ProfilePage() {
 
   const handlePasswordDialogOpen = () => {
     setPasswordDialogOpen(true)
-    setCurrentPassword('')
     setNewPassword('')
     setConfirmPassword('')
     setError('')

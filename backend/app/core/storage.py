@@ -34,8 +34,41 @@ class StorageService:
             if not self.client.bucket_exists(self.bucket):
                 self.client.make_bucket(self.bucket)
                 print(f"✅ Created bucket: {self.bucket}")
+            
+            # В режиме разработки делаем bucket публичным для чтения
+            # Это решает проблемы с presigned URLs через прокси
+            if settings.ENVIRONMENT == "development":
+                self._set_public_read_policy()
         except S3Error as e:
-            print(f"❌ Error creating bucket: {e}")
+            print(f"❌ Error with bucket: {e}")
+            
+    def _set_public_read_policy(self):
+        """
+        Установка публичного доступа на чтение для bucket
+        """
+        import json
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+                    "Resource": [f"arn:aws:s3:::{self.bucket}"],
+                },
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{self.bucket}/*"],
+                },
+            ],
+        }
+        try:
+            self.client.set_bucket_policy(self.bucket, json.dumps(policy))
+            print(f"✅ Set public read policy for bucket: {self.bucket}")
+        except Exception as e:
+            print(f"❌ Error setting bucket policy: {e}")
     
     def upload_file(
         self,
@@ -119,25 +152,37 @@ class StorageService:
         expires_seconds: int = 3600
     ) -> str:
         """
-        Получение временной signed URL для доступа к файлу
-        
-        Args:
-            object_name: имя объекта в storage
-            expires_seconds: время жизни URL в секундах
-        
-        Returns:
-            Signed URL
+        Получение временной signed URL для доступа к файлу.
+        В режиме разработки, если bucket публичный, возвращает прямую ссылку.
         """
         try:
+            # В разработке используем прямые ссылки без подписи, 
+            # так как мы сделали bucket публичным. Это надежнее через прокси.
+            if settings.ENVIRONMENT == "development":
+                base = settings.MINIO_PUBLIC_URL or f"http://{settings.MINIO_ENDPOINT}"
+                base = base.rstrip('/')
+                # Если мы используем прокси /storage, то bucket уже не нужен в пути 
+                # (зависит от настроек прокси, но обычно MinIO хочет bucket в пути)
+                return f"{base}/{self.bucket}/{object_name}"
+
             from datetime import timedelta
             url = self.client.presigned_get_object(
                 self.bucket,
                 object_name,
                 expires=timedelta(seconds=expires_seconds)
             )
+            
+            # Если задан публичный URL, заменяем внутренний адрес на публичный
+            if settings.MINIO_PUBLIC_URL:
+                from urllib.parse import urlparse
+                parsed_url = urlparse(url)
+                internal_base = f"{parsed_url.scheme}://{parsed_url.netloc}"
+                public_base = settings.MINIO_PUBLIC_URL.rstrip('/')
+                url = url.replace(internal_base, public_base)
+                
             return url
         except S3Error as e:
-            raise Exception(f"Failed to generate presigned URL: {e}")
+            raise Exception(f"Failed to generate URL: {e}")
     
     def file_exists(self, object_name: str) -> bool:
         """

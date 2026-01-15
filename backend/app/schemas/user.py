@@ -96,3 +96,10 @@ class TokenPayload(BaseModel):
     role: Role
     exp: Optional[datetime] = None
 
+
+class RefreshTokenRequest(BaseModel):
+    """
+    Схема запроса на обновление токена
+    """
+    refresh_token: str
+

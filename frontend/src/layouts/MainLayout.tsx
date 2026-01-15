@@ -1,8 +1,9 @@
 import { Outlet } from 'react-router-dom'
-import { Box, AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar, Menu, MenuItem, Divider, ToggleButtonGroup, ToggleButton } from '@mui/material'
+import { Box, AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Avatar, Menu, MenuItem } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import QuizIcon from '@mui/icons-material/Quiz'
+import TopicIcon from '@mui/icons-material/Topic'
 import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer'
 import AssignmentIcon from '@mui/icons-material/Assignment'
 import LanguageIcon from '@mui/icons-material/Language'
@@ -60,6 +61,9 @@ export default function MainLayout() {
 
   const menuItems = [
     { text: t('nav.dashboard'), icon: <DashboardIcon />, path: '/' },
+    ...(user?.role !== 'student' ? [
+      { text: t('nav.topics'), icon: <TopicIcon />, path: '/topics' }
+    ] : []),
     { text: t('nav.tests'), icon: <QuizIcon />, path: '/tests' },
     ...(user?.role !== 'student' ? [
       { text: t('nav.questions'), icon: <QuestionAnswerIcon />, path: '/questions' },

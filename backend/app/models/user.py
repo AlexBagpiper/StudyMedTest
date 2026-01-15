@@ -76,6 +76,11 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     
     # Relationships
+    created_topics = relationship(
+        "Topic",
+        back_populates="creator",
+        foreign_keys="Topic.created_by"
+    )
     created_questions = relationship(
         "Question",
         back_populates="author",

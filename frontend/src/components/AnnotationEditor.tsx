@@ -18,7 +18,6 @@ export default function AnnotationEditor({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [canvas, setCanvas] = useState<fabric.Canvas | null>(null)
   const [tool, setTool] = useState<'select' | 'polygon' | 'freehand'>('select')
-  const [isDrawing, setIsDrawing] = useState(false)
   const [points, setPoints] = useState<{ x: number; y: number }[]>([])
 
   useEffect(() => {
@@ -42,7 +41,7 @@ export default function AnnotationEditor({
       )
       img.scale(scale)
       fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas))
-    })
+    }, { crossOrigin: 'anonymous' })
 
     // Загрузка существующих аннотаций
     if (initialAnnotations) {
