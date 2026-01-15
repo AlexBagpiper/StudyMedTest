@@ -1,14 +1,16 @@
-"""
-Questions endpoints
-"""
-
-from typing import List, Optional
+import hashlib
+import json
+import io
+import uuid
+import os
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from PIL import Image
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -16,8 +18,7 @@ from app.core.storage import storage_service
 from app.models.user import User, Role
 from app.models.question import Question, ImageAsset, QuestionType
 from app.schemas.question import QuestionCreate, QuestionUpdate, QuestionResponse, ImageAssetResponse
-import io
-from PIL import Image
+from app.schemas.annotation import AnnotationData
 
 router = APIRouter()
 
@@ -55,7 +56,7 @@ async def list_questions(
     result = await db.execute(query)
     questions = result.scalars().all()
     
-    # Генерация presigned URLs
+    # Генерация presigned URLs для всех вопросов с изображениями
     for question in questions:
         if question.image:
             question.image.presigned_url = storage_service.get_presigned_url(
@@ -83,22 +84,6 @@ async def create_question(
     
     question_data = question_in.model_dump(mode='json')
     
-    if question_in.type == QuestionType.IMAGE_ANNOTATION:
-        if not question_in.image_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Image is required for image annotation questions"
-            )
-        
-        # Проверка наличия аннотаций у изображения
-        result = await db.execute(select(ImageAsset).where(ImageAsset.id == question_in.image_id))
-        image_asset = result.scalar_one_or_none()
-        if not image_asset or not image_asset.coco_annotations:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Selected image must have annotations before it can be attached to a question"
-            )
-
     question = Question(
         author_id=current_user.id,
         type=question_in.type,
@@ -112,7 +97,14 @@ async def create_question(
     
     db.add(question)
     await db.commit()
-    await db.refresh(question, ["topic", "image"])
+    
+    # Получаем созданный вопрос со всеми связями для ответа
+    result = await db.execute(
+        select(Question)
+        .options(selectinload(Question.topic), selectinload(Question.image))
+        .where(Question.id == question.id)
+    )
+    question = result.scalar_one()
     
     if question.image:
         question.image.presigned_url = storage_service.get_presigned_url(
@@ -134,10 +126,7 @@ async def get_question(
     """
     result = await db.execute(
         select(Question)
-        .options(
-            selectinload(Question.topic),
-            selectinload(Question.image)
-        )
+        .options(selectinload(Question.topic), selectinload(Question.image))
         .where(Question.id == question_id)
     )
     question = result.scalar_one_or_none()
@@ -155,7 +144,6 @@ async def get_question(
             detail="Not enough permissions"
         )
     
-    # Генерация presigned URL если есть изображение
     if question.image:
         question.image.presigned_url = storage_service.get_presigned_url(
             question.image.storage_path.split("/", 1)[1],
@@ -192,29 +180,8 @@ async def update_question(
         )
     
     update_data = question_update.model_dump(exclude_unset=True)
-    
-    # Валидация при обновлении на тип IMAGE_ANNOTATION
-    new_type = update_data.get('type', question.type)
-    new_image_id = update_data.get('image_id', question.image_id)
-    
-    if new_type == QuestionType.IMAGE_ANNOTATION:
-        if not new_image_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Image is required for image annotation questions"
-            )
-        
-        result = await db.execute(select(ImageAsset).where(ImageAsset.id == new_image_id))
-        image_asset = result.scalar_one_or_none()
-        if not image_asset or not image_asset.coco_annotations:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Selected image must have annotations"
-            )
-
     for field, value in update_data.items():
         if field in ['reference_data', 'scoring_criteria'] and value is not None:
-            import json
             # Конвертируем только JSONB поля в JSON-совместимый вид
             value = json.loads(json.dumps(value, default=str))
         setattr(question, field, value)
@@ -224,10 +191,7 @@ async def update_question(
     # Получаем обновленный вопрос со всеми связями
     result = await db.execute(
         select(Question)
-        .options(
-            selectinload(Question.topic),
-            selectinload(Question.image)
-        )
+        .options(selectinload(Question.topic), selectinload(Question.image))
         .where(Question.id == question_id)
     )
     question = result.scalar_one()
@@ -272,6 +236,98 @@ async def delete_question(
     return None
 
 
+@router.put("/{question_id}/annotations", response_model=QuestionResponse)
+async def update_question_annotations(
+    question_id: UUID,
+    annotations: AnnotationData,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Обновление эталонных аннотаций вопроса (teacher, admin)
+    """
+    result = await db.execute(select(Question).where(Question.id == question_id))
+    question = result.scalar_one_or_none()
+    
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+    
+    if current_user.role not in [Role.TEACHER, Role.ADMIN] or (current_user.role == Role.TEACHER and question.author_id != current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    # Сохраняем как JSON в reference_data
+    question.reference_data = annotations.model_dump(mode='json')
+    
+    await db.commit()
+    await db.refresh(question)
+    
+    # Релоад со всеми связями для ответа
+    result = await db.execute(
+        select(Question)
+        .options(selectinload(Question.topic), selectinload(Question.image))
+        .where(Question.id == question_id)
+    )
+    question = result.scalar_one()
+    if question.image:
+        question.image.presigned_url = storage_service.get_presigned_url(
+            question.image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
+    return question
+
+
+@router.get("/{question_id}/labels", response_model=List[Dict[str, Any]])
+async def get_question_labels(
+    question_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Получение списка меток вопроса (для студента).
+    Сначала ищет в reference_data, затем в coco_annotations привязанного изображения.
+    """
+    result = await db.execute(
+        select(Question)
+        .options(selectinload(Question.image))
+        .where(Question.id == question_id)
+    )
+    question = result.scalar_one_or_none()
+    
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+    
+    # 1. Если есть в reference_data (сохраненные через редактор)
+    if question.reference_data and "labels" in question.reference_data:
+        return question.reference_data["labels"]
+        
+    # 2. Если нет в reference_data, берем категории из COCO аннотаций изображения
+    if question.image and question.image.coco_annotations:
+        categories = question.image.coco_annotations.get("categories", [])
+        # Приводим к формату {id, name, color}
+        labels = []
+        for cat in categories:
+            # Генерируем стабильный цвет на основе имени
+            name = cat.get("name", "Unknown")
+            color = f"#{hashlib.md5(name.encode()).hexdigest()[:6]}"
+            labels.append({
+                "id": str(cat.get("id")),
+                "name": name,
+                "color": color
+            })
+        return labels
+
+    return []
+
+
 @router.post("/images", response_model=ImageAssetResponse, status_code=status.HTTP_201_CREATED)
 async def upload_image(
     file: UploadFile = File(...),
@@ -314,7 +370,6 @@ async def upload_image(
         )
     
     # Загрузка в MinIO
-    import uuid
     object_name = f"images/{uuid.uuid4()}.{file.filename.split('.')[-1]}"
     
     file_data = io.BytesIO(content)
@@ -383,8 +438,6 @@ def parse_coco_for_image(coco_data: dict, filename: str) -> dict:
     """
     Парсит COCO данные и оставляет только те, что относятся к конкретному изображению.
     """
-    import os
-    
     # 1. Находим изображение в 'images'
     target_image = None
     
@@ -457,7 +510,6 @@ async def upload_annotations(
         )
     
     try:
-        import json
         content = await file.read()
         coco_data = json.loads(content)
         
@@ -495,7 +547,9 @@ async def upload_annotations(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        print(f"Error processing annotations: {traceback.format_exc()}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing annotations: {str(e)}"
         )

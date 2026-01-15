@@ -114,8 +114,8 @@ def evaluate_annotation_answer(self, answer_id: str):
             from app.services.cv_service import cv_service
             
             evaluation_result = await cv_service.evaluate_annotation(
-                student_coco=answer.annotation_data,
-                reference_coco=question.reference_data.get("coco_annotations", {}),
+                student_data=answer.annotation_data or {},
+                reference_data=question.reference_data or {},
                 image_id=question.image_id
             )
             

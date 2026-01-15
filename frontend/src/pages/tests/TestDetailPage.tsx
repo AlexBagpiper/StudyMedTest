@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Typography,
@@ -53,6 +53,12 @@ export default function TestDetailPage() {
 
   const isStudent = user?.role === 'student'
   const isAuthor = test?.author_id === user?.id
+
+  useEffect(() => {
+    if (isStudent) {
+      navigate('/tests', { replace: true })
+    }
+  }, [isStudent, navigate])
 
   const handlePublish = async () => {
     if (!id) return

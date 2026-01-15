@@ -2,8 +2,9 @@
 Submissions endpoints
 """
 
-from typing import List
+from typing import List, Optional
 from uuid import UUID
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -66,7 +67,20 @@ async def start_submission(
     
     db.add(submission)
     await db.commit()
-    await db.refresh(submission)
+    
+    # Релоад со всеми связями для ответа
+    result = await db.execute(
+        select(Submission)
+        .options(
+            selectinload(Submission.answers),
+            selectinload(Submission.variant).selectinload(TestVariant.test)
+        )
+        .where(Submission.id == submission.id)
+    )
+    submission = result.scalar_one()
+    
+    # Добавляем time_limit в объект для схемы
+    submission.time_limit = submission.variant.test.settings.get("time_limit")
     
     return submission
 
@@ -82,7 +96,10 @@ async def get_submission(
     """
     result = await db.execute(
         select(Submission)
-        .options(selectinload(Submission.answers))
+        .options(
+            selectinload(Submission.answers),
+            selectinload(Submission.variant).selectinload(TestVariant.test)
+        )
         .where(Submission.id == submission_id)
     )
     submission = result.scalar_one_or_none()
@@ -100,6 +117,9 @@ async def get_submission(
             detail="Not enough permissions"
         )
     
+    # Добавляем time_limit в объект для схемы
+    submission.time_limit = submission.variant.test.settings.get("time_limit")
+    
     return submission
 
 
@@ -115,7 +135,9 @@ async def create_or_update_answer(
     """
     # Проверка submission
     result = await db.execute(
-        select(Submission).where(Submission.id == submission_id)
+        select(Submission)
+        .options(selectinload(Submission.variant).selectinload(TestVariant.test))
+        .where(Submission.id == submission_id)
     )
     submission = result.scalar_one_or_none()
     
@@ -138,6 +160,24 @@ async def create_or_update_answer(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Submission is not in progress"
         )
+
+    # Проверка времени
+    time_limit = submission.variant.test.settings.get("time_limit")
+    if time_limit:
+        if datetime.utcnow() > submission.started_at + timedelta(minutes=time_limit):
+            # Если время вышло, принудительно завершаем тест
+            submission.status = SubmissionStatus.EVALUATING
+            submission.submitted_at = submission.started_at + timedelta(minutes=time_limit)
+            await db.commit()
+            
+            # Запуск асинхронной оценки через Celery
+            from app.tasks.evaluation_tasks import evaluate_submission
+            evaluate_submission.delay(str(submission.id))
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Time limit exceeded. Test submitted automatically."
+            )
     
     # Проверка существования ответа
     result = await db.execute(
@@ -180,7 +220,10 @@ async def submit_test(
     """
     result = await db.execute(
         select(Submission)
-        .options(selectinload(Submission.answers))
+        .options(
+            selectinload(Submission.answers),
+            selectinload(Submission.variant).selectinload(TestVariant.test)
+        )
         .where(Submission.id == submission_id)
     )
     submission = result.scalar_one_or_none()
@@ -206,8 +249,13 @@ async def submit_test(
         )
     
     # Обновление статуса
-    from datetime import datetime
     submission.submitted_at = datetime.utcnow()
+    
+    # Дополнительная проверка времени при сабмите
+    time_limit = submission.variant.test.settings.get("time_limit")
+    if time_limit and submission.submitted_at > submission.started_at + timedelta(minutes=time_limit):
+        submission.submitted_at = submission.started_at + timedelta(minutes=time_limit)
+
     submission.status = SubmissionStatus.EVALUATING
     
     await db.commit()
@@ -217,6 +265,10 @@ async def submit_test(
     evaluate_submission.delay(str(submission.id))
     
     await db.refresh(submission)
+    
+    # Добавляем time_limit в объект для схемы
+    submission.time_limit = submission.variant.test.settings.get("time_limit")
+    
     return submission
 
 
@@ -232,7 +284,10 @@ async def list_submissions(
     """
     Список submissions
     """
-    query = select(Submission)
+    query = select(Submission).options(
+        selectinload(Submission.answers),
+        selectinload(Submission.variant).selectinload(TestVariant.test)
+    )
     
     # Students видят только свои submissions
     if current_user.role == Role.STUDENT:
@@ -244,11 +299,45 @@ async def list_submissions(
     
     if test_id:
         # Нужно джойн через variant
-        query = query.join(TestVariant).where(TestVariant.test_id == test_id)
+        query = query.join(Submission.variant).where(TestVariant.test_id == test_id)
     
     query = query.offset(skip).limit(limit).order_by(Submission.started_at.desc())
     result = await db.execute(query)
     submissions = result.scalars().all()
     
+    # Добавляем time_limit для каждого элемента списка
+    for sub in submissions:
+        sub.time_limit = sub.variant.test.settings.get("time_limit")
+    
     return submissions
+
+
+@router.delete("/{submission_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_submission(
+    submission_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Удаление submission (только владельцем или админом)
+    """
+    result = await db.execute(select(Submission).where(Submission.id == submission_id))
+    submission = result.scalar_one_or_none()
+    
+    if not submission:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission not found"
+        )
+    
+    # Проверка прав: только администратор
+    if current_user.role != Role.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can delete submissions"
+        )
+    
+    await db.delete(submission)
+    await db.commit()
+    return None
 

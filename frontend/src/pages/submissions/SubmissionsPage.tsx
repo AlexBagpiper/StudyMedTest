@@ -1,29 +1,35 @@
-import { Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Button, Paper } from '@mui/material'
+import { 
+  Box, 
+  Typography, 
+  Card, 
+  CardContent, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  Chip, 
+  Button, 
+  IconButton,
+  Tooltip,
+  Paper, 
+  CircularProgress,
+  Alert
+} from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
-import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import api from '../../lib/api'
+import { useSubmissions, useDeleteSubmission } from '../../lib/api/hooks/useSubmissions'
+import DeleteIcon from '@mui/icons-material/Delete'
 
 export default function SubmissionsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [submissions, setSubmissions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    loadSubmissions()
-  }, [])
-
-  const loadSubmissions = async () => {
-    try {
-      const res = await api.get('/submissions')
-      setSubmissions(res.data)
-    } catch (err) {
-      console.error('Failed to load submissions:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const deleteSubmission = useDeleteSubmission()
+  
+  const { data: submissions = [], isLoading: loading, error } = useSubmissions({ 
+    student_id: user?.role === 'student' ? user.id : undefined 
+  })
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -34,16 +40,45 @@ export default function SubmissionsPage() {
     }
   }
 
+  const getStatusLabel = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'completed': 'Завершено',
+      'evaluating': 'На проверке',
+      'in_progress': 'В процессе',
+      'submitted': 'Отправлено'
+    }
+    return statusMap[status] || status
+  }
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Вы уверены, что хотите удалить эту попытку?')) {
+      try {
+        await deleteSubmission.mutateAsync(id)
+      } catch (err) {
+        console.error('Failed to delete submission:', err)
+        alert('Не удалось удалить попытку')
+      }
+    }
+  }
+
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
+    <Box sx={{ width: '100%', py: 4 }}>
+      <Typography variant="h4" fontWeight="bold" gutterBottom>
         {user?.role === 'student' ? 'Мои результаты' : 'Результаты студентов'}
       </Typography>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          Ошибка загрузки результатов
+        </Alert>
+      )}
+
       {loading ? (
-        <Typography>Загрузка...</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
       ) : submissions.length === 0 ? (
-        <Card>
+        <Card sx={{ borderRadius: 1 }}>
           <CardContent sx={{ textAlign: 'center', py: 6 }}>
             <Typography variant="h6" color="text.secondary">
               {user?.role === 'student' 
@@ -53,40 +88,65 @@ export default function SubmissionsPage() {
           </CardContent>
         </Card>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer component={Paper} sx={{ borderRadius: 1, boxShadow: 3 }}>
           <Table>
-            <TableHead>
+            <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
-                {user?.role !== 'student' && <TableCell>Студент</TableCell>}
-                <TableCell>Дата начала</TableCell>
-                <TableCell>Статус</TableCell>
-                <TableCell>Результат</TableCell>
-                <TableCell>Действие</TableCell>
+                {user?.role !== 'student' && <TableCell sx={{ fontWeight: 'bold' }}>Студент</TableCell>}
+                <TableCell sx={{ fontWeight: 'bold' }}>Тест</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Дата начала</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Статус</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Результат</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }} align="right">Действие</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {submissions.map((sub) => (
-                <TableRow key={sub.id}>
+                <TableRow key={sub.id} hover>
                   {user?.role !== 'student' && (
                     <TableCell>{sub.student_id}</TableCell>
                   )}
-                  <TableCell>{new Date(sub.started_at).toLocaleString()}</TableCell>
+                  <TableCell sx={{ fontWeight: '500' }}>{sub.test_title || 'Загрузка...'}</TableCell>
+                  <TableCell>{new Date(sub.started_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell>
-                    <Chip label={sub.status} color={getStatusColor(sub.status) as any} size="small" />
+                    <Chip 
+                      label={getStatusLabel(sub.status)} 
+                      color={getStatusColor(sub.status) as any} 
+                      size="small" 
+                      variant="outlined"
+                    />
                   </TableCell>
-                  <TableCell>
-                    {sub.result?.score !== undefined ? `${sub.result.score}%` : '-'}
+                  <TableCell sx={{ fontWeight: 'bold' }}>
+                    {sub.result?.total_score !== undefined ? `${sub.result.total_score} / ${sub.result.max_score}` : '-'}
                   </TableCell>
-                  <TableCell>
-                    {sub.status === 'in_progress' ? (
-                      <Button size="small" onClick={() => navigate(`/submissions/${sub.id}`)}>
-                        Продолжить
-                      </Button>
-                    ) : (
-                      <Button size="small" variant="outlined">
-                        Детали
-                      </Button>
-                    )}
+                  <TableCell align="right">
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                      {sub.status === 'in_progress' ? (
+                        <Button 
+                          size="small" 
+                          variant="contained" 
+                          onClick={() => navigate(`/submissions/${sub.id}`)}
+                        >
+                          Продолжить
+                        </Button>
+                      ) : (
+                        <Button size="small" variant="outlined">
+                          Детали
+                        </Button>
+                      )}
+                      {user?.role === 'admin' && (
+                        <Tooltip title="Удалить попытку">
+                          <IconButton 
+                            size="small" 
+                            color="error" 
+                            onClick={() => handleDelete(sub.id)}
+                            disabled={deleteSubmission.isPending}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -97,4 +157,3 @@ export default function SubmissionsPage() {
     </Box>
   )
 }
-

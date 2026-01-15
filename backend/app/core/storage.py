@@ -52,13 +52,7 @@ class StorageService:
             "Statement": [
                 {
                     "Effect": "Allow",
-                    "Principal": {"AWS": ["*"]},
-                    "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
-                    "Resource": [f"arn:aws:s3:::{self.bucket}"],
-                },
-                {
-                    "Effect": "Allow",
-                    "Principal": {"AWS": ["*"]},
+                    "Principal": "*",
                     "Action": ["s3:GetObject"],
                     "Resource": [f"arn:aws:s3:::{self.bucket}/*"],
                 },

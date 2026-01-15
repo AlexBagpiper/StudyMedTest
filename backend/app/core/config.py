@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     
     # Security
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    SECRET_KEY: str = "6067b57b6f633519c6295b958e805d21a57c5e5b3b3a6d4b9b9c9d9e9f0a1b2c"  # Stable key for dev
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30

@@ -62,6 +62,14 @@ class Submission(Base):
         cascade="all, delete-orphan"
     )
     
+    @property
+    def test_id(self):
+        return self.variant.test_id if self.variant else None
+    
+    @property
+    def test_title(self):
+        return self.variant.test.title if self.variant and self.variant.test else None
+    
     def __repr__(self):
         return f"<Submission {self.id} ({self.status})>"
 

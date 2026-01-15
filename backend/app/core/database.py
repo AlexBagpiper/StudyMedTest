@@ -2,12 +2,22 @@
 Database connection и session management
 """
 
+import json
+from datetime import datetime
 from typing import AsyncGenerator
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
 from app.core.config import settings
+
+def json_serializer(obj):
+    if isinstance(obj, UUID):
+        return str(obj)
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 # Создание async engine
 engine = create_async_engine(
@@ -16,6 +26,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
+    json_serializer=lambda obj: json.dumps(obj, default=json_serializer)
 )
 
 # Создание async session maker

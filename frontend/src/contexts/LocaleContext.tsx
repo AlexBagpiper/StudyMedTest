@@ -155,7 +155,7 @@ const translations = {
     'topics.noTopics': 'Темы отсутствуют',
     'topics.createFirst': 'Создать первую тему',
     'topics.name': 'Название темы',
-    'topics.description': 'Описание (опционально)',
+    'topics.description': 'Описание',
     'topics.deleteConfirm': 'Вы уверены, что хотите удалить эту тему?',
     'topics.saving': 'Сохранение...',
     'topics.update': 'Обновить',
@@ -165,6 +165,10 @@ const translations = {
     'topics.accessDenied': 'Доступ запрещен',
     'topics.accessDeniedDesc': 'Студенты не имеют доступа к этой странице.',
     'topics.loadError': 'Ошибка загрузки тем',
+    'topics.error.noAnnotations': 'В файле не найдены аннотации для изображения "{filename}". Убедитесь, что "file_name" в JSON совпадает с именем загруженного изображения.',
+    'questions.error.mustBeJson': 'Файл аннотаций должен быть в формате JSON',
+    'questions.error.invalidJson': 'Некорректный JSON в файле аннотаций',
+    'questions.error.imageNotFound': 'Изображение не найдено',
 
     // Ошибки
     'error.notEnoughPermissions': 'Недостаточно прав',
@@ -200,7 +204,7 @@ const translations = {
     'questions.viewTitle': 'Просмотр',
     'questions.editTitle': 'Редактировать',
     'questions.deleteTitle': 'Удалить',
-    'questions.uploadImageAndAnnotations': 'Загрузите изображение и (опционально) файл аннотаций',
+    'questions.uploadImageAndAnnotations': 'Загрузите изображение и файл аннотаций',
     'questions.annotationsLoaded': 'Аннотации загружены',
     'questions.imageRequired': 'Изображение обязательно',
     'questions.selectImageAndAnnotations': 'Пожалуйста, выберите изображение вместе с файлом аннотаций',
@@ -208,6 +212,8 @@ const translations = {
     'questions.uploading': 'Загрузка...',
     'questions.chooseFiles': 'Выбрать файлы',
     'questions.annotationsRequired': 'Для графического вопроса наличие аннотаций обязательно',
+    'questions.uploadAnnotations': 'Загрузить аннотации (JSON)',
+    'questions.imageUploadedAnnotationsRejected': 'Изображение загружено, но файл аннотаций отклонен: {error}',
   },
   en: {
     // Roles
@@ -360,7 +366,7 @@ const translations = {
     'topics.noTopics': 'No topics',
     'topics.createFirst': 'Create first topic',
     'topics.name': 'Topic Name',
-    'topics.description': 'Description (optional)',
+    'topics.description': 'Description',
     'topics.deleteConfirm': 'Are you sure you want to delete this topic?',
     'topics.saving': 'Saving...',
     'topics.update': 'Update',
@@ -370,6 +376,10 @@ const translations = {
     'topics.accessDenied': 'Access Denied',
     'topics.accessDeniedDesc': 'Students do not have access to this page.',
     'topics.loadError': 'Error loading topics',
+    'topics.error.noAnnotations': 'No annotations found for image "{filename}" in the provided file. Make sure "file_name" in JSON matches the uploaded image name.',
+    'questions.error.mustBeJson': 'Annotations file must be a JSON file',
+    'questions.error.invalidJson': 'Invalid JSON in annotations file',
+    'questions.error.imageNotFound': 'Image not found',
 
     // Errors
     'error.notEnoughPermissions': 'Not enough permissions',
@@ -405,7 +415,7 @@ const translations = {
     'questions.viewTitle': 'View',
     'questions.editTitle': 'Edit',
     'questions.deleteTitle': 'Delete',
-    'questions.uploadImageAndAnnotations': 'Upload image and (optional) annotation file',
+    'questions.uploadImageAndAnnotations': 'Upload image and annotation file',
     'questions.annotationsLoaded': 'Annotations loaded',
     'questions.imageRequired': 'Image is required',
     'questions.selectImageAndAnnotations': 'Please select an image along with the annotation file',
@@ -413,6 +423,8 @@ const translations = {
     'questions.uploading': 'Uploading...',
     'questions.chooseFiles': 'Choose files',
     'questions.annotationsRequired': 'Annotations are required for image questions',
+    'questions.uploadAnnotations': 'Upload annotations (JSON)',
+    'questions.imageUploadedAnnotationsRejected': 'Image uploaded, but annotations file rejected: {error}',
   },
 }
 
@@ -461,6 +473,16 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       'User not found': 'auth.userNotFound',
       'Inactive user': 'auth.accountInactive',
       'Email already registered': 'profile.emailAlreadyRegistered',
+      'Annotations file must be a JSON file': 'questions.error.mustBeJson',
+      'Invalid JSON in annotations file': 'questions.error.invalidJson',
+      'Image not found': 'questions.error.imageNotFound',
+    }
+
+    // Проверка на динамические сообщения
+    if (detail.includes('No annotations found for image')) {
+      const match = detail.match(/'([^']+)'/)
+      const filename = match ? match[1] : 'unknown'
+      return translations[locale]['topics.error.noAnnotations'].replace('{filename}', filename)
     }
 
     const key = errorMap[detail]

@@ -42,7 +42,7 @@ export default function QuestionFormDialog({
   readOnly = false,
 }: QuestionFormDialogProps) {
   const { data: topics = [] } = useTopics()
-  const { t } = useLocale()
+  const { t, translateError } = useLocale()
   const [isUploading, setIsUploading] = useState(false)
   const [imageAsset, setImageAsset] = useState<ImageAsset | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -125,12 +125,12 @@ export default function QuestionFormDialog({
           setValue('image_id', updatedAsset.id, { shouldValidate: true })
         } catch (annoError: any) {
           // Если ошибка в аннотациях, изображение всё равно остается
-          const errorMsg = annoError.response?.data?.detail || 'Error uploading annotations'
-          setUploadError(`Изображение загружено, но файл аннотаций отклонен: ${errorMsg}`)
+          const errorMsg = translateError(annoError.response?.data?.detail || 'Error uploading annotations')
+          setUploadError(t('questions.imageUploadedAnnotationsRejected').replace('{error}', errorMsg))
         }
       }
     } catch (error: any) {
-      setUploadError(error.response?.data?.detail || 'Error uploading image')
+      setUploadError(translateError(error.response?.data?.detail || 'Error uploading image'))
     } finally {
       setIsUploading(false)
     }
@@ -295,7 +295,7 @@ export default function QuestionFormDialog({
                               startIcon={<CloudUploadIcon />}
                               disabled={isUploading}
                             >
-                              Загрузить аннотации (JSON)
+                              {t('questions.uploadAnnotations')}
                               <input
                                 type="file"
                                 hidden
@@ -310,7 +310,7 @@ export default function QuestionFormDialog({
                                       setImageAsset(updated)
                                       setValue('image_id', updated.id, { shouldValidate: true })
                                     } catch (err: any) {
-                                      setUploadError(err.response?.data?.detail || 'Error uploading annotations')
+                                      setUploadError(translateError(err.response?.data?.detail || 'Error uploading annotations'))
                                     } finally {
                                       setIsUploading(false)
                                     }
@@ -353,25 +353,16 @@ export default function QuestionFormDialog({
                           <input
                             type="file"
                             hidden
-                            accept="image/*,.json"
-                            multiple
+                            accept="image/*"
                             onChange={async (e) => {
-                              const files = Array.from(e.target.files || [])
-                              const imageFile = files.find(f => f.type.startsWith('image/'))
-                              const annotationFile = files.find(f => f.name.endsWith('.json'))
-                              
-                              if (imageFile) {
-                                await handleImageAndAnnotationsUpload(imageFile, annotationFile)
-                              } else if (annotationFile) {
-                                setUploadError(t('questions.selectImageAndAnnotations'))
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                await handleImageAndAnnotationsUpload(file)
                               }
                             }}
                           />
                         </Button>
                       </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                        {t('questions.supportedFormats')}
-                      </Typography>
                     </Box>
                   )}
                 </Box>

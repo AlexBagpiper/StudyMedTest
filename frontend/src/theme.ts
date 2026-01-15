@@ -64,7 +64,7 @@ export const theme = createTheme({
         root: {
           textTransform: 'none',
           fontWeight: 500,
-          borderRadius: 8,
+          borderRadius: 12,
         },
 
       },

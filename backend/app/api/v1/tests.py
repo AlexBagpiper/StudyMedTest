@@ -61,6 +61,29 @@ async def start_test(
             detail="Test is not published"
         )
     
+    # 2. Проверка, нет ли уже начатого теста (in_progress) для этого пользователя
+    result = await db.execute(
+        select(Submission)
+        .join(TestVariant)
+        .where(
+            Submission.student_id == current_user.id,
+            Submission.status == SubmissionStatus.IN_PROGRESS,
+            TestVariant.test_id == test_id
+        )
+    )
+    existing_submission = result.scalar_one_or_none()
+    if existing_submission:
+        # Если есть уже начатая попытка, возвращаем её вместо создания новой
+        result = await db.execute(
+            select(Submission)
+            .options(
+                selectinload(Submission.answers),
+                selectinload(Submission.variant)
+            )
+            .where(Submission.id == existing_submission.id)
+        )
+        return result.scalar_one()
+
     # 3. Получение фиксированных вопросов и генерация варианта
     result = await db.execute(
         select(TestQuestion.question_id)
@@ -99,12 +122,22 @@ async def start_test(
     )
     db.add(submission)
     await db.commit()
-    await db.refresh(submission)
+    
+    # Релоад со всеми связями для ответа (нужно для SubmissionResponse)
+    result = await db.execute(
+        select(Submission)
+        .options(
+            selectinload(Submission.answers),
+            selectinload(Submission.variant).selectinload(TestVariant.test)
+        )
+        .where(Submission.id == submission.id)
+    )
+    submission = result.scalar_one()
     
     return submission
 
 
-@router.get("", response_model=List[TestListResponse])
+@router.get("/", response_model=List[TestListResponse])
 async def list_tests(
     skip: int = 0,
     limit: int = 100,
@@ -178,7 +211,7 @@ async def check_test_structure_availability(
         )
 
 
-@router.post("", response_model=TestResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=TestResponse, status_code=status.HTTP_201_CREATED)
 async def create_test(
     test_in: TestCreate,
     current_user: User = Depends(get_current_user),

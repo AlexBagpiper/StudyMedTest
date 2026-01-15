@@ -60,12 +60,17 @@ class SubmissionResponse(BaseModel):
     id: UUID
     student_id: UUID
     variant_id: UUID
+    test_id: Optional[UUID] = None
+    test_title: Optional[str] = None
     status: SubmissionStatus
     started_at: datetime
     submitted_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     result: Optional[Dict[str, Any]] = None
     answers: List[AnswerResponse] = []
+    
+    # Добавляем лимит времени для фронтенда
+    time_limit: Optional[int] = None # в минутах
 
     model_config = {"from_attributes": True}
 

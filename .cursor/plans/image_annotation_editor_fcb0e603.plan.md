@@ -4,41 +4,41 @@ overview: "Разработка редактора аннотаций изобр
 todos:
   - id: annotation-types
     content: Создать TypeScript типы и Pydantic схемы для аннотаций
-    status: pending
+    status: completed
   - id: backend-api
     content: Добавить API эндпоинты для сохранения/получения аннотаций
-    status: pending
+    status: completed
     dependencies:
       - annotation-types
   - id: fabric-canvas
     content: Реализовать FabricCanvas компонент (canvas + zoom/pan)
-    status: pending
+    status: completed
     dependencies:
       - annotation-types
   - id: annotation-store
     content: Создать Zustand store для управления состоянием редактора
-    status: pending
+    status: completed
     dependencies:
       - annotation-types
   - id: drawing-tools
     content: "Реализовать инструменты: polygon, rect, ellipse, point, select"
-    status: pending
+    status: completed
     dependencies:
       - fabric-canvas
       - annotation-store
   - id: labels-panel
     content: Создать панель меток (LabelsPanel) с CRUD
-    status: pending
+    status: completed
     dependencies:
       - annotation-store
   - id: toolbar
     content: Создать панель инструментов (Toolbar)
-    status: pending
+    status: completed
     dependencies:
       - drawing-tools
   - id: teacher-editor
     content: Собрать редактор преподавателя и интегрировать в QuestionFormDialog
-    status: pending
+    status: completed
     dependencies:
       - drawing-tools
       - labels-panel
@@ -46,12 +46,12 @@ todos:
       - backend-api
   - id: student-editor
     content: Реализовать режим студента для прохождения теста
-    status: pending
+    status: completed
     dependencies:
       - teacher-editor
   - id: scoring-service
     content: Реализовать сервис оценки аннотаций (IoU)
-    status: pending
+    status: completed
     dependencies:
       - student-editor
 ---

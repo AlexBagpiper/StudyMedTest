@@ -3,13 +3,14 @@ Question Pydantic схемы
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from app.models.question import QuestionType
 from app.schemas.topic import TopicResponse
+from app.schemas.annotation import AnnotationData
 
 
 class ImageAssetResponse(BaseModel):
@@ -36,8 +37,8 @@ class QuestionBase(BaseModel):
     content: str = Field(..., min_length=1)
     topic_id: Optional[UUID] = None
     difficulty: int = Field(default=1, ge=1, le=5)
-    reference_data: Optional[Dict[str, Any]] = None
-    scoring_criteria: Optional[Dict[str, Any]] = None
+    reference_data: Optional[Any] = None
+    scoring_criteria: Optional[Any] = None
 
 
 class QuestionCreate(QuestionBase):
@@ -54,8 +55,8 @@ class QuestionUpdate(BaseModel):
     content: Optional[str] = Field(None, min_length=1)
     topic_id: Optional[UUID] = None
     difficulty: Optional[int] = Field(None, ge=1, le=5)
-    reference_data: Optional[Dict[str, Any]] = None
-    scoring_criteria: Optional[Dict[str, Any]] = None
+    reference_data: Optional[Any] = None
+    scoring_criteria: Optional[Any] = None
     image_id: Optional[UUID] = None
 
 
