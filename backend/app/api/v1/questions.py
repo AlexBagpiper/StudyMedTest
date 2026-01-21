@@ -314,10 +314,16 @@ async def get_question_labels(
         categories = question.image.coco_annotations.get("categories", [])
         # Приводим к формату {id, name, color}
         labels = []
-        for cat in categories:
-            # Генерируем стабильный цвет на основе имени
+        import colorsys
+
+        for i, cat in enumerate(categories):
+            # Генерируем максимально различные цвета с помощью золотого угла
+            hue = (i * 137.508) / 360.0
+            # Конвертируем HSL в RGB, затем в HEX
+            r, g, b = colorsys.hls_to_rgb(hue, 0.45, 0.7)
+            color = "#{:02x}{:02x}{:02x}".format(int(r*255), int(g*255), int(b*255))
+            
             name = cat.get("name", "Unknown")
-            color = f"#{hashlib.md5(name.encode()).hexdigest()[:6]}"
             labels.append({
                 "id": str(cat.get("id")),
                 "name": name,

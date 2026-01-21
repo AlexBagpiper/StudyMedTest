@@ -8,8 +8,8 @@ import {
 } from '@mui/material'
 import PanToolIcon from '@mui/icons-material/PanTool'
 import NearMeIcon from '@mui/icons-material/NearMe'
-import HexagonIcon from '@mui/icons-material/Hexagon'
-import RectangleIcon from '@mui/icons-material/Rectangle'
+import PolylineIcon from '@mui/icons-material/Polyline'
+import CropSquareIcon from '@mui/icons-material/CropSquare'
 import SaveIcon from '@mui/icons-material/Save'
 import { useAnnotationStore } from './hooks/useAnnotationStore'
 import { EditorMode } from '../../../types/annotation'
@@ -89,15 +89,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
 
         {!readOnly && (
           <>
-            <Tooltip title="Многоугольник" placement="left">
+            <Tooltip title="Полигон" placement="left">
               <ToggleButton value="polygon">
-                <HexagonIcon fontSize="small" />
+                <PolylineIcon fontSize="small" />
               </ToggleButton>
             </Tooltip>
 
             <Tooltip title="Прямоугольник" placement="left">
               <ToggleButton value="rectangle">
-                <RectangleIcon fontSize="small" />
+                <CropSquareIcon fontSize="small" />
               </ToggleButton>
             </Tooltip>
           </>
