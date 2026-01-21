@@ -4,18 +4,13 @@ import {
   ToggleButtonGroup, 
   ToggleButton, 
   Tooltip, 
-  Divider,
   IconButton
 } from '@mui/material'
 import PanToolIcon from '@mui/icons-material/PanTool'
 import NearMeIcon from '@mui/icons-material/NearMe'
 import HexagonIcon from '@mui/icons-material/Hexagon'
 import RectangleIcon from '@mui/icons-material/Rectangle'
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
-import AdjustIcon from '@mui/icons-material/Adjust'
-import DeleteSweepIcon from '@mui/icons-material/DeleteSweep'
 import SaveIcon from '@mui/icons-material/Save'
-import UndoIcon from '@mui/icons-material/Undo'
 import { useAnnotationStore } from './hooks/useAnnotationStore'
 import { EditorMode } from '../../../types/annotation'
 
@@ -42,11 +37,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
         p: 0.5, 
         display: 'flex', 
         flexDirection: 'column', 
-        gap: 1, 
-        bgcolor: 'background.paper',
-        alignItems: 'center'
+        gap: 0.5, 
+        bgcolor: 'transparent',
+        alignItems: 'center',
+        borderRadius: 2,
+        boxShadow: 'none'
       }} 
-      variant="outlined"
+      variant="elevation"
+      elevation={0}
     >
       <ToggleButtonGroup
         orientation="vertical"
@@ -54,6 +52,28 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
         exclusive
         onChange={handleModeChange}
         size="small"
+        sx={{
+          '& .MuiToggleButton-root': {
+            border: '1px solid #e0e0e0',
+            borderRadius: '8px !important',
+            color: '#666',
+            bgcolor: '#ffffff',
+            width: 40,
+            height: 40,
+            margin: '1px 0',
+            '&.Mui-selected': {
+              bgcolor: '#00d2be',
+              color: '#fff',
+              borderColor: '#00d2be',
+              '&:hover': {
+                bgcolor: '#00b3a3',
+              }
+            },
+            '&:hover': {
+              bgcolor: '#f5f5f5',
+            }
+          }
+        }}
       >
         <Tooltip title="Выделение (V)" placement="left">
           <ToggleButton value="select">
@@ -66,8 +86,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
             <PanToolIcon fontSize="small" />
           </ToggleButton>
         </Tooltip>
-
-        <Divider sx={{ my: 0.5, width: '80%' }} />
 
         {!readOnly && (
           <>
@@ -82,39 +100,28 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
                 <RectangleIcon fontSize="small" />
               </ToggleButton>
             </Tooltip>
-
-            <Tooltip title="Эллипс" placement="left">
-              <ToggleButton value="ellipse">
-                <AdjustIcon fontSize="small" />
-              </ToggleButton>
-            </Tooltip>
-
-            <Tooltip title="Точка" placement="left">
-              <ToggleButton value="point">
-                <FiberManualRecordIcon fontSize="small" />
-              </ToggleButton>
-            </Tooltip>
-
-            <Divider sx={{ my: 0.5, width: '80%' }} />
-
-            <Tooltip title="Ластик" placement="left">
-              <ToggleButton value="eraser">
-                <DeleteSweepIcon fontSize="small" color="error" />
-              </ToggleButton>
-            </Tooltip>
           </>
         )}
       </ToggleButtonGroup>
 
       {!readOnly && onSave && (
-        <>
-          <Divider sx={{ my: 0.5, width: '80%' }} />
-          <Tooltip title="Сохранить" placement="left">
-            <IconButton color="primary" onClick={onSave} size="small">
-              <SaveIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </>
+        <Tooltip title="Сохранить" placement="left">
+          <IconButton 
+            color="primary" 
+            onClick={onSave} 
+            size="small"
+            sx={{ 
+              bgcolor: '#ffffff',
+              border: '1px solid #e0e0e0',
+              borderRadius: '8px',
+              '&:hover': {
+                bgcolor: '#f5f5f5'
+              }
+            }}
+          >
+            <SaveIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       )}
     </Paper>
   )

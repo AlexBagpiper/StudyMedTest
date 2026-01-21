@@ -1,5 +1,15 @@
 import React, { useEffect } from 'react'
-import { Box, Paper } from '@mui/material'
+import { 
+  Box, 
+  Paper, 
+  Typography, 
+  IconButton, 
+  Divider, 
+  Tooltip,
+  Button
+} from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import RemoveIcon from '@mui/icons-material/Remove'
 import { FabricCanvas } from './FabricCanvas'
 import { Toolbar } from './Toolbar'
 import { LabelsPanel } from './LabelsPanel'
@@ -11,23 +21,40 @@ interface AnnotationEditorProps {
   initialData?: AnnotationData
   onChange?: (data: AnnotationData) => void
   readOnly?: boolean
+  hideLabels?: boolean
 }
 
 export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({ 
   imageUrl, 
   initialData, 
   onChange,
-  readOnly = false 
+  readOnly = false,
+  hideLabels = false
 }) => {
-  const { labels, annotations, setData, reset } = useAnnotationStore()
+  const { 
+    labels, 
+    annotations, 
+    setData, 
+    reset, 
+    activeLabelId, 
+    setActiveLabelId,
+    zoom,
+    zoomIn,
+    zoomOut,
+    resetZoom
+  } = useAnnotationStore()
 
   useEffect(() => {
     if (initialData) {
       setData(initialData)
+      // Если скрываем метки и нет активной, выбираем первую
+      if (hideLabels && !activeLabelId && initialData.labels?.length > 0) {
+        setActiveLabelId(initialData.labels[0].id)
+      }
     } else {
       reset()
     }
-  }, [initialData, setData, reset])
+  }, [initialData, setData, reset, hideLabels, setActiveLabelId])
 
   // Сообщаем родителю об изменениях
   useEffect(() => {
@@ -37,14 +64,54 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   }, [labels, annotations, onChange, readOnly])
 
   return (
-    <Box sx={{ display: 'flex', gap: 2, height: '600px', width: '100%' }}>
-      <LabelsPanel readOnly={readOnly} />
-      
-      <Box sx={{ flex: 1, position: 'relative', display: 'flex' }}>
-        <FabricCanvas imageUrl={imageUrl} readOnly={readOnly} />
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', bgcolor: '#f5f5f5' }}>
+      <Box sx={{ display: 'flex', gap: 1, flex: 1, width: '100%', overflow: 'hidden', p: 1 }}>
+        {!hideLabels && <LabelsPanel readOnly={readOnly} />}
         
-        <Box sx={{ position: 'absolute', right: 10, top: 10 }}>
+        <Box sx={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', gap: 1, height: '100%' }}>
+          <Box sx={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%' }}>
+            <FabricCanvas imageUrl={imageUrl} readOnly={readOnly} />
+          </Box>
           <Toolbar readOnly={readOnly} />
+        </Box>
+      </Box>
+
+      {/* Футер с инструментами зума */}
+      <Box sx={{ 
+        height: 56, 
+        bgcolor: '#ffffff', 
+        display: 'flex', 
+        alignItems: 'center', 
+        px: 2, 
+        gap: 1,
+        borderTop: '1px solid #e0e0e0'
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#f5f5f5', borderRadius: 1.5, px: 1.5, py: 0.5, border: '1px solid #e0e0e0' }}>
+          <Typography sx={{ color: '#333', fontSize: '0.875rem', minWidth: 45, textAlign: 'center', fontWeight: 500 }}>
+            {Math.round(zoom * 100)}%
+          </Typography>
+          <Divider orientation="vertical" flexItem sx={{ bgcolor: '#ddd', mx: 0.5 }} />
+          <IconButton onClick={zoomOut} size="small" sx={{ color: '#666', '&:hover': { bgcolor: '#e0e0e0' } }}>
+            <RemoveIcon fontSize="inherit" />
+          </IconButton>
+          <IconButton onClick={zoomIn} size="small" sx={{ color: '#666', '&:hover': { bgcolor: '#e0e0e0' } }}>
+            <AddIcon fontSize="inherit" />
+          </IconButton>
+          <Button 
+            onClick={resetZoom} 
+            size="small" 
+            sx={{ 
+              color: '#00d2be', 
+              fontSize: '0.75rem', 
+              minWidth: 'auto',
+              ml: 0.5,
+              textTransform: 'uppercase',
+              fontWeight: 600,
+              '&:hover': { bgcolor: 'transparent', color: '#00b3a3' }
+            }}
+          >
+            Reset
+          </Button>
         </Box>
       </Box>
     </Box>

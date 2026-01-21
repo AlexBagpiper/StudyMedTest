@@ -28,7 +28,7 @@ from app.schemas.submission import (
 router = APIRouter()
 
 
-@router.post("/", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=SubmissionResponse, status_code=status.HTTP_201_CREATED)
 async def start_submission(
     submission_in: SubmissionCreate,
     current_user: User = Depends(get_current_user),
@@ -73,6 +73,7 @@ async def start_submission(
         select(Submission)
         .options(
             selectinload(Submission.answers),
+            selectinload(Submission.student),
             selectinload(Submission.variant).selectinload(TestVariant.test)
         )
         .where(Submission.id == submission.id)
@@ -98,6 +99,7 @@ async def get_submission(
         select(Submission)
         .options(
             selectinload(Submission.answers),
+            selectinload(Submission.student),
             selectinload(Submission.variant).selectinload(TestVariant.test)
         )
         .where(Submission.id == submission_id)
@@ -222,6 +224,7 @@ async def submit_test(
         select(Submission)
         .options(
             selectinload(Submission.answers),
+            selectinload(Submission.student),
             selectinload(Submission.variant).selectinload(TestVariant.test)
         )
         .where(Submission.id == submission_id)
@@ -272,7 +275,7 @@ async def submit_test(
     return submission
 
 
-@router.get("/", response_model=List[SubmissionResponse])
+@router.get("", response_model=List[SubmissionResponse])
 async def list_submissions(
     skip: int = 0,
     limit: int = 100,
@@ -286,6 +289,7 @@ async def list_submissions(
     """
     query = select(Submission).options(
         selectinload(Submission.answers),
+        selectinload(Submission.student),
         selectinload(Submission.variant).selectinload(TestVariant.test)
     )
     

@@ -18,7 +18,7 @@ from app.schemas.topic import TopicCreate, TopicUpdate, TopicResponse
 router = APIRouter()
 
 
-@router.get("/", response_model=List[TopicResponse])
+@router.get("", response_model=List[TopicResponse])
 async def list_topics(
     skip: int = 0,
     limit: int = 100,
@@ -35,7 +35,7 @@ async def list_topics(
     return topics
 
 
-@router.post("/", response_model=TopicResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TopicResponse, status_code=status.HTTP_201_CREATED)
 async def create_topic(
     topic_in: TopicCreate,
     current_user: User = Depends(get_current_user),

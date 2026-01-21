@@ -11,8 +11,9 @@ import {
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLocale } from '../../contexts/LocaleContext'
 import { useTests, useDeleteTest } from '../../lib/api/hooks'
-import { useStartTest } from '../../lib/api/hooks/useTests'
+import { useStartTest, usePublishTest, useUnpublishTest } from '../../lib/api/hooks/useTests'
 import { useSubmissions } from '../../lib/api/hooks/useSubmissions'
 import type { Test, TestStatus, Submission } from '../../types'
 import AddIcon from '@mui/icons-material/Add'
@@ -20,9 +21,13 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
+import PublishIcon from '@mui/icons-material/Publish'
+import UnpublishedIcon from '@mui/icons-material/Unpublished'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 
 export default function TestsPage() {
   const { user } = useAuth()
+  const { t } = useLocale()
   const navigate = useNavigate()
   const isStudent = user?.role === 'student'
 
@@ -30,6 +35,8 @@ export default function TestsPage() {
   const { data: submissions = [] } = useSubmissions({ student_id: user?.id })
   const deleteTest = useDeleteTest()
   const startTest = useStartTest()
+  const publishTest = usePublishTest()
+  const unpublishTest = useUnpublishTest()
 
   const getSubmissionForTest = (testId: string) => {
     // Временный хак: так как Submission связан с Variant, а Variant с Test,
@@ -51,13 +58,33 @@ export default function TestsPage() {
       navigate(`/submissions/${submission.id}`)
     } catch (error: any) {
       console.error('Failed to start test:', error)
-      const message = error.response?.data?.detail || 'Не удалось начать тест'
+      const message = error.response?.data?.detail || t('tests.error.unknown')
       alert(message)
     }
   }
 
+  const handlePublish = async (testId: string) => {
+    if (window.confirm(t('tests.confirm.publish'))) {
+      try {
+        await publishTest.mutateAsync(testId)
+      } catch (error) {
+        console.error('Failed to publish test:', error)
+      }
+    }
+  }
+
+  const handleUnpublish = async (testId: string) => {
+    if (window.confirm(t('tests.confirm.unpublish'))) {
+      try {
+        await unpublishTest.mutateAsync(testId)
+      } catch (error) {
+        console.error('Failed to unpublish test:', error)
+      }
+    }
+  }
+
   const handleDelete = async (testId: string) => {
-    if (window.confirm('Вы уверены, что хотите удалить этот тест?')) {
+    if (window.confirm(t('tests.confirm.delete'))) {
       try {
         await deleteTest.mutateAsync(testId)
       } catch (error) {
@@ -68,9 +95,9 @@ export default function TestsPage() {
 
   const getStatusLabel = (status: TestStatus) => {
     const statusMap: Record<TestStatus, string> = {
-      draft: 'Черновик',
-      published: 'Опубликован',
-      archived: 'Архивирован',
+      draft: t('tests.status.draft'),
+      published: t('tests.status.published'),
+      archived: t('tests.status.archived'),
     }
     return statusMap[status]
   }
@@ -93,7 +120,7 @@ export default function TestsPage() {
         return (
           <Chip
             icon={<AccessTimeIcon />}
-            label="В процессе"
+            label={t('tests.submission.inProgress')}
             color="warning"
             variant="outlined"
             size="small"
@@ -104,7 +131,9 @@ export default function TestsPage() {
         return (
           <Chip
             icon={<CheckCircleOutlineIcon />}
-            label={submission.status === 'completed' ? `Завершено (${submission.result?.total_score || 0})` : 'На проверке'}
+            label={submission.status === 'completed' 
+              ? `${t('tests.submission.completed')} (${submission.result?.total_score || 0})` 
+              : t('tests.submission.evaluating')}
             color="success"
             variant="outlined"
             size="small"
@@ -119,7 +148,7 @@ export default function TestsPage() {
     <Box sx={{ width: '100%', py: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" fontWeight="bold">
-          {isStudent ? 'Доступные тесты' : 'Управление тестами'}
+          {isStudent ? t('tests.title.student') : t('tests.title.admin')}
         </Typography>
         {!isStudent && (
           <Button
@@ -127,14 +156,14 @@ export default function TestsPage() {
             startIcon={<AddIcon />}
             onClick={() => navigate('/tests/create')}
           >
-            Создать тест
+            {t('tests.create')}
           </Button>
         )}
       </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          Ошибка загрузки тестов: {error instanceof Error ? error.message : 'Неизвестная ошибка'}
+          {t('tests.error.load')}: {error instanceof Error ? error.message : t('tests.error.unknown')}
         </Alert>
       )}
 
@@ -146,7 +175,7 @@ export default function TestsPage() {
         <Card sx={{ borderRadius: 1 }}>
           <CardContent sx={{ textAlign: 'center', py: 6 }}>
             <Typography variant="h6" color="text.secondary">
-              {isStudent ? 'Нет доступных тестов' : 'У вас пока нет тестов'}
+              {isStudent ? t('tests.noTests.student') : t('tests.noTests.admin')}
             </Typography>
             {!isStudent && (
               <Button
@@ -155,7 +184,7 @@ export default function TestsPage() {
                 sx={{ mt: 2 }}
                 onClick={() => navigate('/tests/create')}
               >
-                Создать первый тест
+                {t('tests.createFirst')}
               </Button>
             )}
           </CardContent>
@@ -176,7 +205,7 @@ export default function TestsPage() {
                         {test.title}
                       </Typography>
                       <Typography variant="body1" color="text.secondary" sx={{ mb: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                        {test.description || 'Описание отсутствует'}
+                        {test.description || t('tests.description.empty')}
                       </Typography>
                       
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -190,7 +219,7 @@ export default function TestsPage() {
                         )}
                         {test.test_questions && (
                           <Chip
-                            label={`${test.test_questions.length} вопросов`}
+                            label={t('tests.questionsCount').replace('{count}', test.test_questions.length.toString())}
                             size="small"
                             variant="outlined"
                           />
@@ -198,7 +227,7 @@ export default function TestsPage() {
                         {test.settings?.time_limit && (
                           <Chip
                             icon={<AccessTimeIcon sx={{ fontSize: '16px !important' }} />}
-                            label={`${test.settings.time_limit} мин`}
+                            label={t('tests.timeLimit').replace('{count}', test.settings.time_limit.toString())}
                             size="small"
                             variant="outlined"
                           />
@@ -224,7 +253,7 @@ export default function TestsPage() {
                             boxShadow: 2
                           }}
                         >
-                          {isInProgress ? 'Продолжить' : isCompleted ? 'Завершено' : 'Начать тест'}
+                          {isInProgress ? t('tests.action.continue') : isCompleted ? t('tests.action.completed') : t('tests.action.start')}
                         </Button>
                       </Box>
                     )}
@@ -235,17 +264,38 @@ export default function TestsPage() {
                   <CardActions sx={{ px: 3, pb: 2, pt: 0, justifyContent: 'flex-end' }}>
                     <Button 
                       size="small" 
-                      variant="outlined"
+                      startIcon={<VisibilityIcon />}
                       onClick={() => navigate(`/tests/${test.id}`)}
                     >
-                      Просмотр
+                      {t('tests.action.view')}
                     </Button>
+                    {test.status === 'draft' ? (
+                      <Button
+                        size="small"
+                        color="success"
+                        startIcon={<PublishIcon />}
+                        onClick={() => handlePublish(test.id)}
+                        disabled={publishTest.isPending}
+                      >
+                        {t('tests.action.publish')}
+                      </Button>
+                    ) : test.status === 'published' ? (
+                      <Button
+                        size="small"
+                        color="warning"
+                        startIcon={<UnpublishedIcon />}
+                        onClick={() => handleUnpublish(test.id)}
+                        disabled={unpublishTest.isPending}
+                      >
+                        {t('tests.action.unpublish')}
+                      </Button>
+                    ) : null}
                     <Button
                       size="small"
                       startIcon={<EditIcon />}
                       onClick={() => navigate(`/tests/${test.id}/edit`)}
                     >
-                      Редактировать
+                      {t('common.edit')}
                     </Button>
                     <Button
                       size="small"
@@ -254,7 +304,7 @@ export default function TestsPage() {
                       onClick={() => handleDelete(test.id)}
                       disabled={deleteTest.isPending}
                     >
-                      Удалить
+                      {t('common.delete')}
                     </Button>
                   </CardActions>
                 )}

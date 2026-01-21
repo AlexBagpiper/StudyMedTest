@@ -17,6 +17,7 @@ interface AnnotationState {
   activeLabelId: string | null
   selectedAnnotationId: string | null
   zoom: number
+  viewResetVersion: number
   
   // Действия с метками
   addLabel: (name: string, color: string) => void
@@ -33,6 +34,9 @@ interface AnnotationState {
   // Общие действия
   setMode: (mode: EditorMode) => void
   setZoom: (zoom: number) => void
+  zoomIn: () => void
+  zoomOut: () => void
+  resetZoom: () => void
   setData: (data: AnnotationData) => void
   reset: () => void
 }
@@ -44,6 +48,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   activeLabelId: null,
   selectedAnnotationId: null,
   zoom: 1,
+  viewResetVersion: 0,
 
   addLabel: (name, color) => set((state) => {
     const newLabel = { id: uuidv4(), name, color }
@@ -86,6 +91,9 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
 
   setMode: (mode) => set({ mode }),
   setZoom: (zoom) => set({ zoom }),
+  zoomIn: () => set((state) => ({ zoom: Math.min(state.zoom * 1.1, 20) })),
+  zoomOut: () => set((state) => ({ zoom: Math.max(state.zoom / 1.1, 0.01) })),
+  resetZoom: () => set((state) => ({ zoom: 1, viewResetVersion: state.viewResetVersion + 1 })),
   setData: (data) => set({ 
     labels: data.labels || [], 
     annotations: data.annotations || [] 
@@ -96,6 +104,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
     mode: 'select',
     activeLabelId: null,
     selectedAnnotationId: null,
-    zoom: 1
+    zoom: 1,
+    viewResetVersion: 0
   })
 }))

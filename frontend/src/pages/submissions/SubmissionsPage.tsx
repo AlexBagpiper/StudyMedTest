@@ -19,11 +19,13 @@ import {
 } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import { useLocale } from '../../contexts/LocaleContext'
 import { useSubmissions, useDeleteSubmission } from '../../lib/api/hooks/useSubmissions'
 import DeleteIcon from '@mui/icons-material/Delete'
 
 export default function SubmissionsPage() {
   const { user } = useAuth()
+  const { t, formatName } = useLocale()
   const navigate = useNavigate()
   const deleteSubmission = useDeleteSubmission()
   
@@ -42,21 +44,21 @@ export default function SubmissionsPage() {
 
   const getStatusLabel = (status: string) => {
     const statusMap: Record<string, string> = {
-      'completed': 'Завершено',
-      'evaluating': 'На проверке',
-      'in_progress': 'В процессе',
-      'submitted': 'Отправлено'
+      'completed': t('submissions.status.completed'),
+      'evaluating': t('submissions.status.evaluating'),
+      'in_progress': t('submissions.status.inProgress'),
+      'submitted': t('submissions.status.submitted')
     }
     return statusMap[status] || status
   }
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Вы уверены, что хотите удалить эту попытку?')) {
+    if (window.confirm(t('submissions.confirm.delete'))) {
       try {
         await deleteSubmission.mutateAsync(id)
       } catch (err) {
         console.error('Failed to delete submission:', err)
-        alert('Не удалось удалить попытку')
+        alert(t('submissions.error.delete'))
       }
     }
   }
@@ -64,12 +66,12 @@ export default function SubmissionsPage() {
   return (
     <Box sx={{ width: '100%', py: 4 }}>
       <Typography variant="h4" fontWeight="bold" gutterBottom>
-        {user?.role === 'student' ? 'Мои результаты' : 'Результаты студентов'}
+        {user?.role === 'student' ? t('submissions.title.my') : t('submissions.title.all')}
       </Typography>
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          Ошибка загрузки результатов
+          {t('submissions.error.load')}
         </Alert>
       )}
 
@@ -82,8 +84,8 @@ export default function SubmissionsPage() {
           <CardContent sx={{ textAlign: 'center', py: 6 }}>
             <Typography variant="h6" color="text.secondary">
               {user?.role === 'student' 
-                ? 'У вас пока нет завершенных тестов' 
-                : 'Нет результатов для отображения'}
+                ? t('submissions.noResults.my') 
+                : t('submissions.noResults.all')}
             </Typography>
           </CardContent>
         </Card>
@@ -92,19 +94,23 @@ export default function SubmissionsPage() {
           <Table>
             <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
-                {user?.role !== 'student' && <TableCell sx={{ fontWeight: 'bold' }}>Студент</TableCell>}
-                <TableCell sx={{ fontWeight: 'bold' }}>Тест</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Дата начала</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Статус</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Результат</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }} align="right">Действие</TableCell>
+                {user?.role !== 'student' && <TableCell sx={{ fontWeight: 'bold' }}>{t('submissions.table.student')}</TableCell>}
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('submissions.table.test')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('submissions.table.date')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('submissions.table.status')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>{t('submissions.table.result')}</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }} align="right">{t('submissions.table.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {submissions.map((sub) => (
+              {submissions.map((sub: any) => (
                 <TableRow key={sub.id} hover>
                   {user?.role !== 'student' && (
-                    <TableCell>{sub.student_id}</TableCell>
+                    <TableCell>
+                      {sub.student 
+                        ? formatName(sub.student.last_name, sub.student.first_name, sub.student.middle_name)
+                        : sub.student_id}
+                    </TableCell>
                   )}
                   <TableCell sx={{ fontWeight: '500' }}>{sub.test_title || 'Загрузка...'}</TableCell>
                   <TableCell>{new Date(sub.started_at).toLocaleString('ru-RU')}</TableCell>
@@ -127,15 +133,15 @@ export default function SubmissionsPage() {
                           variant="contained" 
                           onClick={() => navigate(`/submissions/${sub.id}`)}
                         >
-                          Продолжить
+                          {t('tests.action.continue')}
                         </Button>
                       ) : (
                         <Button size="small" variant="outlined">
-                          Детали
+                          {t('submissions.action.details')}
                         </Button>
                       )}
                       {user?.role === 'admin' && (
-                        <Tooltip title="Удалить попытку">
+                        <Tooltip title={t('submissions.action.delete')}>
                           <IconButton 
                             size="small" 
                             color="error" 

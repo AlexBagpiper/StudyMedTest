@@ -23,7 +23,7 @@ from app.schemas.annotation import AnnotationData
 router = APIRouter()
 
 
-@router.get("/", response_model=List[QuestionResponse])
+@router.get("", response_model=List[QuestionResponse])
 async def list_questions(
     skip: int = 0,
     limit: int = 100,
@@ -67,7 +67,7 @@ async def list_questions(
     return questions
 
 
-@router.post("/", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
 async def create_question(
     question_in: QuestionCreate,
     current_user: User = Depends(get_current_user),

@@ -1,4 +1,4 @@
-export type AnnotationType = 'polygon' | 'rectangle' | 'ellipse' | 'point'
+export type AnnotationType = 'polygon' | 'rectangle'
 
 export interface AnnotationLabel {
   id: string
@@ -21,4 +21,4 @@ export interface AnnotationData {
   annotations: Annotation[]
 }
 
-export type EditorMode = 'select' | 'hand' | 'polygon' | 'rectangle' | 'ellipse' | 'point' | 'eraser'
+export type EditorMode = 'select' | 'hand' | 'polygon' | 'rectangle'

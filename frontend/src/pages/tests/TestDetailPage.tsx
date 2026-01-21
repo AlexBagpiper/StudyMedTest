@@ -25,13 +25,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useTest } from '../../lib/api/hooks'
-import { usePublishTest, useStartTest } from '../../lib/api/hooks/useTests'
+import { usePublishTest, useUnpublishTest, useStartTest } from '../../lib/api/hooks/useTests'
 import { useTopics } from '../../lib/api/hooks/useTopics'
 import type { TestStatus, Question } from '../../types'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import EditIcon from '@mui/icons-material/Edit'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import PublishIcon from '@mui/icons-material/Publish'
+import UnpublishedIcon from '@mui/icons-material/Unpublished'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import TextFieldsIcon from '@mui/icons-material/TextFields'
 import ImageIcon from '@mui/icons-material/Image'
@@ -46,6 +47,7 @@ export default function TestDetailPage() {
   const { data: test, isLoading, error } = useTest(id)
   const { data: topics } = useTopics({ limit: 1000 })
   const publishTest = usePublishTest()
+  const unpublishTest = useUnpublishTest()
   const startTest = useStartTest()
 
   const [viewingQuestion, setViewingQuestion] = useState<Question | undefined>()
@@ -63,15 +65,23 @@ export default function TestDetailPage() {
   const handlePublish = async () => {
     if (!id) return
 
-    if (
-      window.confirm(
-        'Вы уверены, что хотите опубликовать тест? После публикации его нельзя будет редактировать.'
-      )
-    ) {
+    if (window.confirm(t('tests.confirm.publish'))) {
       try {
         await publishTest.mutateAsync(id)
       } catch (error) {
         console.error('Failed to publish test:', error)
+      }
+    }
+  }
+
+  const handleUnpublish = async () => {
+    if (!id) return
+
+    if (window.confirm(t('tests.confirm.unpublish'))) {
+      try {
+        await unpublishTest.mutateAsync(id)
+      } catch (error) {
+        console.error('Failed to unpublish test:', error)
       }
     }
   }
@@ -84,7 +94,7 @@ export default function TestDetailPage() {
       navigate(`/submissions/${submission.id}`)
     } catch (error: any) {
       console.error('Failed to start test:', error)
-      const message = error.response?.data?.detail || 'Не удалось начать тест'
+      const message = error.response?.data?.detail || t('tests.error.unknown')
       alert(message)
     }
   }
@@ -101,18 +111,18 @@ export default function TestDetailPage() {
     return (
       <Box>
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/tests')} sx={{ mb: 2 }}>
-          Назад к тестам
+          {t('tests.backToTests')}
         </Button>
-        <Alert severity="error">Тест не найден или произошла ошибка</Alert>
+        <Alert severity="error">{t('tests.error.load')}</Alert>
       </Box>
     )
   }
 
   const getStatusLabel = (status: TestStatus) => {
     const statusMap: Record<TestStatus, string> = {
-      draft: 'Черновик',
-      published: 'Опубликован',
-      archived: 'Архивирован',
+      draft: t('tests.status.draft'),
+      published: t('tests.status.published'),
+      archived: t('tests.status.archived'),
     }
     return statusMap[status]
   }
@@ -129,7 +139,7 @@ export default function TestDetailPage() {
   return (
     <Box>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/tests')} sx={{ mb: 2 }}>
-        Назад к тестам
+        {t('tests.backToTests')}
       </Button>
 
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -141,11 +151,11 @@ export default function TestDetailPage() {
             <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
               <Chip label={getStatusLabel(test.status)} color={getStatusColor(test.status)} />
               {test.test_questions && test.test_questions.length > 0 && (
-                <Chip label={`${test.test_questions.length} фикс. вопросов`} variant="outlined" />
+                <Chip label={`${test.test_questions.length} ${t('tests.fixedQuestions')}`} variant="outlined" />
               )}
               {test.structure && test.structure.length > 0 && (
                 <Chip 
-                  label={`${test.structure.reduce((acc: number, curr: any) => acc + curr.count, 0)} динам. вопросов`} 
+                  label={`${test.structure.reduce((acc: number, curr: any) => acc + curr.count, 0)} ${t('tests.dynamicQuestions')}`} 
                   variant="outlined" 
                 />
               )}
@@ -160,7 +170,7 @@ export default function TestDetailPage() {
                 onClick={handleStartTest}
                 size="large"
               >
-                Начать тест
+                {t('tests.action.start')}
               </Button>
             )}
 
@@ -173,7 +183,7 @@ export default function TestDetailPage() {
                       startIcon={<EditIcon />}
                       onClick={() => navigate(`/tests/${id}/edit`)}
                     >
-                      Редактировать
+                      {t('common.edit')}
                     </Button>
                     <Button
                       variant="contained"
@@ -182,9 +192,20 @@ export default function TestDetailPage() {
                       onClick={handlePublish}
                       disabled={publishTest.isPending}
                     >
-                      Опубликовать
+                      {t('tests.action.publish')}
                     </Button>
                   </>
+                )}
+                {test.status === 'published' && (
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    startIcon={<UnpublishedIcon />}
+                    onClick={handleUnpublish}
+                    disabled={unpublishTest.isPending}
+                  >
+                    {t('tests.action.unpublish')}
+                  </Button>
                 )}
               </>
             )}
@@ -202,12 +223,12 @@ export default function TestDetailPage() {
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle2" color="text.secondary">
-              Настройки
+              {t('tests.settings')}
             </Typography>
             <Box sx={{ mt: 1 }}>
               {test.settings?.time_limit && (
                 <Typography variant="body2">
-                  Время на прохождение: {test.settings.time_limit} минут
+                  {t('tests.timeLimitDesc').replace('{count}', test.settings.time_limit.toString())}
                 </Typography>
               )}
             </Box>
@@ -215,15 +236,15 @@ export default function TestDetailPage() {
 
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle2" color="text.secondary">
-              Информация
+              {t('tests.info')}
             </Typography>
             <Box sx={{ mt: 1 }}>
               <Typography variant="body2">
-                Создано: {new Date(test.created_at).toLocaleDateString('ru-RU')}
+                {t('tests.createdAt')}: {new Date(test.created_at).toLocaleDateString('ru-RU')}
               </Typography>
               {test.published_at && (
                 <Typography variant="body2">
-                  Опубликовано: {new Date(test.published_at).toLocaleDateString('ru-RU')}
+                  {t('tests.publishedAt')}: {new Date(test.published_at).toLocaleDateString('ru-RU')}
                 </Typography>
               )}
             </Box>
@@ -234,7 +255,7 @@ export default function TestDetailPage() {
       {test.structure && test.structure.length > 0 && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" gutterBottom>
-            Структура автоподбора вопросов
+            {t('tests.structure')}
           </Typography>
           <Grid container spacing={2}>
             {test.structure.map((rule: any, index: number) => {
@@ -246,12 +267,12 @@ export default function TestDetailPage() {
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box>
                           <Typography variant="subtitle1" fontWeight="bold">
-                            Тема: {topic?.name || rule.topic_id}
+                            {t('tests.topic')}: {topic?.name || rule.topic_id}
                           </Typography>
                           <Box sx={{ display: 'flex', gap: 1, mt: 0.5 }}>
-                            <Chip label={`Тип: ${rule.question_type}`} size="small" variant="outlined" />
-                            <Chip label={`Кол-во: ${rule.count}`} size="small" color="primary" variant="outlined" />
-                            <Chip label={`Сложность: ${rule.difficulty}`} size="small" variant="outlined" />
+                            <Chip label={`${t('tests.type')}: ${rule.question_type}`} size="small" variant="outlined" />
+                            <Chip label={`${t('tests.count')}: ${rule.count}`} size="small" color="primary" variant="outlined" />
+                            <Chip label={`${t('tests.difficulty')}: ${rule.difficulty}`} size="small" variant="outlined" />
                           </Box>
                         </Box>
                       </Box>
@@ -267,7 +288,7 @@ export default function TestDetailPage() {
       {test.test_questions && test.test_questions.length > 0 && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" gutterBottom>
-            Фиксированные вопросы
+            {t('tests.fixedTitle')}
           </Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
@@ -277,7 +298,7 @@ export default function TestDetailPage() {
                     <TableCell width={50}>{t('admin.type')}</TableCell>
                     <TableCell>{t('admin.content')}</TableCell>
                     <TableCell width={150}>{t('questions.topic')}</TableCell>
-                    <TableCell width={100}>Сложность</TableCell>
+                    <TableCell width={100}>{t('questions.difficulty')}</TableCell>
                     <TableCell width={80} align="right">{t('admin.actions')}</TableCell>
                   </TableRow>
                 </TableHead>

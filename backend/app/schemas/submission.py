@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.models.submission import SubmissionStatus
+from app.schemas.user import UserResponse
 
 
 class AnswerCreate(BaseModel):
@@ -59,6 +60,7 @@ class SubmissionResponse(BaseModel):
     """
     id: UUID
     student_id: UUID
+    student: Optional[UserResponse] = None
     variant_id: UUID
     test_id: Optional[UUID] = None
     test_title: Optional[str] = None

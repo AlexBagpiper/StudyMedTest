@@ -44,7 +44,7 @@ export default function TakeTestPage() {
 
   const loadLabels = async (questionId: string) => {
     try {
-      const res = await api.get(`/questions/${questionId}/labels/`)
+      const res = await api.get(`/questions/${questionId}/labels`)
       setCurrentLabels(res.data)
     } catch (err) {
       console.error('Failed to load labels:', err)
@@ -61,17 +61,17 @@ export default function TakeTestPage() {
     try {
       setIsLoading(true)
       // 1. Get submission
-      const subRes = await api.get(`/submissions/${id}/`)
+      const subRes = await api.get(`/submissions/${id}`)
       const subData = subRes.data
       setSubmission(subData)
 
       // 2. Get variant to get question order
-      const variantRes = await api.get(`/tests/variants/${subData.variant_id}/`)
+      const variantRes = await api.get(`/tests/variants/${subData.variant_id}`)
       const variantData = variantRes.data
       
       // 3. Load all questions in the variant
       const questionPromises = variantData.question_order.map((qId: string) => 
-        api.get(`/questions/${qId}/`)
+        api.get(`/questions/${qId}`)
       )
       const questionResponses = await Promise.all(questionPromises)
       setQuestions(questionResponses.map(r => r.data))
@@ -100,7 +100,7 @@ export default function TakeTestPage() {
   const saveAnswer = async (questionId: string) => {
     try {
       const answer = answers[questionId]
-      await api.post(`/submissions/${id}/answers/`, {
+      await api.post(`/submissions/${id}/answers`, {
         question_id: questionId,
         student_answer: typeof answer === 'string' ? answer : null,
         annotation_data: typeof answer === 'object' ? answer : null,
@@ -136,7 +136,7 @@ export default function TakeTestPage() {
       if (currentQuestion) {
         await saveAnswer(currentQuestion.id)
       }
-      await api.post(`/submissions/${id}/submit/`, {})
+      await api.post(`/submissions/${id}/submit`, {})
       navigate('/submissions')
     } catch (err: any) {
       if (isAuto) {
@@ -219,8 +219,8 @@ export default function TakeTestPage() {
   }
 
   return (
-    <Box maxWidth="md" sx={{ mx: 'auto', py: 4 }}>
-      <Paper sx={{ p: 3, mb: 3, borderRadius: 1, boxShadow: 3 }}>
+    <Box sx={{ width: '100%', px: { xs: 2, md: 4 }, py: 4 }}>
+      <Paper sx={{ p: 3, mb: 3, borderRadius: 1, boxShadow: 3, width: '100%' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, alignItems: 'center' }}>
           <Typography variant="h6" fontWeight="bold">
             Вопрос {currentQuestionIndex + 1} из {questions.length}
@@ -254,7 +254,15 @@ export default function TakeTestPage() {
             sx={{ bgcolor: 'background.paper' }}
           />
         ) : (
-          <Box sx={{ height: '600px', border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+          <Box sx={{ 
+            height: 'calc(100vh - 400px)', 
+            minHeight: '600px', 
+            border: '1px solid', 
+            borderColor: '#333', 
+            borderRadius: 1, 
+            overflow: 'hidden',
+            bgcolor: '#1e2125'
+          }}>
             <AnnotationEditor
               imageUrl={currentQuestion?.image?.presigned_url || ''}
               initialData={{
@@ -263,6 +271,7 @@ export default function TakeTestPage() {
               }}
               onChange={(data) => handleAnswerChange(currentQuestion.id, data)}
               readOnly={false}
+              hideLabels={true}
             />
           </Box>
         )}

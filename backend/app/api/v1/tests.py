@@ -137,7 +137,7 @@ async def start_test(
     return submission
 
 
-@router.get("/", response_model=List[TestListResponse])
+@router.get("", response_model=List[TestListResponse])
 async def list_tests(
     skip: int = 0,
     limit: int = 100,
@@ -211,7 +211,7 @@ async def check_test_structure_availability(
         )
 
 
-@router.post("/", response_model=TestResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TestResponse, status_code=status.HTTP_201_CREATED)
 async def create_test(
     test_in: TestCreate,
     current_user: User = Depends(get_current_user),
@@ -489,6 +489,63 @@ async def publish_test(
     await db.commit()
     
     # Возвращаем тест со всеми загруженными связями для TestResponse
+    result = await db.execute(
+        select(Test)
+        .options(
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+        )
+        .where(Test.id == test.id)
+    )
+    test = result.scalar_one()
+    populate_test_question_urls(test)
+    
+    return test
+
+
+@router.post("/{test_id}/unpublish", response_model=TestResponse)
+async def unpublish_test(
+    test_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Снятие теста с публикации
+    """
+    result = await db.execute(
+        select(Test)
+        .options(
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+        )
+        .where(Test.id == test_id)
+    )
+    test = result.scalar_one_or_none()
+    
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Test not found"
+        )
+    
+    # Проверка прав доступа
+    if current_user.role == Role.TEACHER and test.author_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    if test.status != TestStatus.PUBLISHED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Test is not published"
+        )
+    
+    test.status = TestStatus.DRAFT
+    test.published_at = None
+    await db.commit()
+    
+    # Релоад для ответа
     result = await db.execute(
         select(Test)
         .options(
