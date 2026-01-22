@@ -39,6 +39,8 @@ import TextFieldsIcon from '@mui/icons-material/TextFields'
 import ImageIcon from '@mui/icons-material/Image'
 import { MenuItem, Select, FormControl, InputLabel } from '@mui/material'
 import QuestionFormDialog from '../../components/questions/QuestionFormDialog'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { MessageDialog } from '../../components/common/MessageDialog'
 
 interface TestFormData {
   title: string
@@ -71,6 +73,13 @@ export default function TestFormPage() {
   const [showQuestionPicker, setShowQuestionPicker] = useState(false)
   const [viewingQuestion, setViewingQuestion] = useState<Question | undefined>()
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
+  const [isPublishConfirmOpen, setIsPublishConfirmOpen] = useState(false)
+  const [messageDialog, setMessageDialog] = useState<{ open: boolean; title: string; message: string; severity: 'error' | 'info' | 'success' }>({
+    open: false,
+    title: '',
+    message: '',
+    severity: 'info'
+  })
 
   const {
     control,
@@ -113,7 +122,12 @@ export default function TestFormPage() {
 
   const handleAddStructureRule = () => {
     if (topics.length === 0) {
-      alert('Сначала создайте хотя бы одну тему')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        message: t('topics.noTopics'),
+        severity: 'error'
+      })
       return
     }
     
@@ -156,7 +170,12 @@ export default function TestFormPage() {
 
   const onSubmit = async (data: TestFormData) => {
     if (structure.length === 0 && selectedQuestions.length === 0) {
-      alert('Определите структуру теста или добавьте вопросы')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        message: t('tests.error.noQuestions'),
+        severity: 'error'
+      })
       return
     }
 
@@ -179,7 +198,7 @@ export default function TestFormPage() {
       navigate('/tests')
     } catch (error: any) {
       console.error('Failed to save test:', error)
-      let message = 'Не удалось сохранить тест'
+      let message = t('tests.error.unknown')
       if (error.response?.data?.detail) {
         if (Array.isArray(error.response.data.detail)) {
           message = error.response.data.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ')
@@ -187,24 +206,35 @@ export default function TestFormPage() {
           message = error.response.data.detail
         }
       }
-      alert(message)
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        message,
+        severity: 'error'
+      })
     }
   }
 
-  const handlePublish = async () => {
+  const handlePublish = () => {
     if (!testId) return
+    setIsPublishConfirmOpen(true)
+  }
 
-    if (
-      window.confirm(
-        'Вы уверены, что хотите опубликовать тест? После публикации его нельзя будет редактировать.'
-      )
-    ) {
-      try {
-        await publishTest.mutateAsync(testId)
-        navigate('/tests')
-      } catch (error) {
-        console.error('Failed to publish test:', error)
-      }
+  const handleConfirmPublish = async () => {
+    if (!testId) return
+    try {
+      await publishTest.mutateAsync(testId)
+      setIsPublishConfirmOpen(false)
+      navigate('/tests')
+    } catch (error: any) {
+      console.error('Failed to publish test:', error)
+      setIsPublishConfirmOpen(false)
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        message: `${t('tests.error.unknown')}: ${error.response?.data?.detail || error.message}`,
+        severity: 'error'
+      })
     }
   }
 
@@ -520,7 +550,7 @@ export default function TestFormPage() {
                             <Rating value={question.difficulty} readOnly size="small" />
                           </TableCell>
                           <TableCell align="right">
-                            <Button size="small" onClick={() => handleAddQuestion(question)}>
+                            <Button variant="outlined" size="small" onClick={() => handleAddQuestion(question)}>
                               Добавить
                             </Button>
                           </TableCell>
@@ -535,13 +565,13 @@ export default function TestFormPage() {
         </Paper>
 
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button type="submit" variant="contained" disabled={createTest.isPending || updateTest.isPending}>
+          <Button type="submit" variant="outlined" disabled={createTest.isPending || updateTest.isPending}>
             {isEdit ? 'Сохранить' : 'Создать'}
           </Button>
 
           {isEdit && test?.status === 'draft' && (
             <Button
-              variant="contained"
+              variant="outlined"
               color="success"
               startIcon={<PublishIcon />}
               onClick={handlePublish}
@@ -563,6 +593,26 @@ export default function TestFormPage() {
         onSubmit={() => {}}
         question={viewingQuestion}
         readOnly
+      />
+
+      <ConfirmDialog
+        open={isPublishConfirmOpen}
+        title="Опубликовать тест?"
+        content="Вы уверены, что хотите опубликовать тест? После публикации его нельзя будет редактировать."
+        confirmText="Опубликовать"
+        cancelText="Отмена"
+        color="success"
+        onConfirm={handleConfirmPublish}
+        onCancel={() => setIsPublishConfirmOpen(false)}
+        isLoading={publishTest.isPending}
+      />
+
+      <MessageDialog
+        open={messageDialog.open}
+        title={messageDialog.title}
+        content={messageDialog.message}
+        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
+        severity={messageDialog.severity}
       />
     </Box>
   )

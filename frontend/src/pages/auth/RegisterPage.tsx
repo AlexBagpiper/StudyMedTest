@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, TextField, Button, Typography, Alert } from '@mui/material'
+import { Box, TextField, Button, Typography } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
+import { MessageDialog } from '../../components/common/MessageDialog'
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
@@ -10,28 +11,30 @@ export default function RegisterPage() {
   const [lastName, setLastName] = useState('')
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
-  const [error, setError] = useState('')
+  const [messageDialog, setMessageDialog] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  })
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
   const { t } = useLocale()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
 
     // Валидация
     if (password.length < 6) {
-      setError(t('auth.passwordMin'))
+      setMessageDialog({ open: true, message: t('auth.passwordMin') })
       return
     }
 
     if (lastName.length < 1) {
-      setError(t('auth.enterLastName'))
+      setMessageDialog({ open: true, message: t('auth.enterLastName') })
       return
     }
 
     if (firstName.length < 1) {
-      setError(t('auth.enterFirstName'))
+      setMessageDialog({ open: true, message: t('auth.enterFirstName') })
       return
     }
 
@@ -41,13 +44,13 @@ export default function RegisterPage() {
       await register(email, password, lastName, firstName, middleName || undefined)
     } catch (err: any) {
       const detail = err.response?.data?.detail
+      let message = t('common.error')
       if (Array.isArray(detail)) {
-        setError(detail[0]?.msg || t('common.error'))
+        message = detail[0]?.msg || t('common.error')
       } else if (typeof detail === 'string') {
-        setError(detail)
-      } else {
-        setError(t('common.error'))
+        message = detail
       }
+      setMessageDialog({ open: true, message })
     } finally {
       setLoading(false)
     }
@@ -111,12 +114,6 @@ export default function RegisterPage() {
         error={password.length > 0 && password.length < 6}
       />
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
-      )}
-
       <Button
         type="submit"
         fullWidth
@@ -133,6 +130,14 @@ export default function RegisterPage() {
           {t('auth.login')}
         </Link>
       </Typography>
+
+      <MessageDialog
+        open={messageDialog.open}
+        title={t('common.error')}
+        content={messageDialog.message}
+        severity="error"
+        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
+      />
     </Box>
   )
 }

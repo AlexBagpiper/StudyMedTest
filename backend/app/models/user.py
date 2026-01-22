@@ -94,7 +94,8 @@ class User(Base):
     submissions = relationship(
         "Submission",
         back_populates="student",
-        foreign_keys="Submission.student_id"
+        foreign_keys="Submission.student_id",
+        cascade="all, delete-orphan"
     )
     audit_logs = relationship("AuditLog", back_populates="user")
     

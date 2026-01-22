@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { fabric } from 'fabric'
 import { 
-  Box, Menu, MenuItem, ListItemText, Snackbar, Alert,
+  Box, Menu, MenuItem, ListItemText,
   Dialog, DialogTitle, List, ListItemButton, TextField, InputAdornment,
   ListItemIcon, Typography
 } from '@mui/material'
@@ -13,6 +13,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import { useAnnotationStore } from './hooks/useAnnotationStore'
 import { EditorMode } from '../../types/annotation'
+
+import { MessageDialog } from '../common/MessageDialog'
 
 /**
  * Factory function to create containsPoint for rectangles (stroke-only selection).
@@ -531,7 +533,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
           obj.hasControls = false; 
           obj.hasBorders = !readOnly; 
           obj.hoverCursor = 'default'; 
-          obj.evented = !readOnly; 
+          obj.evented = true; 
           c.add(obj)
           obj.setCoords();
         }
@@ -675,8 +677,8 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
 
       if (evt.button === 2 || (opt as any).button === 3 || (evt as any).which === 3) {
         evt.preventDefault(); evt.stopPropagation()
-        if (currentMode === 'polygon' && polygonPointsRef.current.length > 0) setContextMenu({ mouseX: evt.clientX, mouseY: evt.clientY, type: 'drawing' })
-        else { const target = opt.target || canvas.findTarget(evt, false); if (target && (target as any).id) setContextMenu({ mouseX: evt.clientX, mouseY: evt.clientY, type: 'object', targetId: (target as any).id }) }
+        if (!readOnly && currentMode === 'polygon' && polygonPointsRef.current.length > 0) setContextMenu({ mouseX: evt.clientX, mouseY: evt.clientY, type: 'drawing' })
+        else if (!readOnly) { const target = opt.target || canvas.findTarget(evt, false); if (target && (target as any).id) setContextMenu({ mouseX: evt.clientX, mouseY: evt.clientY, type: 'object', targetId: (target as any).id }) }
         return
       }
       if (currentMode === 'hand' || (evt as any).altKey) { canvas.isDragging = true; canvas.selection = false; canvas.lastPosX = evt.clientX; canvas.lastPosY = evt.clientY; canvas.defaultCursor = 'grabbing'; canvas.requestRenderAll(); return }
@@ -851,7 +853,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
       const selectedId = (selected as any).id
       if (selected && selectedId && selectedId !== 'temp') {
         justSelectedIdRef.current = selectedId
-        createEditNodes(canvas, selected)
+        if (!readOnly) createEditNodes(canvas, selected)
         setSelectedAnnotationId(selectedId)
       }
     })
@@ -868,7 +870,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
       const selectedId = (selected as any).id
       if (selected && selectedId && selectedId !== 'temp') {
         justSelectedIdRef.current = selectedId
-        createEditNodes(canvas, selected)
+        if (!readOnly) createEditNodes(canvas, selected)
         setSelectedAnnotationId(selectedId)
       } else {
         clearEditNodes(canvas)
@@ -941,6 +943,14 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
     
     c.requestRenderAll() 
   }, [zoom])
+
+  // Синхронизация аннотаций из хранилища для режима просмотра (review)
+  useEffect(() => {
+    if (readOnly && fabricCanvas.current && fabricImageRef.current) {
+      loadAnnotationsRef.current?.(fabricCanvas.current)
+    }
+  }, [annotations, labels, readOnly])
+
   useEffect(() => { 
     if (!fabricCanvas.current) return; 
     const c = fabricCanvas.current; 
@@ -951,7 +961,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
     c.getObjects().forEach(obj => {
       if ((obj as any).id || (obj as any).isNode) {
         obj.selectable = !readOnly && (mode === 'select' || (obj as any).isNode);
-        obj.evented = !readOnly;
+        obj.evented = (obj as any).id ? true : !readOnly;
       }
     });
 
@@ -1070,16 +1080,14 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
           </MenuItem>
         ]}
       </Menu>
-      <Snackbar 
-        open={errorMessage !== null} 
-        autoHideDuration={4000} 
+
+      <MessageDialog
+        open={errorMessage !== null}
+        title="Внимание"
+        content={errorMessage || ''}
+        severity="warning"
         onClose={() => setErrorMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity="warning" onClose={() => setErrorMessage(null)} sx={{ width: '100%' }}>
-          {errorMessage}
-        </Alert>
-      </Snackbar>
+      />
 
       <Dialog 
         open={labelPicker?.open || false} 

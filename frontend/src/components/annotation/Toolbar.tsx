@@ -12,7 +12,7 @@ import PolylineIcon from '@mui/icons-material/Polyline'
 import CropSquareIcon from '@mui/icons-material/CropSquare'
 import SaveIcon from '@mui/icons-material/Save'
 import { useAnnotationStore } from './hooks/useAnnotationStore'
-import { EditorMode } from '../../../types/annotation'
+import { EditorMode } from '../../types/annotation'
 
 interface ToolbarProps {
   onSave?: () => void
@@ -75,11 +75,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
           }
         }}
       >
-        <Tooltip title="Выделение (V)" placement="left">
-          <ToggleButton value="select">
-            <NearMeIcon fontSize="small" />
-          </ToggleButton>
-        </Tooltip>
+        {!readOnly && (
+          <Tooltip title="Выделение (V)" placement="left">
+            <ToggleButton value="select">
+              <NearMeIcon fontSize="small" />
+            </ToggleButton>
+          </Tooltip>
+        )}
         
         <Tooltip title="Рука (H)" placement="left">
           <ToggleButton value="hand">

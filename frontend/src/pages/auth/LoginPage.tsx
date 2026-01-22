@@ -1,26 +1,32 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, TextField, Button, Typography, Alert } from '@mui/material'
+import { Box, TextField, Button, Typography } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
+import { MessageDialog } from '../../components/common/MessageDialog'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [messageDialog, setMessageDialog] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  })
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const { t, translateError } = useLocale()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
 
     try {
       await login(email, password)
     } catch (err: any) {
-      setError(translateError(err.response?.data?.detail))
+      setMessageDialog({
+        open: true,
+        message: translateError(err.response?.data?.detail)
+      })
     } finally {
       setLoading(false)
     }
@@ -53,12 +59,6 @@ export default function LoginPage() {
         onChange={(e) => setPassword(e.target.value)}
       />
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
-      )}
-
       <Button
         type="submit"
         fullWidth
@@ -75,6 +75,14 @@ export default function LoginPage() {
           {t('auth.register')}
         </Link>
       </Typography>
+
+      <MessageDialog
+        open={messageDialog.open}
+        title={t('common.error')}
+        content={messageDialog.message}
+        severity="error"
+        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
+      />
     </Box>
   )
 }

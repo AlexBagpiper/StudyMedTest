@@ -9,7 +9,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -128,11 +128,15 @@ async def start_test(
         select(Submission)
         .options(
             selectinload(Submission.answers),
-            selectinload(Submission.variant).selectinload(TestVariant.test)
+            joinedload(Submission.student),
+            joinedload(Submission.variant).joinedload(TestVariant.test).joinedload(Test.author)
         )
         .where(Submission.id == submission.id)
     )
-    submission = result.scalar_one()
+    submission = result.unique().scalar_one()
+    
+    # Добавляем time_limit в объект для схемы
+    submission.time_limit = submission.variant.test.settings.get("time_limit")
     
     return submission
 
@@ -680,9 +684,26 @@ async def delete_test(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
+
+    # Проверка наличия результатов
+    from sqlalchemy import exists
+    sub_query = select(exists().where(Submission.variant_id.in_(
+        select(TestVariant.id).where(TestVariant.test_id == test_id)
+    )))
+    has_submissions = await db.scalar(sub_query)
     
-    await db.delete(test)
-    await db.commit()
+    if has_submissions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя удалить тест, у которого есть результаты прохождения. Сначала удалите результаты или архивируйте тест."
+        )
+
+    try:
+        await db.delete(test)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise e
     
     return None
 

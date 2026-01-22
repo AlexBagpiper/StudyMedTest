@@ -19,6 +19,9 @@ import SubmissionsPage from './pages/submissions/SubmissionsPage'
 import TakeTestPage from './pages/submissions/TakeTestPage'
 import ProfilePage from './pages/ProfilePage'
 import AdminPage from './pages/admin/AdminPage'
+import AdminSubmissionsPage from './pages/admin/AdminSubmissionsPage'
+import SubmissionDetailsPage from './pages/admin/SubmissionDetailsPage'
+import SubmissionReviewPage from './pages/admin/SubmissionReviewPage'
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -30,6 +33,25 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  return <>{children}</>
+}
+
+// Admin or Teacher route wrapper
+function StaffRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) {
+    return <div>Loading...</div>
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (user.role !== 'admin' && user.role !== 'teacher') {
+    return <Navigate to="/" replace />
   }
 
   return <>{children}</>
@@ -84,6 +106,30 @@ function App() {
         <Route path="/submissions" element={<SubmissionsPage />} />
         <Route path="/submissions/:id" element={<TakeTestPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route
+          path="/admin/submissions"
+          element={
+            <StaffRoute>
+              <AdminSubmissionsPage />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/admin/submissions/:id"
+          element={
+            <StaffRoute>
+              <SubmissionDetailsPage />
+            </StaffRoute>
+          }
+        />
+        <Route
+          path="/admin/submissions/:id/review"
+          element={
+            <StaffRoute>
+              <SubmissionReviewPage />
+            </StaffRoute>
+          }
+        />
         <Route
           path="/admin"
           element={

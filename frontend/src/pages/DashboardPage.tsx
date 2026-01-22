@@ -64,7 +64,7 @@ export default function DashboardPage() {
           title: t('dashboard.studentResults'),
           description: t('dashboard.studentResultsDesc'),
           icon: <AssignmentIcon sx={{ fontSize: 40 }} />,
-          action: () => navigate('/submissions'),
+          action: () => navigate('/admin/submissions'),
           color: '#10B981',
         },
       ]

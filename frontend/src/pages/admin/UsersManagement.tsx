@@ -18,7 +18,6 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  Alert,
   CircularProgress,
   Tabs,
   Tab,
@@ -29,6 +28,9 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
 import { adminApi } from '../../lib/api'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { MessageDialog } from '../../components/common/MessageDialog'
+import { useLocale } from '../../contexts/LocaleContext'
 
 interface User {
   id: string
@@ -66,10 +68,31 @@ const initialFormData: UserFormData = {
 }
 
 export default function UsersManagement() {
+  const { t } = useLocale()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  
+  // Dialog states
+  const [messageDialog, setMessageDialog] = useState<{
+    open: boolean
+    title: string
+    content: string
+    severity: 'error' | 'success' | 'info' | 'warning'
+  }>({
+    open: false,
+    title: '',
+    content: '',
+    severity: 'info'
+  })
+
+  const [confirmDelete, setConfirmDelete] = useState<{
+    open: boolean
+    userId: string | null
+  }>({
+    open: false,
+    userId: null
+  })
+
   const [openDialog, setOpenDialog] = useState(false)
   const [formData, setFormData] = useState<UserFormData>(initialFormData)
   const [editingUser, setEditingUser] = useState<User | null>(null)
@@ -96,7 +119,6 @@ export default function UsersManagement() {
   const loadUsers = async () => {
     try {
       setLoading(true)
-      setError(null)
       const params: any = { limit: 100 }
       
       if (roleFilter !== 'all') {
@@ -111,7 +133,12 @@ export default function UsersManagement() {
       setUsers(response.items)
       setTotal(response.total)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка загрузки пользователей')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: err.response?.data?.detail || 'Ошибка загрузки пользователей',
+        severity: 'error'
+      })
     } finally {
       setLoading(false)
     }
@@ -141,50 +168,74 @@ export default function UsersManagement() {
     setOpenDialog(false)
     setEditingUser(null)
     setFormData(initialFormData)
-    setError(null)
   }
 
   const handleSubmit = async () => {
     try {
-      setError(null)
-      
       if (editingUser) {
         const updateData: any = { ...formData }
         if (!updateData.password) {
           delete updateData.password
         }
         await adminApi.updateUser(editingUser.id, updateData)
-        setSuccess('Пользователь успешно обновлён')
+        setMessageDialog({
+          open: true,
+          title: t('common.success'),
+          content: 'Пользователь успешно обновлён',
+          severity: 'success'
+        })
       } else {
         await adminApi.createUser(formData)
-        setSuccess(
-          formData.role === 'teacher'
+        setMessageDialog({
+          open: true,
+          title: t('common.success'),
+          content: formData.role === 'teacher'
             ? 'Преподаватель успешно создан'
-            : 'Пользователь успешно создан'
-        )
+            : 'Пользователь успешно создан',
+          severity: 'success'
+        })
       }
       
       handleCloseDialog()
       loadUsers()
-      setTimeout(() => setSuccess(null), 3000)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка при сохранении')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: err.response?.data?.detail || 'Ошибка при сохранении',
+        severity: 'error'
+      })
     }
   }
 
   const handleDelete = async (userId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить этого пользователя?')) {
-      return
-    }
+    setConfirmDelete({ open: true, userId })
+  }
+
+  const confirmDeleteAction = async () => {
+    if (!confirmDelete.userId) return
 
     try {
-      setError(null)
-      await adminApi.deleteUser(userId)
-      setSuccess('Пользователь успешно удалён')
+      setLoading(true)
+      await adminApi.deleteUser(confirmDelete.userId)
+      setMessageDialog({
+        open: true,
+        title: t('common.success'),
+        content: 'Пользователь успешно удалён',
+        severity: 'success'
+      })
+      setConfirmDelete({ open: false, userId: null })
       loadUsers()
-      setTimeout(() => setSuccess(null), 3000)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка при удалении')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: err.response?.data?.detail || 'Ошибка при удалении',
+        severity: 'error'
+      })
+      setConfirmDelete({ open: false, userId: null })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -205,18 +256,6 @@ export default function UsersManagement() {
           Создать преподавателя
         </Button>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
 
       <Paper sx={{ mb: 3 }}>
         <Box sx={{ p: 2 }}>
@@ -418,6 +457,26 @@ export default function UsersManagement() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDelete.open}
+        title="Удаление пользователя"
+        content="Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить."
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmDeleteAction}
+        onCancel={() => setConfirmDelete({ open: false, userId: null })}
+        color="error"
+        isLoading={loading}
+      />
+
+      <MessageDialog
+        open={messageDialog.open}
+        title={messageDialog.title}
+        content={messageDialog.content}
+        severity={messageDialog.severity}
+        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
+      />
     </Box>
   )
 }

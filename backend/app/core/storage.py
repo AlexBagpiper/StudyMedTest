@@ -33,14 +33,14 @@ class StorageService:
         try:
             if not self.client.bucket_exists(self.bucket):
                 self.client.make_bucket(self.bucket)
-                print(f"✅ Created bucket: {self.bucket}")
+                print(f"[+] Created bucket: {self.bucket}")
             
             # В режиме разработки делаем bucket публичным для чтения
             # Это решает проблемы с presigned URLs через прокси
             if settings.ENVIRONMENT == "development":
                 self._set_public_read_policy()
         except S3Error as e:
-            print(f"❌ Error with bucket: {e}")
+            print(f"[-] Error with bucket: {e}")
             
     def _set_public_read_policy(self):
         """
@@ -60,9 +60,9 @@ class StorageService:
         }
         try:
             self.client.set_bucket_policy(self.bucket, json.dumps(policy))
-            print(f"✅ Set public read policy for bucket: {self.bucket}")
+            print(f"[+] Set public read policy for bucket: {self.bucket}")
         except Exception as e:
-            print(f"❌ Error setting bucket policy: {e}")
+            print(f"[-] Error setting bucket policy: {e}")
     
     def upload_file(
         self,

@@ -95,14 +95,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   zoomOut: () => set((state) => ({ zoom: Math.max(state.zoom / 1.1, 0.01) })),
   resetZoom: () => set((state) => ({ zoom: 1, viewResetVersion: state.viewResetVersion + 1 })),
   setData: (data) => set({ 
-    labels: (data.labels || []).map((label, i) => {
-      // Гарантируем уникальные и различимые цвета для каждой категории
-      const hue = (i * 137.508) % 360
-      return {
-        ...label,
-        color: `hsl(${hue}, 75%, 45%)` // Используем HSL для гарантии различимости
-      }
-    }), 
+    labels: data.labels || [], 
     annotations: data.annotations || [] 
   }),
   reset: () => set({

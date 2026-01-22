@@ -47,6 +47,13 @@ class AnswerResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BulkDeleteRequest(BaseModel):
+    """
+    Схема для массового удаления
+    """
+    ids: List[UUID]
+
+
 class SubmissionCreate(BaseModel):
     """
     Схема для создания submission
@@ -64,10 +71,12 @@ class SubmissionResponse(BaseModel):
     variant_id: UUID
     test_id: Optional[UUID] = None
     test_title: Optional[str] = None
+    teacher: Optional[UserResponse] = None
     status: SubmissionStatus
     started_at: datetime
     submitted_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    is_hidden: bool = False
     result: Optional[Dict[str, Any]] = None
     answers: List[AnswerResponse] = []
     

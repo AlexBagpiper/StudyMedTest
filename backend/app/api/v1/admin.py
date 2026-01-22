@@ -4,6 +4,7 @@ Admin API - CRUD операции для всех сущностей
 """
 
 from datetime import datetime
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -30,6 +31,7 @@ from app.schemas.admin import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
@@ -247,9 +249,61 @@ async def delete_user(
     if user.id == admin.id:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     
+    # Для ролей teacher и admin проверяем зависимости
+    if user.role in [Role.TEACHER, Role.ADMIN]:
+        from app.models.test import Test, TestVariant
+        from app.models.topic import Topic
+        
+        # 1. Проверяем сабмишены студентов на тесты этого автора
+        submission_count = await db.scalar(
+            select(func.count(Submission.id))
+            .join(TestVariant, Submission.variant_id == TestVariant.id)
+            .join(Test, TestVariant.test_id == Test.id)
+            .where(Test.author_id == user_id)
+            .where(Submission.student_id != user_id)
+        )
+        if submission_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Нельзя удалить {user.role.value}: у студентов есть результаты ({submission_count}) по тестам этого автора"
+            )
+
+        # 2. Проверяем наличие созданных тестов
+        test_count = await db.scalar(select(func.count(Test.id)).where(Test.author_id == user_id))
+        if test_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Нельзя удалить {user.role.value}: у пользователя есть созданные тесты ({test_count})"
+            )
+
+        # 3. Проверяем наличие созданных вопросов
+        question_count = await db.scalar(select(func.count(Question.id)).where(Question.author_id == user_id))
+        if question_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Нельзя удалить {user.role.value}: у пользователя есть созданные вопросы ({question_count})"
+            )
+
+        # 4. Проверяем наличие созданных тем
+        topic_count = await db.scalar(select(func.count(Topic.id)).where(Topic.created_by == user_id))
+        if topic_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Нельзя удалить {user.role.value}: у пользователя есть созданные темы ({topic_count})"
+            )
+
     await log_admin_action(db, admin, "delete", "user", user_id, {"email": user.email})
     await db.delete(user)
-    await db.commit()
+    
+    try:
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        logger.exception("Error deleting user: %s", user_id, exc_info=e)
+        raise HTTPException(
+            status_code=400,
+            detail="Ошибка при удалении: возможны зависимости в БД"
+        )
 
 
 # ==================== QUESTIONS ====================
@@ -518,13 +572,15 @@ async def list_submissions(
     limit: int = Query(50, ge=1, le=100),
     student_id: Optional[UUID] = None,
     status: Optional[SubmissionStatus] = None,
+    sort_by: str = "started_at",
+    order: str = "desc",
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Список всех submissions"""
+    """Список всех submissions (админ видит все, включая скрытые)"""
     query = select(Submission).options(
         selectinload(Submission.student),
-        selectinload(Submission.variant).selectinload(TestVariant.test)
+        selectinload(Submission.variant).selectinload(TestVariant.test).selectinload(Test.author)
     )
     count_query = select(func.count(Submission.id))
     
@@ -536,9 +592,21 @@ async def list_submissions(
         query = query.where(Submission.status == status)
         count_query = count_query.where(Submission.status == status)
     
+    # Сортировка
+    if not hasattr(Submission, sort_by):
+        sort_attr = Submission.started_at
+    else:
+        sort_attr = getattr(Submission, sort_by)
+        if not hasattr(sort_attr, "desc"):
+            sort_attr = Submission.started_at
+
+    if order == "desc":
+        query = query.order_by(sort_attr.desc())
+    else:
+        query = query.order_by(sort_attr.asc())
+        
     total = await db.scalar(count_query)
-    
-    query = query.order_by(Submission.started_at.desc()).offset(skip).limit(limit)
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     submissions = result.scalars().all()
     

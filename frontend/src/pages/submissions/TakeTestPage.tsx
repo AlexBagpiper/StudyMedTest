@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Box,
   Typography,
@@ -6,29 +6,47 @@ import {
   Paper,
   Divider,
   CircularProgress,
-  Alert,
   TextField,
 } from '@mui/material'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLocale } from '../../contexts/LocaleContext'
+import { useSubmitTest } from '../../lib/api/hooks/useSubmissions'
 import { AnnotationEditor } from '../../components/annotation/AnnotationEditor'
 import { AnnotationData } from '../../types/annotation'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { MessageDialog } from '../../components/common/MessageDialog'
 
 export default function TakeTestPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user } = useAuth()
+  const { t } = useLocale()
+  const submitTest = useSubmitTest()
   
   const [submission, setSubmission] = useState<any>(null)
   const [questions, setQuestions] = useState<any[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const currentQuestionIndexRef = useRef(currentQuestionIndex)
+
   const [answers, setAnswers] = useState<Record<string, any>>({})
+  const answersRef = useRef(answers)
+  
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isSubmittingRef = useRef(false)
   const [currentLabels, setCurrentLabels] = useState<any[]>([])
   const [timeLeft, setTimeLeft] = useState<number | null>(null)
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false)
+  const [isTimeExpiredDialogOpen, setIsTimeExpiredDialogOpen] = useState(false)
+  const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  })
 
   const currentQuestion = questions[currentQuestionIndex]
 
@@ -60,23 +78,26 @@ export default function TakeTestPage() {
   const loadSubmission = async () => {
     try {
       setIsLoading(true)
-      // 1. Get submission
       const subRes = await api.get(`/submissions/${id}`)
       const subData = subRes.data
+      
+      // Если тест уже не в процессе, перенаправляем на результаты
+      if (subData.status !== 'in_progress') {
+        navigate('/submissions', { replace: true })
+        return
+      }
+      
       setSubmission(subData)
 
-      // 2. Get variant to get question order
       const variantRes = await api.get(`/tests/variants/${subData.variant_id}`)
       const variantData = variantRes.data
       
-      // 3. Load all questions in the variant
       const questionPromises = variantData.question_order.map((qId: string) => 
         api.get(`/questions/${qId}`)
       )
       const questionResponses = await Promise.all(questionPromises)
       setQuestions(questionResponses.map(r => r.data))
       
-      // Initialize answers from existing ones if any
       const initialAnswers: Record<string, any> = {}
       if (subData.answers) {
         subData.answers.forEach((a: any) => {
@@ -87,65 +108,137 @@ export default function TakeTestPage() {
       
     } catch (err: any) {
       console.error('Failed to load test:', err)
-      setError(err.response?.data?.detail || 'Не удалось загрузить тест')
+      setError(err.response?.data?.detail || t('tests.error.load'))
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleAnswerChange = (questionId: string, value: any) => {
-    setAnswers(prev => ({ ...prev, [questionId]: value }))
+    setAnswers(prev => {
+      const next = { ...prev, [questionId]: value }
+      answersRef.current = next
+      return next
+    })
   }
 
   const saveAnswer = async (questionId: string) => {
+    if (submission?.status !== 'in_progress' && !isSubmittingRef.current) return;
+    
     try {
-      const answer = answers[questionId]
+      const answer = answersRef.current[questionId]
       await api.post(`/submissions/${id}/answers`, {
         question_id: questionId,
         student_answer: typeof answer === 'string' ? answer : null,
         annotation_data: typeof answer === 'object' ? answer : null,
       })
-    } catch (err) {
+    } catch (err: any) {
+      if (err.response?.status === 400 && 
+          (err.response?.data?.detail === "Submission is not in progress" || 
+           err.response?.data?.detail?.includes("Time limit exceeded"))) {
+        return;
+      }
       console.error('Failed to save answer:', err)
     }
   }
 
   const handleNext = async () => {
-    if (currentQuestion) {
-      await saveAnswer(currentQuestion.id)
-    }
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1)
-    }
-  }
-
-  const handlePrev = async () => {
-    if (currentQuestion) {
-      await saveAnswer(currentQuestion.id)
-    }
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1)
-    }
-  }
-
-  const handleSubmitTest = async (isAuto = false) => {
-    if (!isAuto && !window.confirm('Вы уверены, что хотите завершить тест?')) return
-    
+    if (isSubmittingRef.current) return
     try {
+      isSubmittingRef.current = true
       setIsSubmitting(true)
       if (currentQuestion) {
         await saveAnswer(currentQuestion.id)
       }
-      await api.post(`/submissions/${id}/submit`, {})
-      navigate('/submissions')
-    } catch (err: any) {
-      if (isAuto) {
-        // Если авто-сабмит не удался (например, уже сабмитнуто на бэкенде), просто уходим
-        navigate('/submissions')
-      } else {
-        alert(err.response?.data?.detail || 'Не удалось завершить тест')
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex(prev => {
+          const next = prev + 1
+          currentQuestionIndexRef.current = next
+          return next
+        })
       }
     } finally {
+      isSubmittingRef.current = false
+      setIsSubmitting(false)
+    }
+  }
+
+  const handlePrev = async () => {
+    if (isSubmittingRef.current) return
+    try {
+      isSubmittingRef.current = true
+      setIsSubmitting(true)
+      if (currentQuestion) {
+        await saveAnswer(currentQuestion.id)
+      }
+      if (currentQuestionIndex > 0) {
+        setCurrentQuestionIndex(prev => {
+          const next = prev - 1
+          currentQuestionIndexRef.current = next
+          return next
+        })
+      }
+    } finally {
+      isSubmittingRef.current = false
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleSubmitTest = async (isAuto = false) => {
+    if (isSubmittingRef.current) return
+    
+    try {
+      isSubmittingRef.current = true
+      setIsSubmitting(true)
+      setIsConfirmDialogOpen(false)
+      
+      const qIndex = currentQuestionIndexRef.current
+      const q = questions[qIndex]
+      
+      if (q) {
+        await saveAnswer(q.id)
+      }
+      
+      if (id) {
+        await submitTest.mutateAsync(id)
+      }
+      
+      if (isAuto) {
+        setIsTimeExpiredDialogOpen(true)
+      } else {
+        navigate('/submissions', { replace: true })
+      }
+    } catch (err: any) {
+      // Инвалидируем кэш в любом случае, так как статус мог измениться на бэкенде даже при ошибке (например, 500 после коммита)
+      await queryClient.invalidateQueries({ queryKey: ['submissions'] })
+
+      // Даже если произошла ошибка, связанная с временем или уже отправленным тестом,
+      // мы считаем, что тест завершен.
+      const isAlreadySubmitted = err.response?.status === 400 && 
+          (err.response?.data?.detail === "Submission already submitted" || 
+           err.response?.data?.detail === "Submission is not in progress" ||
+           err.response?.data?.detail?.includes("Time limit exceeded"))
+
+      if (isAlreadySubmitted) {
+        if (isAuto) {
+          setIsTimeExpiredDialogOpen(true)
+        } else {
+          navigate('/submissions', { replace: true })
+        }
+        return
+      }
+      
+      console.error('Failed to submit test:', err)
+      if (isAuto) {
+        setIsTimeExpiredDialogOpen(true)
+      } else {
+        setErrorDialog({
+          open: true,
+          message: err.response?.data?.detail || t('tests.error.unknown')
+        })
+      }
+    } finally {
+      isSubmittingRef.current = false
       setIsSubmitting(false)
     }
   }
@@ -157,23 +250,32 @@ export default function TakeTestPage() {
     }
 
     const calculateTimeLeft = () => {
-      const startedAt = new Date(submission.started_at).getTime()
-      const limitMs = submission.time_limit * 60 * 1000
+      const dateStr = submission.started_at;
+      const normalizedDateStr = (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) 
+        ? `${dateStr}Z` 
+        : dateStr;
+        
+      const startedAt = new Date(normalizedDateStr).getTime()
+      const limitMs = (submission.time_limit || 0) * 60 * 1000
       const now = new Date().getTime()
       const remaining = Math.max(0, Math.floor((startedAt + limitMs - now) / 1000))
       
       if (remaining <= 0) {
-        handleSubmitTest(true) // Auto-submit
         return 0
       }
       return remaining
     }
 
-    // Initial calculation
     const initial = calculateTimeLeft()
     setTimeLeft(initial)
+    
+    if (initial === 0 && submission && submission.status === 'in_progress') {
+      setTimeout(() => handleSubmitTest(true), 0)
+    }
 
     const timer = setInterval(() => {
+      if (isSubmittingRef.current) return; // Don't tick if we are already submitting
+
       setTimeLeft((prev) => {
         if (prev === null || prev <= 0) {
           clearInterval(timer)
@@ -181,8 +283,9 @@ export default function TakeTestPage() {
         }
         const next = prev - 1
         if (next <= 0) {
-          handleSubmitTest(true)
           clearInterval(timer)
+          // Defer call to avoid state updates during render if this was called from a render-related logic
+          setTimeout(() => handleSubmitTest(true), 0)
           return 0
         }
         return next
@@ -191,6 +294,15 @@ export default function TakeTestPage() {
 
     return () => clearInterval(timer)
   }, [submission])
+
+  useEffect(() => {
+    if (error) {
+      setErrorDialog({
+        open: true,
+        message: error
+      })
+    }
+  }, [error])
 
   if (isLoading) {
     return (
@@ -203,8 +315,7 @@ export default function TakeTestPage() {
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
-        <Button onClick={() => navigate('/tests')}>Назад к тестам</Button>
+        <Button onClick={() => navigate('/tests')}>{t('tests.backToTests')}</Button>
       </Box>
     )
   }
@@ -212,8 +323,8 @@ export default function TakeTestPage() {
   if (questions.length === 0) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="warning" sx={{ mb: 2 }}>В тесте нет вопросов</Alert>
-        <Button onClick={() => navigate('/tests')}>Назад к тестам</Button>
+        <Typography variant="h6" sx={{ mb: 2 }}>{t('questions.noResults')}</Typography>
+        <Button onClick={() => navigate('/tests')}>{t('tests.backToTests')}</Button>
       </Box>
     )
   }
@@ -223,7 +334,7 @@ export default function TakeTestPage() {
       <Paper sx={{ p: 3, mb: 3, borderRadius: 1, boxShadow: 3, width: '100%' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, alignItems: 'center' }}>
           <Typography variant="h6" fontWeight="bold">
-            Вопрос {currentQuestionIndex + 1} из {questions.length}
+            {t('tests.questionIndex').replace('{current}', (currentQuestionIndex + 1).toString()).replace('{total}', questions.length.toString())}
           </Typography>
           {timeLeft !== null && (
             <Typography 
@@ -231,7 +342,7 @@ export default function TakeTestPage() {
               fontWeight="bold"
               sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
             >
-              Осталось: {formatTime(timeLeft)}
+              {t('tests.timeLeft')}: {formatTime(timeLeft)}
             </Typography>
           )}
         </Box>
@@ -248,7 +359,7 @@ export default function TakeTestPage() {
             multiline
             rows={6}
             variant="outlined"
-            placeholder="Введите ваш ответ здесь..."
+            placeholder={t('questions.enterAnswer')}
             value={answers[currentQuestion.id] || ''}
             onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
             sx={{ bgcolor: 'background.paper' }}
@@ -284,7 +395,7 @@ export default function TakeTestPage() {
           onClick={handlePrev}
           sx={{ borderRadius: 2, px: 4 }}
         >
-          Назад
+          {t('common.back')}
         </Button>
         
         <Box>
@@ -294,21 +405,50 @@ export default function TakeTestPage() {
               onClick={handleNext}
               sx={{ borderRadius: 2, px: 4 }}
             >
-              Далее
+              {t('common.next')}
             </Button>
           ) : (
             <Button 
               variant="contained" 
               color="success" 
-              onClick={handleSubmitTest}
+              onClick={() => setIsConfirmDialogOpen(true)}
               disabled={isSubmitting}
               sx={{ borderRadius: 2, px: 4 }}
             >
-              {isSubmitting ? 'Отправка...' : 'Завершить тест'}
+              {isSubmitting ? t('questions.uploading') : t('tests.confirm.finish.confirmText')}
             </Button>
           )}
         </Box>
       </Box>
+
+      <ConfirmDialog
+        open={isConfirmDialogOpen}
+        title={t('tests.confirm.finish.title')}
+        content={t('tests.confirm.finish.content')}
+        confirmText={t('tests.confirm.finish.confirmText')}
+        cancelText={t('common.cancel')}
+        color="success"
+        onConfirm={() => handleSubmitTest(false)}
+        onCancel={() => setIsConfirmDialogOpen(false)}
+        isLoading={isSubmitting}
+      />
+
+      <MessageDialog
+        open={errorDialog.open}
+        title={t('common.error')}
+        content={errorDialog.message}
+        onClose={() => setErrorDialog({ ...errorDialog, open: false })}
+        severity="error"
+      />
+
+      <MessageDialog
+        open={isTimeExpiredDialogOpen}
+        title={t('tests.confirm.timeExpired.title')}
+        content={t('tests.confirm.timeExpired.content')}
+        buttonText={t('common.ok')}
+        onClose={() => navigate('/submissions', { replace: true })}
+        severity="warning"
+      />
     </Box>
   )
 }

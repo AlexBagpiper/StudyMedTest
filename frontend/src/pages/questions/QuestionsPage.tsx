@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Typography,
@@ -10,7 +10,6 @@ import {
   Select,
   MenuItem,
   CircularProgress,
-  Alert,
   TextField,
   InputAdornment,
   Table,
@@ -43,6 +42,8 @@ import {
 import { useTopics } from '../../lib/api/hooks/useTopics'
 import QuestionFormDialog from '../../components/questions/QuestionFormDialog'
 import type { Question, QuestionCreate, QuestionType } from '../../types'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { MessageDialog } from '../../components/common/MessageDialog'
 
 export default function QuestionsPage() {
   const { user } = useAuth()
@@ -53,9 +54,23 @@ export default function QuestionsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<Question | undefined>()
   const [isViewOnly, setIsViewOnly] = useState(false)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  })
 
   const { data: questions = [], isLoading, error } = useQuestions()
   const { data: topics = [] } = useTopics()
+
+  useEffect(() => {
+    if (error) {
+      setErrorDialog({
+        open: true,
+        message: `${t('common.error')}: ${(error as Error).message}`
+      })
+    }
+  }, [error, t])
   const createQuestion = useCreateQuestion()
   const updateQuestion = useUpdateQuestion()
   const deleteQuestion = useDeleteQuestion()
@@ -90,13 +105,21 @@ export default function QuestionsPage() {
     setDialogOpen(true)
   }
 
-  const handleDeleteClick = async (questionId: string) => {
-    if (!window.confirm(t('questions.deleteConfirm'))) return
+  const handleDeleteClick = (questionId: string) => {
+    setConfirmId(questionId)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!confirmId) return
     try {
-      await deleteQuestion.mutateAsync(questionId)
+      await deleteQuestion.mutateAsync(confirmId)
+      setConfirmId(null)
     } catch (error: any) {
       console.error('Failed to delete question:', error)
-      alert(translateError(error.response?.data?.detail))
+      setErrorDialog({
+        open: true,
+        message: translateError(error.response?.data?.detail)
+      })
     }
   }
 
@@ -114,7 +137,10 @@ export default function QuestionsPage() {
       setEditingQuestion(undefined)
     } catch (error: any) {
       console.error('Failed to save question:', error)
-      alert(translateError(error.response?.data?.detail))
+      setErrorDialog({
+        open: true,
+        message: translateError(error.response?.data?.detail)
+      })
     }
   }
 
@@ -141,19 +167,11 @@ export default function QuestionsPage() {
     )
   }
 
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mb: 3 }}>
-        {t('common.error')}: {(error as Error).message}
-      </Alert>
-    )
-  }
-
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">{t('questions.bank')}</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateClick}>
+        <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateClick}>
           {t('questions.create')}
         </Button>
       </Box>
@@ -302,6 +320,26 @@ export default function QuestionsPage() {
         question={editingQuestion}
         isLoading={createQuestion.isPending || updateQuestion.isPending}
         readOnly={isViewOnly}
+      />
+
+      <ConfirmDialog
+        open={!!confirmId}
+        title={t('questions.deleteTitle')}
+        content={t('questions.deleteConfirm')}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        color="error"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmId(null)}
+        isLoading={deleteQuestion.isPending}
+      />
+
+      <MessageDialog
+        open={errorDialog.open}
+        title={t('common.error')}
+        content={errorDialog.message}
+        onClose={() => setErrorDialog({ ...errorDialog, open: false })}
+        severity="error"
       />
     </Box>
   )

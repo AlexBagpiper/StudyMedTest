@@ -1,11 +1,9 @@
 import React, { useEffect } from 'react'
 import { 
   Box, 
-  Paper, 
   Typography, 
   IconButton, 
   Divider, 
-  Tooltip,
   Button
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
@@ -14,7 +12,7 @@ import { FabricCanvas } from './FabricCanvas'
 import { Toolbar } from './Toolbar'
 import { LabelsPanel } from './LabelsPanel'
 import { useAnnotationStore } from './hooks/useAnnotationStore'
-import { AnnotationData } from '../../../types/annotation'
+import { AnnotationData } from '../../types/annotation'
 
 interface AnnotationEditorProps {
   imageUrl: string
@@ -41,8 +39,15 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
     zoom,
     zoomIn,
     zoomOut,
-    resetZoom
+    resetZoom,
+    setMode
   } = useAnnotationStore()
+
+  useEffect(() => {
+    if (readOnly) {
+      setMode('hand')
+    }
+  }, [readOnly, setMode])
 
   useEffect(() => {
     if (initialData) {

@@ -22,6 +22,7 @@ export interface Submission {
   started_at: string
   submitted_at?: string
   completed_at?: string
+  is_hidden: boolean
   result?: {
     total_score: number
     max_score: number

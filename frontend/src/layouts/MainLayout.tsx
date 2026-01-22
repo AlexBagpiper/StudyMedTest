@@ -68,7 +68,11 @@ export default function MainLayout() {
     ...(user?.role !== 'student' ? [
       { text: t('nav.questions'), icon: <QuestionAnswerIcon />, path: '/questions' },
     ] : []),
-    { text: t('nav.submissions'), icon: <AssignmentIcon />, path: '/submissions' },
+    { 
+      text: t('nav.submissions'), 
+      icon: <AssignmentIcon />, 
+      path: user?.role === 'student' ? '/submissions' : '/admin/submissions' 
+    },
     ...(user?.role === 'admin' ? [
       { text: t('nav.admin'), icon: <AdminPanelSettingsIcon />, path: '/admin' },
     ] : []),

@@ -7,7 +7,6 @@ import {
   CardActions,
   Chip,
   CircularProgress,
-  Alert,
 } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -16,6 +15,9 @@ import { useTests, useDeleteTest } from '../../lib/api/hooks'
 import { useStartTest, usePublishTest, useUnpublishTest } from '../../lib/api/hooks/useTests'
 import { useSubmissions } from '../../lib/api/hooks/useSubmissions'
 import type { Test, TestStatus, Submission } from '../../types'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { MessageDialog } from '../../components/common/MessageDialog'
+import { useState, useEffect } from 'react'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
@@ -33,10 +35,94 @@ export default function TestsPage() {
 
   const { data: tests = [], isLoading, error } = useTests()
   const { data: submissions = [] } = useSubmissions({ student_id: user?.id })
+
+  useEffect(() => {
+    if (error) {
+      setErrorDialog({
+        open: true,
+        message: `${t('tests.error.load')}: ${error instanceof Error ? error.message : t('tests.error.unknown')}`
+      })
+    }
+  }, [error, t])
   const deleteTest = useDeleteTest()
   const startTest = useStartTest()
   const publishTest = usePublishTest()
   const unpublishTest = useUnpublishTest()
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    content: string;
+    onConfirm: () => void;
+    color: 'primary' | 'error' | 'success' | 'warning';
+    isLoading: boolean;
+  }>({
+    open: false,
+    title: '',
+    content: '',
+    onConfirm: () => {},
+    color: 'primary',
+    isLoading: false
+  })
+  const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  })
+
+  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }))
+
+  const handlePublish = (testId: string) => {
+    setConfirmDialog({
+      open: true,
+      title: t('tests.action.publish'),
+      content: t('tests.confirm.publish'),
+      color: 'success',
+      onConfirm: async () => {
+        try {
+          await publishTest.mutateAsync(testId)
+          closeConfirm()
+        } catch (error) {
+          console.error('Failed to publish test:', error)
+        }
+      }
+    })
+  }
+
+  const handleUnpublish = (testId: string) => {
+    setConfirmDialog({
+      open: true,
+      title: t('tests.action.unpublish'),
+      content: t('tests.confirm.unpublish'),
+      color: 'warning',
+      onConfirm: async () => {
+        try {
+          await unpublishTest.mutateAsync(testId)
+          closeConfirm()
+        } catch (error) {
+          console.error('Failed to unpublish test:', error)
+        }
+      }
+    })
+  }
+
+  const handleDelete = (testId: string) => {
+    setConfirmDialog({
+      open: true,
+      title: t('common.delete'),
+      content: t('tests.confirm.delete'),
+      color: 'error',
+      onConfirm: async () => {
+        try {
+          await deleteTest.mutateAsync(testId)
+          closeConfirm()
+        } catch (error: any) {
+          console.error('Failed to delete test:', error)
+          const message = error.response?.data?.detail || t('common.error.unknown')
+          setErrorDialog({ open: true, message })
+        }
+      }
+    })
+  }
 
   const getSubmissionForTest = (testId: string) => {
     // Временный хак: так как Submission связан с Variant, а Variant с Test,
@@ -53,44 +139,24 @@ export default function TestsPage() {
       return
     }
 
-    try {
-      const submission = await startTest.mutateAsync(testId)
-      navigate(`/submissions/${submission.id}`)
-    } catch (error: any) {
-      console.error('Failed to start test:', error)
-      const message = error.response?.data?.detail || t('tests.error.unknown')
-      alert(message)
-    }
-  }
-
-  const handlePublish = async (testId: string) => {
-    if (window.confirm(t('tests.confirm.publish'))) {
-      try {
-        await publishTest.mutateAsync(testId)
-      } catch (error) {
-        console.error('Failed to publish test:', error)
+    setConfirmDialog({
+      open: true,
+      title: t('tests.confirm.start.title'),
+      content: t('tests.confirm.start.content'),
+      color: 'primary',
+      onConfirm: async () => {
+        try {
+          const submission = await startTest.mutateAsync(testId)
+          closeConfirm()
+          navigate(`/submissions/${submission.id}`)
+        } catch (error: any) {
+          console.error('Failed to start test:', error)
+          const message = error.response?.data?.detail || t('tests.error.unknown')
+          setErrorDialog({ open: true, message })
+          closeConfirm()
+        }
       }
-    }
-  }
-
-  const handleUnpublish = async (testId: string) => {
-    if (window.confirm(t('tests.confirm.unpublish'))) {
-      try {
-        await unpublishTest.mutateAsync(testId)
-      } catch (error) {
-        console.error('Failed to unpublish test:', error)
-      }
-    }
-  }
-
-  const handleDelete = async (testId: string) => {
-    if (window.confirm(t('tests.confirm.delete'))) {
-      try {
-        await deleteTest.mutateAsync(testId)
-      } catch (error) {
-        console.error('Failed to delete test:', error)
-      }
-    }
+    })
   }
 
   const getStatusLabel = (status: TestStatus) => {
@@ -152,7 +218,7 @@ export default function TestsPage() {
         </Typography>
         {!isStudent && (
           <Button
-            variant="contained"
+            variant="outlined"
             startIcon={<AddIcon />}
             onClick={() => navigate('/tests/create')}
           >
@@ -160,12 +226,6 @@ export default function TestsPage() {
           </Button>
         )}
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {t('tests.error.load')}: {error instanceof Error ? error.message : t('tests.error.unknown')}
-        </Alert>
-      )}
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -239,7 +299,7 @@ export default function TestsPage() {
                     {isStudent && (
                       <Box sx={{ ml: 3, display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <Button
-                          variant="contained"
+                          variant="outlined"
                           size="large"
                           onClick={() => handleStartTest(test.id)}
                           disabled={startTest.isPending || (isCompleted && !isInProgress)}
@@ -261,9 +321,10 @@ export default function TestsPage() {
                 </CardContent>
                 
                 {!isStudent && (
-                  <CardActions sx={{ px: 3, pb: 2, pt: 0, justifyContent: 'flex-end' }}>
+                  <CardActions sx={{ px: 3, pb: 2, pt: 0, justifyContent: 'flex-end', gap: 1 }}>
                     <Button 
                       size="small" 
+                      variant="outlined"
                       startIcon={<VisibilityIcon />}
                       onClick={() => navigate(`/tests/${test.id}`)}
                     >
@@ -272,6 +333,7 @@ export default function TestsPage() {
                     {test.status === 'draft' ? (
                       <Button
                         size="small"
+                        variant="outlined"
                         color="success"
                         startIcon={<PublishIcon />}
                         onClick={() => handlePublish(test.id)}
@@ -282,6 +344,7 @@ export default function TestsPage() {
                     ) : test.status === 'published' ? (
                       <Button
                         size="small"
+                        variant="outlined"
                         color="warning"
                         startIcon={<UnpublishedIcon />}
                         onClick={() => handleUnpublish(test.id)}
@@ -292,6 +355,7 @@ export default function TestsPage() {
                     ) : null}
                     <Button
                       size="small"
+                      variant="outlined"
                       startIcon={<EditIcon />}
                       onClick={() => navigate(`/tests/${test.id}/edit`)}
                     >
@@ -299,6 +363,7 @@ export default function TestsPage() {
                     </Button>
                     <Button
                       size="small"
+                      variant="outlined"
                       color="error"
                       startIcon={<DeleteIcon />}
                       onClick={() => handleDelete(test.id)}
@@ -313,6 +378,26 @@ export default function TestsPage() {
           })}
         </Box>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        content={confirmDialog.content}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        color={confirmDialog.color}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+        isLoading={publishTest.isPending || unpublishTest.isPending || deleteTest.isPending || startTest.isPending}
+      />
+
+      <MessageDialog
+        open={errorDialog.open}
+        title={t('common.error')}
+        content={errorDialog.message}
+        onClose={() => setErrorDialog({ ...errorDialog, open: false })}
+        severity="error"
+      />
     </Box>
   )
 }

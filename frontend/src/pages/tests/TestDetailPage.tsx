@@ -37,6 +37,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import TextFieldsIcon from '@mui/icons-material/TextFields'
 import ImageIcon from '@mui/icons-material/Image'
 import QuestionFormDialog from '../../components/questions/QuestionFormDialog'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { MessageDialog } from '../../components/common/MessageDialog'
 
 export default function TestDetailPage() {
   const { id } = useParams()
@@ -52,6 +54,27 @@ export default function TestDetailPage() {
 
   const [viewingQuestion, setViewingQuestion] = useState<Question | undefined>()
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    content: string;
+    onConfirm: () => void;
+    color: 'primary' | 'error' | 'success' | 'warning';
+    isLoading: boolean;
+  }>({
+    open: false,
+    title: '',
+    content: '',
+    onConfirm: () => {},
+    color: 'primary',
+    isLoading: false
+  })
+  const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  })
+
+  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
   const isStudent = user?.role === 'student'
   const isAuthor = test?.author_id === user?.id
@@ -62,41 +85,63 @@ export default function TestDetailPage() {
     }
   }, [isStudent, navigate])
 
-  const handlePublish = async () => {
+  const handlePublish = () => {
     if (!id) return
-
-    if (window.confirm(t('tests.confirm.publish'))) {
-      try {
-        await publishTest.mutateAsync(id)
-      } catch (error) {
-        console.error('Failed to publish test:', error)
+    setConfirmDialog({
+      open: true,
+      title: t('tests.action.publish'),
+      content: t('tests.confirm.publish'),
+      color: 'success',
+      onConfirm: async () => {
+        try {
+          await publishTest.mutateAsync(id)
+          closeConfirm()
+        } catch (error) {
+          console.error('Failed to publish test:', error)
+        }
       }
-    }
+    })
   }
 
-  const handleUnpublish = async () => {
+  const handleUnpublish = () => {
     if (!id) return
-
-    if (window.confirm(t('tests.confirm.unpublish'))) {
-      try {
-        await unpublishTest.mutateAsync(id)
-      } catch (error) {
-        console.error('Failed to unpublish test:', error)
+    setConfirmDialog({
+      open: true,
+      title: t('tests.action.unpublish'),
+      content: t('tests.confirm.unpublish'),
+      color: 'warning',
+      onConfirm: async () => {
+        try {
+          await unpublishTest.mutateAsync(id)
+          closeConfirm()
+        } catch (error) {
+          console.error('Failed to unpublish test:', error)
+        }
       }
-    }
+    })
   }
 
-  const handleStartTest = async () => {
+  const handleStartTest = () => {
     if (!id) return
 
-    try {
-      const submission = await startTest.mutateAsync(id)
-      navigate(`/submissions/${submission.id}`)
-    } catch (error: any) {
-      console.error('Failed to start test:', error)
-      const message = error.response?.data?.detail || t('tests.error.unknown')
-      alert(message)
-    }
+    setConfirmDialog({
+      open: true,
+      title: t('tests.confirm.start.title'),
+      content: t('tests.confirm.start.content'),
+      color: 'primary',
+      onConfirm: async () => {
+        try {
+          const submission = await startTest.mutateAsync(id)
+          closeConfirm()
+          navigate(`/submissions/${submission.id}`)
+        } catch (error: any) {
+          console.error('Failed to start test:', error)
+          const message = error.response?.data?.detail || t('tests.error.unknown')
+          setErrorDialog({ open: true, message })
+          closeConfirm()
+        }
+      }
+    })
   }
 
   if (isLoading) {
@@ -165,7 +210,7 @@ export default function TestDetailPage() {
           <Box sx={{ display: 'flex', gap: 1 }}>
             {isStudent && test.status === 'published' && (
               <Button
-                variant="contained"
+                variant="outlined"
                 startIcon={<PlayArrowIcon />}
                 onClick={handleStartTest}
                 size="large"
@@ -179,14 +224,14 @@ export default function TestDetailPage() {
                 {test.status === 'draft' && (
                   <>
                     <Button
-                      variant="contained"
+                      variant="outlined"
                       startIcon={<EditIcon />}
                       onClick={() => navigate(`/tests/${id}/edit`)}
                     >
                       {t('common.edit')}
                     </Button>
                     <Button
-                      variant="contained"
+                      variant="outlined"
                       color="success"
                       startIcon={<PublishIcon />}
                       onClick={handlePublish}
@@ -198,7 +243,7 @@ export default function TestDetailPage() {
                 )}
                 {test.status === 'published' && (
                   <Button
-                    variant="contained"
+                    variant="outlined"
                     color="warning"
                     startIcon={<UnpublishedIcon />}
                     onClick={handleUnpublish}
@@ -359,6 +404,26 @@ export default function TestDetailPage() {
         onSubmit={() => {}}
         question={viewingQuestion}
         readOnly
+      />
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        content={confirmDialog.content}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        color={confirmDialog.color}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+        isLoading={publishTest.isPending || unpublishTest.isPending || startTest.isPending}
+      />
+
+      <MessageDialog
+        open={errorDialog.open}
+        title={t('common.error')}
+        content={errorDialog.message}
+        onClose={() => setErrorDialog({ ...errorDialog, open: false })}
+        severity="error"
       />
     </Box>
   )

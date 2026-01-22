@@ -184,6 +184,7 @@ class AdminSubmissionTest(BaseModel):
     """Информация о тесте в submission"""
     id: UUID
     title: str
+    author: Optional[AdminQuestionAuthor] = None
 
     model_config = {"from_attributes": True}
 
@@ -221,6 +222,7 @@ class AdminSubmissionResponse(BaseModel):
     started_at: datetime
     submitted_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    is_hidden: bool = False
     result: Optional[Dict[str, Any]] = None
     answers: Optional[List[AdminAnswerResponse]] = None
 

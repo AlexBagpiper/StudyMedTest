@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -43,6 +43,7 @@ class Submission(Base):
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     submitted_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    is_hidden = Column(Boolean, default=False, nullable=False)
     
     # Результаты
     result = Column(JSONB, nullable=True)
@@ -69,6 +70,10 @@ class Submission(Base):
     @property
     def test_title(self):
         return self.variant.test.title if self.variant and self.variant.test else None
+    
+    @property
+    def teacher(self):
+        return self.variant.test.author if self.variant and self.variant.test else None
     
     def __repr__(self):
         return f"<Submission {self.id} ({self.status})>"

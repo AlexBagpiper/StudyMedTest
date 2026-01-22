@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Typography,
@@ -12,7 +12,6 @@ import {
   DialogActions,
   TextField,
   CircularProgress,
-  Alert,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -27,14 +26,34 @@ import {
   useDeleteTopic,
 } from '../../lib/api/hooks/useTopics'
 import type { Topic, TopicCreate } from '../../types'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { MessageDialog } from '../../components/common/MessageDialog'
 
 export default function TopicsPage() {
   const { user } = useAuth()
   const { t, translateError } = useLocale()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTopic, setEditingTopic] = useState<Topic | undefined>()
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [messageDialog, setMessageDialog] = useState<{ open: boolean; title: string; message: string; severity: 'error' | 'success' }>({
+    open: false,
+    title: '',
+    message: '',
+    severity: 'error'
+  })
 
   const { data: topics = [], isLoading, error } = useTopics()
+
+  useEffect(() => {
+    if (error) {
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        message: `${t('topics.loadError')}: ${(error as Error).message}`,
+        severity: 'error'
+      })
+    }
+  }, [error, t])
   const createTopic = useCreateTopic()
   const updateTopic = useUpdateTopic()
   const deleteTopic = useDeleteTopic()
@@ -75,16 +94,25 @@ export default function TopicsPage() {
     setDialogOpen(true)
   }
 
-  const handleDeleteClick = async (topicId: string) => {
-    if (window.confirm(t('topics.deleteConfirm'))) {
-      try {
-        await deleteTopic.mutateAsync(topicId)
-      } catch (error: any) {
-        const message = error.response?.data?.detail 
-          ? translateError(error.response.data.detail) 
-          : t('common.error')
-        alert(message)
-      }
+  const handleDeleteClick = (topicId: string) => {
+    setConfirmId(topicId)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!confirmId) return
+    try {
+      await deleteTopic.mutateAsync(confirmId)
+      setConfirmId(null)
+    } catch (error: any) {
+      const message = error.response?.data?.detail 
+        ? translateError(error.response.data.detail) 
+        : t('common.error')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        message,
+        severity: 'error'
+      })
     }
   }
 
@@ -104,7 +132,12 @@ export default function TopicsPage() {
       const message = error.response?.data?.detail 
         ? translateError(error.response.data.detail) 
         : t('common.error')
-      alert(message)
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        message,
+        severity: 'error'
+      })
     }
   }
 
@@ -121,19 +154,11 @@ export default function TopicsPage() {
     )
   }
 
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mb: 3 }}>
-        {t('topics.loadError')}: {(error as Error).message}
-      </Alert>
-    )
-  }
-
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">{t('topics.title')}</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateClick}>
+        <Button variant="outlined" startIcon={<AddIcon />} onClick={handleCreateClick}>
           {t('topics.create')}
         </Button>
       </Box>
@@ -197,7 +222,7 @@ export default function TopicsPage() {
               <Controller
                 name="name"
                 control={control}
-                rules={{ required: t('topics.name') }}
+                rules={{ required: t('topics.nameRequired') }}
                 render={({ field }) => (
                   <TextField
                     {...field}
@@ -241,6 +266,26 @@ export default function TopicsPage() {
           </DialogActions>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmId}
+        title={t('common.delete')}
+        content={t('topics.deleteConfirm')}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        color="error"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmId(null)}
+        isLoading={deleteTopic.isPending}
+      />
+
+      <MessageDialog
+        open={messageDialog.open}
+        title={messageDialog.title}
+        content={messageDialog.message}
+        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
+        severity={messageDialog.severity}
+      />
     </Box>
   )
 }

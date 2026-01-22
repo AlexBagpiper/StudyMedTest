@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { 
   Box, Typography, Card, CardContent, Avatar, Chip, 
-  TextField, Button, Alert, Divider, Grid,
+  TextField, Button, Divider, Grid,
   Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
@@ -9,6 +9,7 @@ import EmailIcon from '@mui/icons-material/Email'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocale } from '../contexts/LocaleContext'
 import api from '../lib/api'
+import { MessageDialog } from '../components/common/MessageDialog'
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -34,8 +35,17 @@ export default function ProfilePage() {
   
   // UI состояния
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [messageDialog, setMessageDialog] = useState<{
+    open: boolean
+    title: string
+    content: string
+    severity: 'error' | 'success' | 'info' | 'warning'
+  }>({
+    open: false,
+    title: '',
+    content: '',
+    severity: 'info'
+  })
 
   if (!user) return null
 
@@ -49,14 +59,10 @@ export default function ProfilePage() {
       setMiddleName(user.middle_name || '')
     }
     setIsEditing(!isEditing)
-    setError('')
-    setSuccess('')
   }
 
   const handleSaveProfile = async () => {
     setLoading(true)
-    setError('')
-    setSuccess('')
 
     try {
       await api.put('/users/me', {
@@ -65,20 +71,30 @@ export default function ProfilePage() {
         middle_name: middleName || null,
       })
       
-      setSuccess(t('profile.saved'))
+      setMessageDialog({
+        open: true,
+        title: t('common.success'),
+        content: t('profile.saved'),
+        severity: 'success'
+      })
       setIsEditing(false)
       
       // Перезагружаем страницу для обновления данных
-      window.location.reload()
+      setTimeout(() => window.location.reload(), 1500)
     } catch (err: any) {
       const detail = err.response?.data?.detail
+      let content = t('common.error')
       if (Array.isArray(detail)) {
-        setError(detail[0]?.msg || t('common.error'))
+        content = detail[0]?.msg || t('common.error')
       } else if (typeof detail === 'string') {
-        setError(detail)
-      } else {
-        setError(t('common.error'))
+        content = detail
       }
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content,
+        severity: 'error'
+      })
     } finally {
       setLoading(false)
     }
@@ -88,44 +104,61 @@ export default function ProfilePage() {
     setPasswordDialogOpen(true)
     setNewPassword('')
     setConfirmPassword('')
-    setError('')
   }
 
   const handlePasswordDialogClose = () => {
     setPasswordDialogOpen(false)
-    setError('')
   }
 
   const handleChangePassword = async () => {
     if (newPassword !== confirmPassword) {
-      setError(t('profile.passwordMismatch'))
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: t('profile.passwordMismatch'),
+        severity: 'error'
+      })
       return
     }
 
     if (newPassword.length < 6) {
-      setError(t('auth.passwordMin'))
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: t('auth.passwordMin'),
+        severity: 'error'
+      })
       return
     }
 
     setLoading(true)
-    setError('')
 
     try {
       await api.put('/users/me', {
         password: newPassword,
       })
       
-      setSuccess(t('profile.passwordChanged'))
+      setMessageDialog({
+        open: true,
+        title: t('common.success'),
+        content: t('profile.passwordChanged'),
+        severity: 'success'
+      })
       handlePasswordDialogClose()
     } catch (err: any) {
       const detail = err.response?.data?.detail
+      let content = t('common.error')
       if (Array.isArray(detail)) {
-        setError(detail[0]?.msg || t('common.error'))
+        content = detail[0]?.msg || t('common.error')
       } else if (typeof detail === 'string') {
-        setError(detail)
-      } else {
-        setError(t('common.error'))
+        content = detail
       }
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content,
+        severity: 'error'
+      })
     } finally {
       setLoading(false)
     }
@@ -137,22 +170,24 @@ export default function ProfilePage() {
     setNewEmail('')
     setEmailCode('')
     setDevCode('')
-    setError('')
   }
 
   const handleEmailDialogClose = () => {
     setEmailDialogOpen(false)
-    setError('')
   }
 
   const handleRequestEmailChange = async () => {
     if (!newEmail || !newEmail.includes('@')) {
-      setError('Введите корректный email')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: 'Введите корректный email',
+        severity: 'error'
+      })
       return
     }
 
     setLoading(true)
-    setError('')
 
     try {
       const response = await api.post('/users/me/request-email-change', {
@@ -165,14 +200,20 @@ export default function ProfilePage() {
       }
       
       setEmailStep('confirm')
-      setSuccess('Код подтверждения отправлен на новый email')
+      setMessageDialog({
+        open: true,
+        title: t('common.success'),
+        content: 'Код подтверждения отправлен на новый email',
+        severity: 'success'
+      })
     } catch (err: any) {
       const detail = err.response?.data?.detail
-      if (typeof detail === 'string') {
-        setError(detail)
-      } else {
-        setError('Ошибка при отправке кода')
-      }
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: typeof detail === 'string' ? detail : 'Ошибка при отправке кода',
+        severity: 'error'
+      })
     } finally {
       setLoading(false)
     }
@@ -180,32 +221,42 @@ export default function ProfilePage() {
 
   const handleConfirmEmailChange = async () => {
     if (!emailCode || emailCode.length !== 6) {
-      setError('Введите 6-значный код')
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: 'Введите 6-значный код',
+        severity: 'error'
+      })
       return
     }
 
     setLoading(true)
-    setError('')
 
     try {
       await api.post('/users/me/confirm-email-change', {
         code: emailCode,
       })
       
-      setSuccess('Email успешно изменен')
+      setMessageDialog({
+        open: true,
+        title: t('common.success'),
+        content: 'Email успешно изменен',
+        severity: 'success'
+      })
       handleEmailDialogClose()
       
       // Перезагружаем страницу для обновления данных
       setTimeout(() => {
         window.location.reload()
-      }, 1000)
+      }, 1500)
     } catch (err: any) {
       const detail = err.response?.data?.detail
-      if (typeof detail === 'string') {
-        setError(detail)
-      } else {
-        setError('Неверный код подтверждения')
-      }
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: typeof detail === 'string' ? detail : 'Неверный код подтверждения',
+        severity: 'error'
+      })
     } finally {
       setLoading(false)
     }
@@ -234,18 +285,6 @@ export default function ProfilePage() {
           {isEditing ? t('profile.cancel') : t('profile.edit')}
         </Button>
       </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
-      
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
-          {success}
-        </Alert>
-      )}
 
       <Card>
         <CardContent>
@@ -350,11 +389,6 @@ export default function ProfilePage() {
       <Dialog open={passwordDialogOpen} onClose={handlePasswordDialogClose} maxWidth="sm" fullWidth>
         <DialogTitle>{t('profile.changePassword')}</DialogTitle>
         <DialogContent>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
           <TextField
             fullWidth
             margin="normal"
@@ -393,17 +427,6 @@ export default function ProfilePage() {
       <Dialog open={emailDialogOpen} onClose={handleEmailDialogClose} maxWidth="sm" fullWidth>
         <DialogTitle>{t('profile.changeEmail')}</DialogTitle>
         <DialogContent>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
-          {success && (
-            <Alert severity="success" sx={{ mb: 2 }}>
-              {success}
-            </Alert>
-          )}
-          
           {emailStep === 'request' ? (
             <>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 2 }}>
@@ -470,6 +493,14 @@ export default function ProfilePage() {
           )}
         </DialogActions>
       </Dialog>
+
+      <MessageDialog
+        open={messageDialog.open}
+        title={messageDialog.title}
+        content={messageDialog.content}
+        severity={messageDialog.severity}
+        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
+      />
     </Box>
   )
 }

@@ -15,6 +15,8 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import TextFieldsIcon from '@mui/icons-material/TextFields'
 import ImageIcon from '@mui/icons-material/Image'
 import type { Question } from '../../types'
+import { ConfirmDialog } from '../common/ConfirmDialog'
+import { useLocale } from '../../contexts/LocaleContext'
 
 interface QuestionCardProps {
   question: Question
@@ -23,7 +25,9 @@ interface QuestionCardProps {
 }
 
 export default function QuestionCard({ question, onEdit, onDelete }: QuestionCardProps) {
+  const { t } = useLocale()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -40,17 +44,20 @@ export default function QuestionCard({ question, onEdit, onDelete }: QuestionCar
 
   const handleDelete = () => {
     handleMenuClose()
-    if (window.confirm('Вы уверены, что хотите удалить этот вопрос?')) {
-      onDelete(question.id)
-    }
+    setConfirmOpen(true)
+  }
+
+  const handleConfirmDelete = () => {
+    setConfirmOpen(false)
+    onDelete(question.id)
   }
 
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'text':
-        return 'Текстовый'
+        return t('questions.type.text')
       case 'image_annotation':
-        return 'Графический'
+        return t('questions.type.imageAnnotation')
       default:
         return type
     }
@@ -114,7 +121,7 @@ export default function QuestionCard({ question, onEdit, onDelete }: QuestionCar
                 }}
               >
                 <Typography variant="caption" color="success.700" sx={{ fontWeight: 600 }}>
-                  Эталонный ответ:
+                  {t('questions.referenceAnswer')}:
                 </Typography>
                 <Typography
                   variant="body2"
@@ -131,7 +138,7 @@ export default function QuestionCard({ question, onEdit, onDelete }: QuestionCar
               </Box>
             )}
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Создан: {new Date(question.created_at).toLocaleDateString('ru-RU')}
+              {t('admin.createdAt')}: {new Date(question.created_at).toLocaleDateString('ru-RU')}
             </Typography>
           </Box>
           <IconButton onClick={handleMenuOpen} size="small">
@@ -140,15 +147,26 @@ export default function QuestionCard({ question, onEdit, onDelete }: QuestionCar
           <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
             <MenuItem onClick={handleEdit}>
               <EditIcon sx={{ mr: 1 }} fontSize="small" />
-              Редактировать
+              {t('common.edit')}
             </MenuItem>
             <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
               <DeleteIcon sx={{ mr: 1 }} fontSize="small" />
-              Удалить
+              {t('common.delete')}
             </MenuItem>
           </Menu>
         </Box>
       </CardContent>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t('questions.deleteTitle')}
+        content={t('questions.deleteConfirm')}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        color="error"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </Card>
   )
 }
