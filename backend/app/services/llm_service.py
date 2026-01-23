@@ -75,6 +75,50 @@ class YandexGPTProvider(BaseLLMProvider):
         
         return vars
 
+    def _format_criteria(self, criteria: Dict[str, int]) -> str:
+        return "\n".join([f"- {k.replace('_', ' ').title()}: 0-{v} баллов" 
+                         for i, (k, v) in enumerate(criteria.items())])
+
+    def _parse_json_response(self, text: str) -> Dict[str, Any]:
+        """Устойчивый парсинг JSON из ответа модели"""
+        import re
+        
+        # 1. Предварительная очистка от явных Markdown блоков
+        clean_text = text.strip()
+        
+        # Ищем содержимое между ```json и ``` или просто ``` и ```
+        if "```" in clean_text:
+            blocks = re.findall(r'```(?:json)?\s*(.*?)\s*```', clean_text, re.DOTALL)
+            if blocks:
+                clean_text = blocks[0].strip()
+        
+        # 2. Если JSON все еще не валиден, пытаемся найти границы первой и последней фигурной скобки
+        try:
+            return json.loads(clean_text)
+        except json.JSONDecodeError:
+            json_match = re.search(r'(\{.*\})', clean_text, re.DOTALL)
+            if json_match:
+                clean_text = json_match.group(1)
+            
+            # 3. Финальные попытки исправления типичных ошибок LLM
+            try:
+                return json.loads(clean_text)
+            except json.JSONDecodeError as e:
+                # а) Удаляем лишние запятые перед закрывающими скобками: {"a": 1,} -> {"a": 1}
+                clean_text = re.sub(r',\s*([\]\}])', r'\1', clean_text)
+                
+                # б) Заменяем одинарные кавычки на двойные (очень осторожно)
+                # Ищем ключи в одинарных кавычках: 'key': -> "key":
+                clean_text = re.sub(r"([\{\[,]\s*)'([^']+)':", r'\1"\2":', clean_text)
+                # Ищем строковые значения в одинарных кавычках: : 'value' -> : "value"
+                clean_text = re.sub(r":\s*'([^']+)'(\s*[,\]\}])", r': "\1"\2', clean_text)
+                
+                try:
+                    return json.loads(clean_text)
+                except:
+                    # Если ничего не помогло, выбрасываем ошибку с информативным текстом
+                    raise Exception(f"Не удалось распарсить ответ модели как JSON. Ошибка: {str(e)}. Ответ: {text[:150]}...")
+
     async def evaluate_answer(
         self,
         question: str,
@@ -188,49 +232,158 @@ class YandexGPTProvider(BaseLLMProvider):
                 "feedback": f"Error during YandexGPT evaluation: {str(e)}"
             }
 
-    def _parse_json_response(self, text: str) -> Dict[str, Any]:
-        """Устойчивый парсинг JSON из ответа модели"""
-        import re
-        
-        # 1. Предварительная очистка от явных Markdown блоков
-        clean_text = text.strip()
-        
-        # Ищем содержимое между ```json и ``` или просто ``` и ```
-        if "```" in clean_text:
-            blocks = re.findall(r'```(?:json)?\s*(.*?)\s*```', clean_text, re.DOTALL)
-            if blocks:
-                clean_text = blocks[0].strip()
-        
-        # 2. Если JSON все еще не валиден, пытаемся найти границы первой и последней фигурной скобки
-        try:
-            return json.loads(clean_text)
-        except json.JSONDecodeError:
-            json_match = re.search(r'(\{.*\})', clean_text, re.DOTALL)
-            if json_match:
-                clean_text = json_match.group(1)
-            
-            # 3. Финальные попытки исправления типичных ошибок LLM
-            try:
-                return json.loads(clean_text)
-            except json.JSONDecodeError as e:
-                # а) Удаляем лишние запятые перед закрывающими скобками: {"a": 1,} -> {"a": 1}
-                clean_text = re.sub(r',\s*([\]\}])', r'\1', clean_text)
-                
-                # б) Заменяем одинарные кавычки на двойные (очень осторожно)
-                # Ищем ключи в одинарных кавычках: 'key': -> "key":
-                clean_text = re.sub(r"([\{\[,]\s*)'([^']+)':", r'\1"\2":', clean_text)
-                # Ищем строковые значения в одинарных кавычках: : 'value' -> : "value"
-                clean_text = re.sub(r":\s*'([^']+)'(\s*[,\]\}])", r': "\1"\2', clean_text)
-                
-                try:
-                    return json.loads(clean_text)
-                except:
-                    # Если ничего не помогло, выбрасываем ошибку с информативным текстом
-                    raise Exception(f"Не удалось распарсить ответ модели как JSON. Ошибка: {str(e)}. Ответ: {text[:150]}...")
 
-    def _format_criteria(self, criteria: Dict[str, int]) -> str:
-        return "\n".join([f"- {k.replace('_', ' ').title()}: 0-{v} баллов" 
-                         for i, (k, v) in enumerate(criteria.items())])
+class OpenAICompatibleProvider(YandexGPTProvider):
+    """
+    Универсальный провайдер для OpenAI-совместимых API (DeepSeek, Qwen)
+    """
+    
+    def __init__(self, base_url: str, default_model: str, api_key_name: str):
+        self.base_url = base_url
+        self.default_model = default_model
+        self.api_key_name = api_key_name
+
+    async def evaluate_answer(
+        self,
+        question: str,
+        reference_answer: str,
+        student_answer: str,
+        criteria: Dict[str, int],
+        config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        import httpx
+        config = config or {}
+        
+        # Получаем API ключ из настроек или конфига
+        api_key = config.get(self.api_key_name) or getattr(settings, self.api_key_name.upper(), None)
+        model = config.get("model") or self.default_model
+        
+        if not api_key:
+            return {
+                "criteria_scores": {k: 0 for k in criteria.keys()},
+                "total_score": 0,
+                "feedback": f"API key {self.api_key_name} not configured"
+            }
+
+        criteria_template = ",\n    ".join([f'"{k}": <баллы>' for k in criteria.keys()])
+        prompt = f"""Ты — эксперт-преподаватель медицины. Оцени ответ студента по критериям.
+            
+ВОПРОС: {question}
+ЭТАЛОН: {reference_answer}
+ОТВЕТ СТУДЕНТА: {student_answer}
+
+КРИТЕРИИ:
+{self._format_criteria(criteria)}
+
+Верни ответ ТОЛЬКО в формате JSON:
+{{
+  "criteria_scores": {{
+    {criteria_template}
+  }},
+  "total_score": <сумма>,
+  "feedback": "<текст>"
+}}"""
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": "Ты эксперт-преподаватель медицины. Отвечай СТРОГО в формате JSON."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=60.0
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"API Error: {response.status_code} {response.text}")
+                
+                result_text = response.json()["choices"][0]["message"]["content"]
+                return self._parse_json_response(result_text)
+                
+        except Exception as e:
+            logger.error(f"Provider {self.default_model} error: {e}")
+            return {
+                "criteria_scores": {k: 0 for k in criteria.keys()},
+                "total_score": 0,
+                "feedback": f"Error: {str(e)}"
+            }
+
+
+class GigaChatProvider(YandexGPTProvider):
+    """
+    GigaChat Provider
+    """
+    
+    def __init__(self):
+        self.token = None
+        self.default_model = "GigaChat:latest"
+
+    async def _get_token(self, credentials: str, scope: str):
+        import httpx
+        import uuid
+        
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
+                "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
+                headers={
+                    "Authorization": f"Basic {credentials}",
+                    "RqUID": str(uuid.uuid4()),
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                data={"scope": scope}
+            )
+            if response.status_code != 200:
+                raise Exception(f"GigaChat Auth Error: {response.text}")
+            return response.json()["access_token"]
+
+    async def evaluate_answer(
+        self,
+        question: str,
+        reference_answer: str,
+        student_answer: str,
+        criteria: Dict[str, int],
+        config: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        import httpx
+        config = config or {}
+        credentials = config.get("gigachat_credentials") or settings.GIGACHAT_CREDENTIALS
+        scope = config.get("gigachat_scope") or settings.GIGACHAT_SCOPE
+        
+        if not credentials:
+            return {"criteria_scores": {}, "total_score": 0, "feedback": "GigaChat credentials not configured"}
+
+        try:
+            token = await self._get_token(credentials, scope)
+            
+            criteria_template = ",\n    ".join([f'"{k}": <баллы>' for k in criteria.keys()])
+            prompt = f"""Оцени ответ студента по медицине.
+Вопрос: {question}
+Эталон: {reference_answer}
+Ответ: {student_answer}
+Критерии: {self._format_criteria(criteria)}
+Верни JSON: {{"criteria_scores": {{{criteria_template}}}, "total_score": 0, "feedback": ""}}"""
+
+            async with httpx.AsyncClient(verify=False) as client:
+                response = await client.post(
+                    "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={
+                        "model": self.default_model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.1
+                    }
+                )
+                result_text = response.json()["choices"][0]["message"]["content"]
+                return self._parse_json_response(result_text)
+        except Exception as e:
+            return {"criteria_scores": {}, "total_score": 0, "feedback": f"GigaChat Error: {str(e)}"}
 
 
 class LocalLLMProvider(BaseLLMProvider):
@@ -347,34 +500,41 @@ class LLMRouter:
     def __init__(self):
         self.providers = {
             "local": LocalLLMProvider(),
-            "yandex": YandexGPTProvider()
+            "yandex": YandexGPTProvider(),
+            "gigachat": GigaChatProvider(),
+            "deepseek": OpenAICompatibleProvider(
+                base_url="https://api.deepseek.com",
+                default_model="deepseek-chat",
+                api_key_name="deepseek_api_key"
+            ),
+            "qwen": OpenAICompatibleProvider(
+                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                default_model="qwen-plus",
+                api_key_name="qwen_api_key"
+            )
         }
     
-    def get_provider(self, strategy: str, priority: str = "normal") -> BaseLLMProvider:
+    def get_provider(self, strategy: str, priority: str = "normal", config: Optional[Dict[str, Any]] = None) -> BaseLLMProvider:
         """
         Выбор провайдера по стратегии
         
         Args:
-            strategy: local | hybrid | yandex
+            strategy: local | hybrid | yandex | gigachat | deepseek | qwen
             priority: "critical" для важных задач, "normal" для обычных
+            config: словарь настроек из БД
         """
-        if strategy == "yandex":
-            return self.providers["yandex"]
+        if strategy in self.providers:
+            return self.providers[strategy]
         
-        elif strategy == "local":
-            return self.providers["local"]
-        
-        elif strategy == "hybrid":
-            # Пока гибрид использует яндекс для критичных
-            if priority == "critical":
-                return self.providers["yandex"]
-            return self.providers["local"]
+        if strategy == "hybrid":
+            # Гибридная логика: Облако как основной, Локальный как fallback
+            # (Логика fallback реализована в LLMService.evaluate_text_answer)
+            cloud_strategy = (config or {}).get("hybrid_cloud_provider") or "deepseek"
+            return self.providers.get(cloud_strategy, self.providers["deepseek"])
         
         # Fallback
         default_strategy = settings.LLM_STRATEGY
-        if default_strategy == "local":
-            return self.providers["local"]
-        return self.providers["yandex"]
+        return self.providers.get(default_strategy, self.providers["yandex"])
 
 
 class LLMService:
@@ -426,10 +586,9 @@ class LLMService:
         db_config = db_config or {}
         
         strategy = db_config.get("strategy") or settings.LLM_STRATEGY
-        fallback_enabled = db_config.get("fallback_enabled", True)
         
         # 1. Первая попытка
-        provider = self.router.get_provider(strategy, priority)
+        provider = self.router.get_provider(strategy, priority, db_config)
         try:
             result = await provider.evaluate_answer(
                 question=question,
@@ -449,12 +608,10 @@ class LLMService:
         except Exception as e:
             logger.warning(f"Primary LLM provider ({provider.__class__.__name__}) failed: {e}")
             
-            if not fallback_enabled:
-                raise
-
-            # 2. Попытка через запасной вариант
+            # 2. Попытка через запасной вариант (Локальная модель)
+            # Если мы уже на локальной модели, пробуем Яндекс как последний шанс
             fallback_strategy = "local" if strategy != "local" else "yandex"
-            fallback_provider = self.router.get_provider(fallback_strategy, priority)
+            fallback_provider = self.router.get_provider(fallback_strategy, priority, db_config)
             
             logger.info(f"Attempting fallback to {fallback_provider.__class__.__name__}")
             

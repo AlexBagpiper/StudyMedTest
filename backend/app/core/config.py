@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     # LLM Configuration
     YANDEX_API_KEY: Optional[str] = None
     YANDEX_FOLDER_ID: Optional[str] = None
+    
+    DEEPSEEK_API_KEY: Optional[str] = None
+    QWEN_API_KEY: Optional[str] = None
+    
+    GIGACHAT_CREDENTIALS: Optional[str] = None  # Base64 encoded ClientID:ClientSecret
+    GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"  # GIGACHAT_API_PERS or GIGACHAT_API_CORP
+    
     LOCAL_LLM_ENABLED: bool = True
     LOCAL_LLM_URL: str = "http://localhost:8001/v1"
     LOCAL_LLM_MODEL: str = "mistral-7b-instruct"

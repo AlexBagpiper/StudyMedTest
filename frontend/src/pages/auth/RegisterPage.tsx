@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, TextField, Button, Typography } from '@mui/material'
+import { Box, TextField, Button, Typography, IconButton, InputAdornment } from '@mui/material'
+import Visibility from '@mui/icons-material/Visibility'
+import VisibilityOff from '@mui/icons-material/VisibilityOff'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
 import { MessageDialog } from '../../components/common/MessageDialog'
@@ -8,6 +10,8 @@ import { MessageDialog } from '../../components/common/MessageDialog'
 export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [lastName, setLastName] = useState('')
   const [firstName, setFirstName] = useState('')
   const [middleName, setMiddleName] = useState('')
@@ -25,6 +29,11 @@ export default function RegisterPage() {
     // Валидация
     if (password.length < 6) {
       setMessageDialog({ open: true, message: t('auth.passwordMin') })
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setMessageDialog({ open: true, message: t('auth.passwordsDontMatch') })
       return
     }
 
@@ -105,13 +114,40 @@ export default function RegisterPage() {
         fullWidth
         name="password"
         label={t('auth.password')}
-        type="password"
+        type={showPassword ? 'text' : 'password'}
         id="password"
         autoComplete="new-password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         helperText={t('auth.passwordMin')}
         error={password.length > 0 && password.length < 6}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                aria-label="toggle password visibility"
+                onClick={() => setShowPassword(!showPassword)}
+                edge="end"
+              >
+                {showPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
+      <TextField
+        margin="normal"
+        required
+        fullWidth
+        name="confirmPassword"
+        label={t('auth.confirmPassword')}
+        type={showPassword ? 'text' : 'password'}
+        id="confirmPassword"
+        autoComplete="new-password"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        error={confirmPassword.length > 0 && password !== confirmPassword}
+        helperText={confirmPassword.length > 0 && password !== confirmPassword ? t('auth.passwordsDontMatch') : ''}
       />
 
       <Button

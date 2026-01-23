@@ -208,7 +208,9 @@ export default function SubmissionsPage() {
                     {t('submissions.table.result')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }} align="right">{t('submissions.table.actions')}</TableCell>
+                {user?.role !== 'student' && (
+                  <TableCell sx={{ fontWeight: 'bold' }} align="right">{t('submissions.table.actions')}</TableCell>
+                )}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -258,6 +260,16 @@ export default function SubmissionsPage() {
                         </Button>
                       ) : (
                         <>
+                          {(sub.status === 'completed' || sub.status === 'submitted' || sub.status === 'evaluating') && (
+                            <Button 
+                              size="small" 
+                              variant="outlined" 
+                              startIcon={<VisibilityIcon />}
+                              onClick={() => navigate(`/admin/submissions/${sub.id}/review`)}
+                            >
+                              {t('submissions.action.details')}
+                            </Button>
+                          )}
                           {user?.role === 'teacher' && (
                             <>
                               {sub.is_hidden ? (

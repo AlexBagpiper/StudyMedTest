@@ -75,7 +75,8 @@ async def run_evaluate_text_answer(session: AsyncSession, answer_id: str) -> Dic
                 answer.evaluation = {"error": str(e), "failed_at": datetime.utcnow().isoformat()}
                 answer.score = 0
                 await session.commit()
-        except:
+        except Exception as e_inner:
+            logger.exception(f"Critical error updating failed answer state for {answer_id}")
             pass
         raise e
 

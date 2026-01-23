@@ -75,6 +75,17 @@ export default function SubmissionReviewPage() {
       setIsLoading(true)
       const subRes = await api.get(`/submissions/${id}`)
       const subData = subRes.data
+
+      // Проверка прав доступа: студент может видеть только свои результаты
+      if (user?.role === 'student' && subData.student_id !== user.id) {
+        setErrorDialog({
+          open: true,
+          message: t('error.notEnoughPermissions')
+        })
+        setIsLoading(false)
+        return
+      }
+
       setSubmission(subData)
 
       const variantRes = await api.get(`/tests/variants/${subData.variant_id}`)
@@ -163,7 +174,7 @@ export default function SubmissionReviewPage() {
               {isRevaluating ? 'Пересчет...' : 'Пересчитать оценку'}
             </Button>
           )}
-          <Button variant="outlined" onClick={() => navigate(`/admin/submissions/${id}`)}>
+          <Button variant="outlined" onClick={() => navigate(user?.role === 'student' ? '/submissions' : `/admin/submissions/${id}`)}>
             {t('common.back')}
           </Button>
         </Box>
@@ -189,35 +200,134 @@ export default function SubmissionReviewPage() {
         </Typography>
 
         {currentQuestion?.type === 'text' ? (
-          <TextField
-            fullWidth
-            multiline
-            rows={6}
-            variant="outlined"
-            value={answers[currentQuestion.id] || ''}
-            InputProps={{ readOnly: true }}
-            sx={{ bgcolor: 'action.hover' }}
-          />
-        ) : (
-          <Box sx={{ 
-            height: 'calc(100vh - 400px)', 
-            minHeight: '600px', 
-            border: '1px solid', 
-            borderColor: 'divider', 
-            borderRadius: 1, 
-            overflow: 'hidden',
-            bgcolor: '#1e2125'
-          }}>
-            <AnnotationEditor
-              imageUrl={currentQuestion?.image?.presigned_url || ''}
-              initialData={{
-                labels: currentLabels,
-                annotations: (answers[currentQuestion?.id] as AnnotationData)?.annotations || []
-              }}
-              readOnly={true}
-              hideLabels={true}
-            />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Ответ студента
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={6}
+                variant="outlined"
+                value={answers[currentQuestion.id] || ''}
+                InputProps={{ readOnly: true }}
+                sx={{ bgcolor: 'action.hover' }}
+              />
+            </Box>
+            
+            {currentQuestion.reference_data?.reference_answer && (
+              <Box>
+                <Typography variant="subtitle2" color="primary" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {t('questions.referenceAnswer')}
+                </Typography>
+                <Paper 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'success.light', 
+                    color: 'success.contrastText', 
+                    whiteSpace: 'pre-wrap', 
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'success.main'
+                  }}
+                >
+                  {currentQuestion.reference_data.reference_answer}
+                </Paper>
+              </Box>
+            )}
           </Box>
+        ) : currentQuestion?.type === 'choice' ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Ответ студента
+              </Typography>
+              <TextField
+                fullWidth
+                variant="outlined"
+                value={answers[currentQuestion.id] || ''}
+                InputProps={{ readOnly: true }}
+                sx={{ bgcolor: 'action.hover' }}
+              />
+            </Box>
+            
+            {currentQuestion.reference_data?.correct_answer && (
+              <Box>
+                <Typography variant="subtitle2" color="primary" fontWeight="bold" gutterBottom>
+                  {t('questions.referenceAnswer')}
+                </Typography>
+                <Paper 
+                  variant="outlined" 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'success.light', 
+                    color: 'success.contrastText', 
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'success.main'
+                  }}
+                >
+                  {currentQuestion.reference_data.correct_answer}
+                </Paper>
+              </Box>
+            )}
+          </Box>
+        ) : (
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={(currentQuestion.reference_data?.annotations || currentQuestion.image?.coco_annotations) ? 6 : 12}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Ответ студента
+              </Typography>
+              <Box sx={{ 
+                height: 'calc(100vh - 500px)', 
+                minHeight: '500px', 
+                border: '1px solid', 
+                borderColor: 'divider', 
+                borderRadius: 1, 
+                overflow: 'hidden',
+                bgcolor: '#1e2125'
+              }}>
+                <AnnotationEditor
+                  imageUrl={currentQuestion?.image?.presigned_url || ''}
+                  initialData={{
+                    labels: currentLabels,
+                    annotations: (answers[currentQuestion?.id] as AnnotationData)?.annotations || []
+                  }}
+                  readOnly={true}
+                  hideLabels={true}
+                />
+              </Box>
+            </Grid>
+            
+            {(currentQuestion.reference_data?.annotations || currentQuestion.image?.coco_annotations) && (
+              <Grid item xs={12} md={6}>
+                <Typography variant="subtitle2" color="primary" fontWeight="bold" gutterBottom>
+                  {t('questions.referenceAnswer')}
+                </Typography>
+                <Box sx={{ 
+                  height: 'calc(100vh - 500px)', 
+                  minHeight: '500px', 
+                  border: '1px solid', 
+                  borderColor: 'primary.main', 
+                  borderRadius: 1, 
+                  overflow: 'hidden',
+                  bgcolor: '#1e2125'
+                }}>
+                  <AnnotationEditor
+                    imageUrl={currentQuestion?.image?.presigned_url || ''}
+                    initialData={{
+                      labels: currentLabels,
+                      annotations: currentQuestion.reference_data?.annotations || currentQuestion.image?.coco_annotations?.annotations || []
+                    }}
+                    readOnly={true}
+                    hideLabels={true}
+                  />
+                </Box>
+              </Grid>
+            )}
+          </Grid>
         )}
 
         {/* Результаты оценки */}

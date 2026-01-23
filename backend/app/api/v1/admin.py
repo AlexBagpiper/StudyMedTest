@@ -924,7 +924,10 @@ async def update_cv_config(
     else:
         config.value = new_value
     
-    await log_admin_action(db, admin, "update", "config", details={"key": "cv_evaluation_params", "value": new_value})
+    # Mask sensitive fields before logging
+    masked_value = {k: ("***REDACTED***" if "api_key" in k.lower() or "secret" in k.lower() else v) 
+                    for k, v in new_value.items()}
+    await log_admin_action(db, admin, "update", "config", details={"key": "cv_evaluation_params", "value": masked_value})
     await db.commit()
     
     return config_in
@@ -967,7 +970,10 @@ async def update_llm_config(
     else:
         config.value = new_value
     
-    await log_admin_action(db, admin, "update", "config", details={"key": "llm_evaluation_params", "value": new_value})
+    # Mask sensitive fields before logging
+    masked_value = {k: ("***REDACTED***" if "api_key" in k.lower() or "secret" in k.lower() else v) 
+                    for k, v in new_value.items()}
+    await log_admin_action(db, admin, "update", "config", details={"key": "llm_evaluation_params", "value": masked_value})
     await db.commit()
     
     return config_in

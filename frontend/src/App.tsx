@@ -125,9 +125,9 @@ function App() {
         <Route
           path="/admin/submissions/:id/review"
           element={
-            <StaffRoute>
+            <ProtectedRoute>
               <SubmissionReviewPage />
-            </StaffRoute>
+            </ProtectedRoute>
           }
         />
         <Route

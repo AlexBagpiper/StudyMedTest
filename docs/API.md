@@ -51,7 +51,7 @@ Authorization: Bearer <access_token>
 
 **Request:**
 ```http
-Content-Type: application/x-form-urlencoded
+Content-Type: application/x-www-form-urlencoded
 
 username=student@example.com&password=securepassword
 ```

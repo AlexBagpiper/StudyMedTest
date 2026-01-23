@@ -25,11 +25,15 @@ interface LLMConfig {
   yandex_api_key?: string
   yandex_folder_id?: string
   yandex_model: string
+  deepseek_api_key?: string
+  qwen_api_key?: string
+  gigachat_credentials?: string
+  gigachat_scope: string
   local_llm_enabled: boolean
   local_llm_url?: string
   local_llm_model?: string
-  strategy: 'local' | 'hybrid' | 'yandex'
-  fallback_enabled: boolean
+  strategy: 'local' | 'hybrid' | 'yandex' | 'deepseek' | 'qwen' | 'gigachat'
+  hybrid_cloud_provider: string
   evaluation_prompt?: string
 }
 
@@ -44,8 +48,9 @@ export default function LLMSettings() {
   const [llmConfig, setLlmConfig] = useState<LLMConfig>({
     local_llm_enabled: false,
     strategy: 'yandex',
-    fallback_enabled: true,
     yandex_model: 'yandexgpt-lite/latest',
+    gigachat_scope: 'GIGACHAT_API_PERS',
+    hybrid_cloud_provider: 'deepseek',
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -175,67 +180,140 @@ export default function LLMSettings() {
                   onChange={(e) => setLlmConfig({ ...llmConfig, strategy: e.target.value as any })}
                 >
                   <MenuItem value="yandex">YandexGPT (Облако)</MenuItem>
-                  <MenuItem value="local">Только локально (vLLM/Ollama)</MenuItem>
-                  <MenuItem value="hybrid">Гибридная (Yandex для важных, локально для массы)</MenuItem>
+                  <MenuItem value="gigachat">GigaChat (Облако)</MenuItem>
+                  <MenuItem value="deepseek">DeepSeek (Облако)</MenuItem>
+                  <MenuItem value="qwen">Qwen (Облако)</MenuItem>
+                  <MenuItem value="local">Локальная модель (Локально)</MenuItem>
+                  <MenuItem value="hybrid">Гибридная стратегия (Облако/Локально)</MenuItem>
                 </TextField>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={llmConfig.fallback_enabled}
-                      onChange={(e) => setLlmConfig({ ...llmConfig, fallback_enabled: e.target.checked })}
-                    />
-                  }
-                  label="Запасной вариант при ошибке"
-                />
-              </Grid>
+              {llmConfig.strategy === 'hybrid' && (
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Облачный провайдер (основной)"
+                    value={llmConfig.hybrid_cloud_provider}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, hybrid_cloud_provider: e.target.value })}
+                    helperText="При сбое этого провайдера будет использована локальная модель"
+                  >
+                    <MenuItem value="yandex">YandexGPT</MenuItem>
+                    <MenuItem value="gigachat">GigaChat</MenuItem>
+                    <MenuItem value="deepseek">DeepSeek</MenuItem>
+                    <MenuItem value="qwen">Qwen</MenuItem>
+                  </TextField>
+                </Grid>
+              )}
             </Grid>
 
             <Divider sx={{ my: 3 }} />
 
-            <Typography variant="h6" gutterBottom>API Ключи и модель (Yandex Cloud)</Typography>
-            <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  select
-                  fullWidth
-                  label="Модель YandexGPT"
-                  value={llmConfig.yandex_model || 'yandexgpt-lite/latest'}
-                  onChange={(e) => setLlmConfig({ ...llmConfig, yandex_model: e.target.value })}
-                >
-                  <MenuItem value="yandexgpt-lite/latest">Lite (Экономная)</MenuItem>
-                  <MenuItem value="yandexgpt/latest">Pro (Более точная)</MenuItem>
-                </TextField>
+            {/* Yandex Section */}
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" gutterBottom color="primary">Yandex GPT</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Модель YandexGPT"
+                    value={llmConfig.yandex_model || 'yandexgpt-lite/latest'}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, yandex_model: e.target.value })}
+                  >
+                    <MenuItem value="yandexgpt-lite/latest">Lite (Экономная)</MenuItem>
+                    <MenuItem value="yandexgpt/latest">Pro (Более точная)</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="Yandex API Key"
+                    value={llmConfig.yandex_api_key || ''}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, yandex_api_key: e.target.value })}
+                    placeholder="AQVN..."
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    label="Yandex Folder ID"
+                    value={llmConfig.yandex_folder_id || ''}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, yandex_folder_id: e.target.value })}
+                    placeholder="b1g..."
+                  />
+                </Grid>
               </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  fullWidth
-                  type="password"
-                  label="Yandex API Key"
-                  value={llmConfig.yandex_api_key || ''}
-                  onChange={(e) => setLlmConfig({ ...llmConfig, yandex_api_key: e.target.value })}
-                  placeholder="AQVN..."
-                  error={Boolean(llmConfig.yandex_api_key && !llmConfig.yandex_api_key.startsWith('AQVN') && !llmConfig.yandex_api_key.startsWith('t1.'))}
-                  helperText={llmConfig.yandex_api_key && !llmConfig.yandex_api_key.startsWith('AQVN') && !llmConfig.yandex_api_key.startsWith('t1.') 
-                    ? "Ключ должен начинаться на 'AQVN' (или 't1.' для IAM-токена)" 
-                    : ""}
-                />
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* GigaChat Section */}
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" gutterBottom color="primary">GigaChat (Sber)</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={8}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="GigaChat Credentials (Base64)"
+                    value={llmConfig.gigachat_credentials || ''}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, gigachat_credentials: e.target.value })}
+                    placeholder="ClientID:ClientSecret in Base64"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Scope"
+                    value={llmConfig.gigachat_scope || 'GIGACHAT_API_PERS'}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, gigachat_scope: e.target.value })}
+                  >
+                    <MenuItem value="GIGACHAT_API_PERS">Личный (Personal)</MenuItem>
+                    <MenuItem value="GIGACHAT_API_CORP">Корпоративный (Corp)</MenuItem>
+                  </TextField>
+                </Grid>
               </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  fullWidth
-                  label="Yandex Folder ID"
-                  value={llmConfig.yandex_folder_id || ''}
-                  onChange={(e) => setLlmConfig({ ...llmConfig, yandex_folder_id: e.target.value })}
-                  placeholder="b1g..."
-                  error={Boolean(llmConfig.yandex_folder_id && !llmConfig.yandex_folder_id.startsWith('b1'))}
-                  helperText={llmConfig.yandex_folder_id && !llmConfig.yandex_folder_id.startsWith('b1') 
-                    ? "ID каталога обычно начинается на 'b1'" 
-                    : ""}
-                />
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* DeepSeek Section */}
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" gutterBottom color="primary">DeepSeek</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="DeepSeek API Key"
+                    value={llmConfig.deepseek_api_key || ''}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, deepseek_api_key: e.target.value })}
+                    placeholder="sk-..."
+                  />
+                </Grid>
               </Grid>
-            </Grid>
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* Qwen Section */}
+            <Box sx={{ mb: 4 }}>
+              <Typography variant="h6" gutterBottom color="primary">Qwen (Alibaba DashScope)</Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    label="Qwen API Key"
+                    value={llmConfig.qwen_api_key || ''}
+                    onChange={(e) => setLlmConfig({ ...llmConfig, qwen_api_key: e.target.value })}
+                    placeholder="your-api-key"
+                  />
+                </Grid>
+              </Grid>
+            </Box>
 
             <Divider sx={{ my: 3 }} />
 
@@ -342,13 +420,19 @@ export default function LLMSettings() {
           <Paper sx={{ p: 3, bgcolor: '#f8fafc', mb: 3 }}>
             <Typography variant="h6" gutterBottom>Информация по стратегиям</Typography>
             <Typography variant="body2" paragraph>
-              <strong>YandexGPT:</strong> использует облако Яндекса. Требует Folder ID и API Key.
+              <strong>YandexGPT:</strong> стабильное облако Яндекса. Требует Folder ID и API Key.
             </Typography>
             <Typography variant="body2" paragraph>
-              <strong>Только локально:</strong> используется ваша инфраструктура (vLLM/Ollama).
+              <strong>DeepSeek / Qwen:</strong> наиболее экономичные и мощные зарубежные модели. Работают через OpenAI-совместимый API.
             </Typography>
             <Typography variant="body2" paragraph>
-              <strong>Гибридная:</strong> система будет использовать локальную модель для большинства тестов, переключаясь на YandexGPT для критически важных экзаменов.
+              <strong>GigaChat:</strong> суверенная модель от Сбера. Работает внутри РФ, требует ClientID/Secret.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              <strong>Локально:</strong> используется ваша собственная инфраструктура (vLLM, Ollama или LocalAI).
+            </Typography>
+            <Typography variant="body2" paragraph>
+              <strong>Гибридная:</strong> позволяет выбрать основное облачное LLM. Если облачный сервис будет недоступен или вернет ошибку, система автоматически переключится на <strong>локальную модель</strong> для завершения оценки.
             </Typography>
           </Paper>
 

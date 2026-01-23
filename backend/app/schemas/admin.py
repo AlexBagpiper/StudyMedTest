@@ -299,12 +299,19 @@ class AdminLLMConfig(BaseModel):
     """Схема для настроек LLM"""
     yandex_api_key: Optional[str] = Field(None, description="API ключ Yandex Cloud")
     yandex_folder_id: Optional[str] = Field(None, description="ID каталога Yandex Cloud")
-    yandex_model: str = Field("yandexgpt-lite/latest", description="Модель YandexGPT (yandexgpt/latest или yandexgpt-lite/latest)")
+    yandex_model: str = Field("yandexgpt-lite/latest", description="Модель YandexGPT")
+    
+    deepseek_api_key: Optional[str] = Field(None, description="API ключ DeepSeek")
+    qwen_api_key: Optional[str] = Field(None, description="API ключ Qwen (Alibaba DashScope)")
+    
+    gigachat_credentials: Optional[str] = Field(None, description="GigaChat Credentials (Base64)")
+    gigachat_scope: str = Field("GIGACHAT_API_PERS", description="GigaChat Scope")
+    
     local_llm_enabled: bool = Field(False, description="Включить локальную модель")
     local_llm_url: Optional[str] = Field(None, description="URL локального сервера (vLLM/Ollama)")
     local_llm_model: Optional[str] = Field(None, description="Название модели")
-    strategy: str = Field("yandex", description="Стратегия: yandex, local, hybrid")
-    fallback_enabled: bool = Field(True, description="Включить запасной вариант при ошибке")
+    strategy: str = Field("yandex", description="Стратегия: yandex, local, hybrid, deepseek, qwen, gigachat")
+    hybrid_cloud_provider: str = Field("deepseek", description="Основной облачный провайдер для гибридной стратегии")
     evaluation_prompt: Optional[str] = Field(None, description="Кастомный промпт для оценки")
 
     @field_validator("yandex_api_key")
