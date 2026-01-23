@@ -13,20 +13,26 @@ import {
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../lib/api'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { AnnotationEditor } from '../../components/annotation/AnnotationEditor'
 import { AnnotationData } from '../../types/annotation'
 import { MessageDialog } from '../../components/common/MessageDialog'
+import { adminApi } from '../../lib/api'
+import RefreshIcon from '@mui/icons-material/Refresh'
 
 export default function SubmissionReviewPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t, formatName } = useLocale()
+  const { user } = useAuth()
   
   const [submission, setSubmission] = useState<any>(null)
   const [questions, setQuestions] = useState<any[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [isLoading, setIsLoading] = useState(true)
+  const [isRevaluating, setIsRevaluating] = useState(false)
+  const [cvConfig, setCvConfig] = useState<any>(null)
   const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
     open: false,
     message: ''
@@ -37,6 +43,7 @@ export default function SubmissionReviewPage() {
 
   useEffect(() => {
     loadSubmission()
+    loadCVConfig()
   }, [id])
 
   useEffect(() => {
@@ -44,6 +51,15 @@ export default function SubmissionReviewPage() {
       loadLabels(currentQuestion.id)
     }
   }, [currentQuestion])
+
+  const loadCVConfig = async () => {
+    try {
+      const config = await adminApi.getCVConfig()
+      setCvConfig(config)
+    } catch (err) {
+      console.error('Failed to load CV config:', err)
+    }
+  }
 
   const loadLabels = async (questionId: string) => {
     try {
@@ -89,6 +105,22 @@ export default function SubmissionReviewPage() {
     }
   }
 
+  const handleRevaluate = async () => {
+    if (!id) return
+    try {
+      setIsRevaluating(true)
+      await adminApi.revaluateSubmission(id)
+      await loadSubmission() // Перезагружаем данные для отображения новых баллов
+    } catch (err: any) {
+      setErrorDialog({
+        open: true,
+        message: err.response?.data?.detail || 'Ошибка при пересчете оценки'
+      })
+    } finally {
+      setIsRevaluating(false)
+    }
+  }
+
   const handleNext = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1)
@@ -120,9 +152,21 @@ export default function SubmissionReviewPage() {
             {t('submissions.table.student')}: {submission?.student ? formatName(submission.student.last_name, submission.student.first_name, submission.student.middle_name) : submission?.student_id}
           </Typography>
         </Box>
-        <Button variant="outlined" onClick={() => navigate(`/admin/submissions/${id}`)}>
-          {t('common.back')}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          {user?.role === 'admin' && (
+            <Button 
+              variant="outlined" 
+              startIcon={isRevaluating ? <CircularProgress size={20} /> : <RefreshIcon />}
+              onClick={handleRevaluate}
+              disabled={isRevaluating}
+            >
+              {isRevaluating ? 'Пересчет...' : 'Пересчитать оценку'}
+            </Button>
+          )}
+          <Button variant="outlined" onClick={() => navigate(`/admin/submissions/${id}`)}>
+            {t('common.back')}
+          </Button>
+        </Box>
       </Box>
 
       <Paper sx={{ p: 3, mb: 3, borderRadius: 1, boxShadow: 3, width: '100%' }}>
@@ -197,7 +241,9 @@ export default function SubmissionReviewPage() {
                     <Typography variant="h5" fontWeight="bold">
                       {evaluation.iou !== undefined ? `${(evaluation.iou * 100).toFixed(0)}%` : '—'}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">Вес: 50%</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Вес: {cvConfig ? `${(cvConfig.iou_weight * 100).toFixed(0)}%` : '50%'}
+                    </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <Typography variant="caption" color="text.secondary" display="block">
@@ -206,7 +252,9 @@ export default function SubmissionReviewPage() {
                     <Typography variant="h5" fontWeight="bold">
                       {evaluation.recall !== undefined ? `${(evaluation.recall * 100).toFixed(0)}%` : '—'}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">Вес: 30%</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Вес: {cvConfig ? `${(cvConfig.recall_weight * 100).toFixed(0)}%` : '30%'}
+                    </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <Typography variant="caption" color="text.secondary" display="block">
@@ -215,7 +263,9 @@ export default function SubmissionReviewPage() {
                     <Typography variant="h5" fontWeight="bold">
                       {evaluation.precision !== undefined ? `${(evaluation.precision * 100).toFixed(0)}%` : '—'}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">Вес: 20%</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Вес: {cvConfig ? `${(cvConfig.precision_weight * 100).toFixed(0)}%` : '20%'}
+                    </Typography>
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <Typography variant="caption" color="primary" fontWeight="bold" display="block">
@@ -231,21 +281,55 @@ export default function SubmissionReviewPage() {
           }
 
           if (currentQuestion?.type === 'text') {
+            const criteriaLabels: Record<string, string> = {
+              factual_correctness: 'Фактическая правильность',
+              completeness: 'Полнота ответа',
+              terminology: 'Терминология',
+              structure: 'Структура и логика'
+            };
+
             return (
               <Box sx={{ mt: 4, p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
                 <Typography variant="h6" fontWeight="bold" gutterBottom color="primary">
                   Результаты LLM-оценки
                 </Typography>
-                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
+                
+                <Typography variant="body2" sx={{ mb: 3, fontStyle: 'italic', color: 'text.primary', borderLeft: '4px solid', borderColor: 'primary.main', pl: 2, py: 1, bgcolor: 'background.paper' }}>
                   {evaluation.feedback}
                 </Typography>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+
+                {evaluation.criteria_scores && (
+                  <Grid container spacing={2} sx={{ mb: 3 }}>
+                    {Object.entries(evaluation.criteria_scores).map(([key, score]: [string, any]) => (
+                      <Grid item xs={12} sm={6} md={3} key={key}>
+                        <Paper sx={{ p: 1.5, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5, display: 'block', lineHeight: 1.2 }}>
+                            {criteriaLabels[key] || key}
+                          </Typography>
+                          <Typography variant="h6" fontWeight="bold">
+                            {score}
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              / {currentQuestion.scoring_criteria?.[key] || ''}
+                            </Typography>
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
                   <Typography variant="body2" color="text.secondary">
-                    Модель: {evaluation.llm_provider}
+                    Модель: {evaluation.llm_provider || 'YandexGPT'}
                   </Typography>
-                  <Typography variant="h5" fontWeight="bold" color="primary">
-                    Балл: {currentAnswer.score !== undefined ? currentAnswer.score.toFixed(0) : '—'}
-                  </Typography>
+                  <Box sx={{ textAlign: 'right' }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Итоговый балл
+                    </Typography>
+                    <Typography variant="h4" fontWeight="bold" color="primary">
+                      {currentAnswer.score !== undefined ? currentAnswer.score.toFixed(0) : '—'}
+                    </Typography>
+                  </Box>
                 </Box>
               </Box>
             );

@@ -56,7 +56,8 @@ async def create_admin():
         admin = User(
             email='admin@medtest.local',
             password_hash=get_password_hash('admin123'),
-            full_name='System Administrator',
+            last_name='Администратор',
+            first_name='Системы',
             role='admin',
             is_active=True,
             is_verified=True
@@ -95,7 +96,8 @@ curl -X POST http://localhost:8000/api/v1/users \
   -d '{
     "email": "teacher@medtest.local",
     "password": "teacher123",
-    "full_name": "Иван Петров",
+    "last_name": "Петров",
+    "first_name": "Иван",
     "role": "teacher"
   }'
 ```

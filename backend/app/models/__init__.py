@@ -9,6 +9,7 @@ from app.models.question import Question, QuestionType, ImageAsset
 from app.models.test import Test, TestStatus, TestQuestion, TestVariant
 from app.models.submission import Submission, SubmissionStatus, Answer
 from app.models.audit import AuditLog
+from app.models.system_config import SystemConfig
 
 __all__ = [
     "Base",
@@ -26,5 +27,6 @@ __all__ = [
     "SubmissionStatus",
     "Answer",
     "AuditLog",
+    "SystemConfig",
 ]
 

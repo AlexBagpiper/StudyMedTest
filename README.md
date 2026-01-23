@@ -118,9 +118,14 @@ cd frontend
 npm test
 ```
 
-## Архитектура
+## Документация
 
-См. [документацию по архитектуре](docs/architecture.md) для детального описания системы.
+- [Архитектура системы](docs/ARCHITECTURE.md)
+- [Система оценки и веса](docs/SCORING_SYSTEM.md)
+- [Инструкция пользователя (Manual)](docs/INSTRUCTIONS.md)
+- [Технические детали функций](docs/FEATURES_TECHNICAL.md)
+- [API Documentation](docs/API.md)
+- [Руководство по деплою](docs/DEPLOYMENT.md)
 
 ## Лицензия
 

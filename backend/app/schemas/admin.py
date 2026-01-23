@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.user import Role
 from app.models.question import QuestionType
@@ -269,3 +269,58 @@ class AdminAuditLogResponse(BaseModel):
     timestamp: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ==================== SYSTEM CONFIGS ====================
+
+class AdminSystemConfigUpdate(BaseModel):
+    """Обновление системной настройки"""
+    value: Any
+    description: Optional[str] = None
+
+
+class AdminSystemConfigResponse(BaseModel):
+    """Ответ с системной настройкой"""
+    id: UUID
+    key: str
+    value: Any
+    description: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+class AdminCVConfig(BaseModel):
+    """Специальная схема для настроек CV"""
+    iou_weight: float = Field(0.5, ge=0.0, le=1.0)
+    recall_weight: float = Field(0.3, ge=0.0, le=1.0)
+    precision_weight: float = Field(0.2, ge=0.0, le=1.0)
+    iou_threshold: float = Field(0.5, ge=0.0, le=1.0)
+
+class AdminLLMConfig(BaseModel):
+    """Схема для настроек LLM"""
+    yandex_api_key: Optional[str] = Field(None, description="API ключ Yandex Cloud")
+    yandex_folder_id: Optional[str] = Field(None, description="ID каталога Yandex Cloud")
+    yandex_model: str = Field("yandexgpt-lite/latest", description="Модель YandexGPT (yandexgpt/latest или yandexgpt-lite/latest)")
+    local_llm_enabled: bool = Field(False, description="Включить локальную модель")
+    local_llm_url: Optional[str] = Field(None, description="URL локального сервера (vLLM/Ollama)")
+    local_llm_model: Optional[str] = Field(None, description="Название модели")
+    strategy: str = Field("yandex", description="Стратегия: yandex, local, hybrid")
+    fallback_enabled: bool = Field(True, description="Включить запасной вариант при ошибке")
+    evaluation_prompt: Optional[str] = Field(None, description="Кастомный промпт для оценки")
+
+    @field_validator("yandex_api_key")
+    @classmethod
+    def validate_yandex_api_key(cls, v: Optional[str]) -> Optional[str]:
+        if v and not (v.startswith("AQVN") or v.startswith("t1.")):
+            # Мы не выбрасываем ValueError, чтобы не блокировать сохранение, если пользователь уверен,
+            # но в данном контексте лучше просто добавить лог или оставить как есть.
+            # Однако, для строгой валидации можно было бы выбросить ошибку.
+            # Оставим пока без жесткой ошибки, так как на фронте уже есть визуальная валидация.
+            pass
+        return v
+
+class AdminLLMTestResponse(BaseModel):
+    """Ответ на тест LLM конфигурации"""
+    status: str
+    message: str
+    provider: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None

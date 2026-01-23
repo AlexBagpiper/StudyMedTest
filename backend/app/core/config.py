@@ -81,12 +81,12 @@ class Settings(BaseSettings):
     MINIO_PUBLIC_URL: Optional[str] = "/storage"  # Доступ через прокси Vite
     
     # LLM Configuration
-    OPENAI_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
+    YANDEX_API_KEY: Optional[str] = None
+    YANDEX_FOLDER_ID: Optional[str] = None
     LOCAL_LLM_ENABLED: bool = True
     LOCAL_LLM_URL: str = "http://localhost:8001/v1"
     LOCAL_LLM_MODEL: str = "mistral-7b-instruct"
-    LLM_STRATEGY: str = "hybrid"  # cloud, local, hybrid
+    LLM_STRATEGY: str = "yandex"  # yandex, local, hybrid
     LLM_FALLBACK_ENABLED: bool = True
     
     # Email (опционально)

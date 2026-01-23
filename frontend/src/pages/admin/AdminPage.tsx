@@ -5,12 +5,16 @@ import SchoolIcon from '@mui/icons-material/School'
 import SettingsIcon from '@mui/icons-material/Settings'
 import { useLocale } from '../../contexts/LocaleContext'
 import UsersManagement from './UsersManagement'
+import SystemSettings, { SettingsSection } from './SystemSettings'
+import CVSettings from './CVSettings'
+import LLMSettings from './LLMSettings'
 
 type AdminSection = 'main' | 'users' | 'schools' | 'settings'
 
 export default function AdminPage() {
   const { t } = useLocale()
   const [activeSection, setActiveSection] = useState<AdminSection>('main')
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>('menu')
 
   const adminSections = [
     {
@@ -40,18 +44,39 @@ export default function AdminPage() {
     if (activeSection === 'main') return null
 
     const sectionTitle = adminSections.find((s) => s.id === activeSection)?.title
+    const isSubSetting = activeSection === 'settings' && activeSettingsSection !== 'menu'
 
     return (
       <Breadcrumbs sx={{ mb: 3 }}>
         <Link
           component="button"
           variant="body1"
-          onClick={() => setActiveSection('main')}
+          onClick={() => {
+            setActiveSection('main')
+            setActiveSettingsSection('menu')
+          }}
           sx={{ cursor: 'pointer', textDecoration: 'none' }}
         >
           Администрирование
         </Link>
-        <Typography color="text.primary">{sectionTitle}</Typography>
+        {isSubSetting ? (
+          <Link
+            component="button"
+            variant="body1"
+            onClick={() => setActiveSettingsSection('menu')}
+            sx={{ cursor: 'pointer', textDecoration: 'none' }}
+          >
+            {sectionTitle}
+          </Link>
+        ) : (
+          <Typography color="text.primary">{sectionTitle}</Typography>
+        )}
+        {isSubSetting && (
+          <Typography color="text.primary">
+            {activeSettingsSection === 'cv' ? 'Параметры CV-оценки' : 
+             activeSettingsSection === 'llm' ? 'Параметры LLM-оценки' : ''}
+          </Typography>
+        )}
       </Breadcrumbs>
     )
   }
@@ -74,15 +99,17 @@ export default function AdminPage() {
         )
       
       case 'settings':
+        if (activeSettingsSection === 'cv') {
+          return <CVSettings />
+        }
+        if (activeSettingsSection === 'llm') {
+          return <LLMSettings />
+        }
         return (
-          <Box>
-            <Typography variant="h4" gutterBottom>
-              Настройки системы
-            </Typography>
-            <Typography color="text.secondary">
-              Функционал в разработке
-            </Typography>
-          </Box>
+          <SystemSettings 
+            activeSubSection={activeSettingsSection} 
+            onSectionChange={setActiveSettingsSection} 
+          />
         )
       
       default:

@@ -10,7 +10,7 @@ from uuid import UUID
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from celery import Task
+import celery
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,11 +19,12 @@ from app.tasks.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.models.submission import Submission, SubmissionStatus, Answer
 from app.models.question import Question, QuestionType
+from app.models.system_config import SystemConfig
 
 logger = logging.getLogger(__name__)
 
 
-class DatabaseTask(Task):
+class DatabaseTask(celery.Task):
     """
     Base task с async database session
     """
@@ -32,33 +33,51 @@ class DatabaseTask(Task):
 
 async def run_evaluate_text_answer(session: AsyncSession, answer_id: str) -> Dict[str, Any]:
     """Внутренняя логика оценки текста"""
-    result = await session.execute(
-        select(Answer).where(Answer.id == UUID(answer_id))
-    )
-    answer = result.scalar_one_or_none()
-    if not answer: return {"error": "Answer not found"}
-    
-    result = await session.execute(
-        select(Question).where(Question.id == answer.question_id)
-    )
-    question = result.scalar_one_or_none()
-    
-    from app.services.llm_service import llm_service
-    evaluation_result = await llm_service.evaluate_text_answer(
-        question=question.content,
-        reference_answer=question.reference_data.get("reference_answer", "") if question.reference_data else "",
-        student_answer=answer.student_answer,
-        criteria=question.scoring_criteria or {}
-    )
-    
-    answer.evaluation = {
-        "criteria_scores": evaluation_result["criteria_scores"],
-        "feedback": evaluation_result["feedback"],
-        "llm_provider": evaluation_result["provider"],
-        "evaluated_at": datetime.utcnow().isoformat(),
-    }
-    answer.score = round(evaluation_result["total_score"])
-    return {"answer_id": answer_id, "score": answer.score}
+    try:
+        result = await session.execute(
+            select(Answer).where(Answer.id == UUID(answer_id))
+        )
+        answer = result.scalar_one_or_none()
+        if not answer: return {"error": "Answer not found"}
+        
+        result = await session.execute(
+            select(Question).where(Question.id == answer.question_id)
+        )
+        question = result.scalar_one_or_none()
+        
+        from app.services.llm_service import llm_service
+        # Если критерии не заданы или пустые, передаем None, чтобы сервис использовал дефолты
+        scoring_criteria = question.scoring_criteria if question.scoring_criteria else None
+        
+        evaluation_result = await llm_service.evaluate_text_answer(
+            question=question.content,
+            reference_answer=question.reference_data.get("reference_answer", "") if question.reference_data else "",
+            student_answer=answer.student_answer,
+            criteria=scoring_criteria,
+            db=session
+        )
+        
+        answer.evaluation = {
+            "criteria_scores": evaluation_result["criteria_scores"],
+            "feedback": evaluation_result["feedback"],
+            "llm_provider": evaluation_result["provider"],
+            "evaluated_at": datetime.utcnow().isoformat(),
+        }
+        answer.score = round(evaluation_result["total_score"])
+        return {"answer_id": answer_id, "score": answer.score}
+    except Exception as e:
+        logger.exception(f"Error in run_evaluate_text_answer for {answer_id}")
+        # Сохраняем ошибку в evaluation, чтобы ее можно было увидеть в админке/базе
+        try:
+            result = await session.execute(select(Answer).where(Answer.id == UUID(answer_id)))
+            answer = result.scalar_one_or_none()
+            if answer:
+                answer.evaluation = {"error": str(e), "failed_at": datetime.utcnow().isoformat()}
+                answer.score = 0
+                await session.commit()
+        except:
+            pass
+        raise e
 
 async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) -> Dict[str, Any]:
     """Внутренняя логика оценки аннотации"""
@@ -92,10 +111,18 @@ async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) 
             except Exception:
                 pass
 
+    # Получаем настройки CV из БД
+    result_cfg = await session.execute(
+        select(SystemConfig).where(SystemConfig.key == "cv_evaluation_params")
+    )
+    config_obj = result_cfg.scalar_one_or_none()
+    cv_config = config_obj.value if config_obj else None
+
     evaluation_result = await cv_service.evaluate_annotation(
         student_data=answer.annotation_data or {},
         reference_data=reference_data,
-        image_id=question.image_id
+        image_id=question.image_id,
+        config=cv_config
     )
     
     answer.evaluation = {
@@ -106,6 +133,36 @@ async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) 
         "evaluated_at": datetime.utcnow().isoformat(),
     }
     answer.score = round(evaluation_result["total_score"])
+    return {"answer_id": answer_id, "score": answer.score}
+
+async def run_evaluate_choice_answer(session: AsyncSession, answer_id: str) -> Dict[str, Any]:
+    """Внутренняя логика оценки выбора варианта"""
+    result = await session.execute(
+        select(Answer).where(Answer.id == UUID(answer_id))
+    )
+    answer = result.scalar_one_or_none()
+    if not answer: return {"error": "Answer not found"}
+    
+    result = await session.execute(
+        select(Question).where(Question.id == answer.question_id)
+    )
+    question = result.scalar_one_or_none()
+    if not question: return {"error": "Question not found"}
+
+    # Простая проверка: совпадает ли ответ студента с эталоном
+    # Ожидаем в reference_data ключ 'correct_answer'
+    reference_data = question.reference_data or {}
+    correct_answer = str(reference_data.get("correct_answer", "")).strip().lower()
+    student_answer = str(answer.student_answer or "").strip().lower()
+    
+    is_correct = correct_answer != "" and correct_answer == student_answer
+    
+    answer.evaluation = {
+        "type": "choice",
+        "is_correct": is_correct,
+        "evaluated_at": datetime.utcnow().isoformat(),
+    }
+    answer.score = 100.0 if is_correct else 0.0
     return {"answer_id": answer_id, "score": answer.score}
 
 def run_async(coro):
@@ -196,6 +253,9 @@ def evaluate_submission(self, submission_id: str):
                 )
                 answers = result.scalars().all()
                 
+                # Сбор сложностей для итогового расчета
+                answer_difficulties = {}
+                
                 for i, answer in enumerate(answers):
                     result_q = await session.execute(
                         select(Question)
@@ -207,6 +267,8 @@ def evaluate_submission(self, submission_id: str):
                     try:
                         if not question:
                             continue
+                        
+                        answer_difficulties[answer.id] = question.difficulty or 1
 
                         if question.type == QuestionType.TEXT:
                             await run_evaluate_text_answer(session, str(answer.id))
@@ -220,11 +282,21 @@ def evaluate_submission(self, submission_id: str):
                         logger.error(f"Failed to evaluate answer {answer.id}: {e}")
                         answer.score = 0
                 
-                # Подсчёт итогового балла
-                total_sum = sum(a.score or 0 for a in answers)
-                max_possible = len(answers) * 100
+                # Подсчёт итогового балла с учетом сложности
+                total_weighted_score = 0.0
+                max_weighted_possible = 0.0
                 
-                percentage = (total_sum / max_possible * 100) if max_possible > 0 else 0
+                # Коэффициенты сложности (Weight = 1.0 + (difficulty - 1) * 0.5)
+                # 1 -> 1.0, 2 -> 1.5, 3 -> 2.0, 4 -> 2.5, 5 -> 3.0
+                
+                for answer in answers:
+                    difficulty = answer_difficulties.get(answer.id, 1)
+                    weight = 1.0 + (difficulty - 1) * 0.5
+                    
+                    total_weighted_score += (answer.score or 0) * weight
+                    max_weighted_possible += 100.0 * weight
+                
+                percentage = (total_weighted_score / max_weighted_possible * 100) if max_weighted_possible > 0 else 0
                 
                 if percentage >= 90: grade = "5"
                 elif percentage >= 75: grade = "4"
@@ -236,6 +308,10 @@ def evaluate_submission(self, submission_id: str):
                     "max_score": 100,
                     "percentage": round(percentage),
                     "grade": grade,
+                    "weighted_details": {
+                        "total_weighted": round(total_weighted_score),
+                        "max_weighted": round(max_weighted_possible)
+                    }
                 }
                 submission.status = SubmissionStatus.COMPLETED
                 submission.completed_at = datetime.utcnow()

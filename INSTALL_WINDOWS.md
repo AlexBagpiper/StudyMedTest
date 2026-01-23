@@ -311,7 +311,8 @@ async def create_admin():
         admin = User(
             email='admin@medtest.local',
             password_hash=get_password_hash('admin123'),
-            full_name='Администратор системы',
+            last_name='Администратор',
+            first_name='Системы',
             role='admin',
             is_active=True,
             is_verified=True

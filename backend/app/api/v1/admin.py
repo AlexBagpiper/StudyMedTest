@@ -18,6 +18,7 @@ from app.core.security import get_current_user, get_password_hash
 from app.core.storage import storage_service
 from app.models.user import User, Role
 from app.models.question import Question, ImageAsset
+from app.models.system_config import SystemConfig
 from app.models.test import Test, TestQuestion, TestVariant, TestStatus
 from app.models.submission import Submission, Answer, SubmissionStatus
 from app.models.audit import AuditLog
@@ -28,6 +29,8 @@ from app.schemas.admin import (
     AdminSubmissionResponse, AdminAnswerResponse,
     AdminAuditLogResponse, AdminImageAssetResponse,
     PaginatedResponse, AdminStatsResponse, EntityCounts,
+    AdminSystemConfigResponse, AdminSystemConfigUpdate, AdminCVConfig,
+    AdminLLMConfig, AdminLLMTestResponse,
 )
 
 router = APIRouter()
@@ -40,6 +43,16 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return current_user
+
+
+def require_staff(current_user: User = Depends(get_current_user)) -> User:
+    """Проверка что пользователь - администратор или преподаватель"""
+    if current_user.role not in [Role.ADMIN, Role.TEACHER]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Staff access required"
         )
     return current_user
 
@@ -447,6 +460,25 @@ async def delete_question(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     
+    # Проверка зависимостей
+    test_count = await db.scalar(
+        select(func.count(TestQuestion.id)).where(TestQuestion.question_id == question_id)
+    )
+    if test_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Нельзя удалить вопрос: он используется в тестах"
+        )
+
+    answer_count = await db.scalar(
+        select(func.count(Answer.id)).where(Answer.question_id == question_id)
+    )
+    if answer_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Нельзя удалить вопрос: на него уже есть ответы студентов"
+        )
+
     await log_admin_action(db, admin, "delete", "question", question_id)
     await db.delete(question)
     await db.commit()
@@ -655,6 +687,110 @@ async def delete_submission(
     await db.commit()
 
 
+@router.post("/submissions/{submission_id}/revaluate")
+async def revaluate_submission(
+    submission_id: UUID,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Принудительный пересчет оценки для всей работы"""
+    try:
+        # 1. Сначала загружаем работу и ответы
+        result = await db.execute(
+            select(Submission)
+            .options(selectinload(Submission.answers))
+            .where(Submission.id == submission_id)
+        )
+        submission = result.scalar_one_or_none()
+        
+        if not submission:
+            raise HTTPException(status_code=404, detail="Submission not found")
+        
+        from app.tasks.evaluation_tasks import run_evaluate_annotation_answer, run_evaluate_text_answer
+        from app.models.question import Question, QuestionType
+        from app.models.submission import Answer, SubmissionStatus
+        
+        # 2. Выполняем оценку каждого ответа
+        # Используем список ID чтобы избежать конфликтов итерации по связанным объектам
+        answer_ids = [a.id for a in submission.answers]
+        
+        for ans_id in answer_ids:
+            # Получаем свежий объект ответа и его вопрос с предзагрузкой картинки
+            res_ans = await db.execute(
+                select(Answer).where(Answer.id == ans_id)
+            )
+            answer = res_ans.scalar_one()
+            
+            res_q = await db.execute(
+                select(Question)
+                .options(selectinload(Question.image))
+                .where(Question.id == answer.question_id)
+            )
+            question = res_q.scalar_one_or_none()
+            if not question: continue
+            
+            if question.type == QuestionType.IMAGE_ANNOTATION:
+                try:
+                    await run_evaluate_annotation_answer(db, str(answer.id))
+                except Exception as e:
+                    logger.warning(f"Failed annotation eval {answer.id}: {e}")
+            elif question.type == QuestionType.TEXT:
+                try:
+                    await run_evaluate_text_answer(db, str(answer.id))
+                except Exception as e:
+                    logger.warning(f"Failed text eval {answer.id}: {e}")
+        
+        # 3. Финальный пересчет всей работы с учетом сложности
+        # Делаем commit чтобы все оценки точно сохранились
+        await db.commit()
+        
+        # Перечитываем работу со свежими баллами ответов и сложностью вопросов
+        result = await db.execute(
+            select(Submission)
+            .options(selectinload(Submission.answers).selectinload(Answer.question))
+            .where(Submission.id == submission_id)
+        )
+        submission = result.scalar_one()
+        
+        total_weighted_score = 0.0
+        max_weighted_possible = 0.0
+        
+        for answer in submission.answers:
+            difficulty = answer.question.difficulty if answer.question else 1
+            weight = 1.0 + (difficulty - 1) * 0.5
+            
+            total_weighted_score += (answer.score or 0) * weight
+            max_weighted_possible += 100.0 * weight
+            
+        percentage = (total_weighted_score / max_weighted_possible * 100) if max_weighted_possible > 0 else 0
+        
+        if percentage >= 90: grade = "5"
+        elif percentage >= 75: grade = "4"
+        elif percentage >= 60: grade = "3"
+        else: grade = "2"
+        
+        submission.result = {
+            "total_score": round(percentage),
+            "max_score": 100,
+            "percentage": round(percentage),
+            "grade": grade,
+            "weighted_details": {
+                "total_weighted": round(total_weighted_score),
+                "max_weighted": round(max_weighted_possible)
+            }
+        }
+        submission.status = SubmissionStatus.COMPLETED
+        
+        await log_admin_action(db, admin, "revaluate", "submission", submission_id)
+        await db.commit()
+        return {"status": "success", "message": "Evaluation recalculated"}
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Error in revaluate_submission: {e}\n{tb}")
+        raise
+
+
 # ==================== IMAGES ====================
 
 @router.get("/images", response_model=PaginatedResponse[AdminImageAssetResponse])
@@ -736,3 +872,152 @@ async def list_audit_logs(
     logs = result.scalars().all()
     
     return PaginatedResponse(items=logs, total=total or 0, skip=skip, limit=limit)
+
+
+# ==================== SYSTEM CONFIGS ====================
+
+@router.get("/configs", response_model=List[AdminSystemConfigResponse])
+async def list_configs(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Список всех системных настроек"""
+    result = await db.execute(select(SystemConfig))
+    return result.scalars().all()
+
+
+@router.get("/configs/cv", response_model=AdminCVConfig)
+async def get_cv_config(
+    user: User = Depends(require_staff),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение настроек CV оценки"""
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == "cv_evaluation_params"))
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        # Возвращаем дефолты если не настроено
+        return AdminCVConfig()
+    
+    return AdminCVConfig(**config.value)
+
+
+@router.put("/configs/cv", response_model=AdminCVConfig)
+async def update_cv_config(
+    config_in: AdminCVConfig,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Обновление настроек CV оценки"""
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == "cv_evaluation_params"))
+    config = result.scalar_one_or_none()
+    
+    new_value = config_in.model_dump()
+    
+    if not config:
+        config = SystemConfig(
+            key="cv_evaluation_params",
+            value=new_value,
+            description="Параметры для CV-оценки графических тестов"
+        )
+        db.add(config)
+    else:
+        config.value = new_value
+    
+    await log_admin_action(db, admin, "update", "config", details={"key": "cv_evaluation_params", "value": new_value})
+    await db.commit()
+    
+    return config_in
+
+@router.get("/configs/llm", response_model=AdminLLMConfig)
+async def get_llm_config(
+    user: User = Depends(require_staff),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение настроек LLM оценки"""
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == "llm_evaluation_params"))
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        # Возвращаем дефолты если не настроено
+        return AdminLLMConfig()
+    
+    return AdminLLMConfig(**config.value)
+
+
+@router.put("/configs/llm", response_model=AdminLLMConfig)
+async def update_llm_config(
+    config_in: AdminLLMConfig,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Обновление настроек LLM оценки"""
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == "llm_evaluation_params"))
+    config = result.scalar_one_or_none()
+    
+    new_value = config_in.model_dump()
+    
+    if not config:
+        config = SystemConfig(
+            key="llm_evaluation_params",
+            value=new_value,
+            description="Параметры для LLM-оценки текстовых ответов"
+        )
+        db.add(config)
+    else:
+        config.value = new_value
+    
+    await log_admin_action(db, admin, "update", "config", details={"key": "llm_evaluation_params", "value": new_value})
+    await db.commit()
+    
+    return config_in
+
+
+@router.post("/configs/llm/test", response_model=AdminLLMTestResponse)
+async def test_llm_config(
+    config_in: AdminLLMConfig,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Тестирование настроек LLM без сохранения"""
+    from app.services.llm_service import llm_service
+    
+    try:
+        # Простой тестовый запрос
+        test_question = "Что такое клетка?"
+        test_reference = "Клетка — структурно-функциональная элементарная единица строения и жизнедеятельности всех организмов."
+        test_answer = "Это маленькая частица живого организма, которая умеет делиться."
+        
+        # Передаем переданный конфиг напрямую
+        result = await llm_service.evaluate_text_answer(
+            question=test_question,
+            reference_answer=test_reference,
+            student_answer=test_answer,
+            config=config_in.model_dump(),
+            db=db
+        )
+        
+        # Если оценка прошла (даже если 0, но провайдер ответил и нет ошибки в фидбеке)
+        feedback = result.get("feedback", "")
+        is_real_error = "Error" in feedback or "Ошибка" in feedback or result.get("total_score") == 0 and result.get("provider") == "None"
+
+        if result.get("provider") and result["provider"] != "None" and not is_real_error:
+            return AdminLLMTestResponse(
+                status="success",
+                message="Тестовая проверка прошла успешно",
+                provider=result.get("provider"),
+                result=result
+            )
+        else:
+            return AdminLLMTestResponse(
+                status="error",
+                message=result.get("feedback", "Не удалось получить ответ от LLM или провайдер вернул ошибку"),
+                provider=result.get("provider") or "Unknown"
+            )
+            
+    except Exception as e:
+        logger.exception("Error during LLM config test")
+        return AdminLLMTestResponse(
+            status="error",
+            message=str(e)
+        )

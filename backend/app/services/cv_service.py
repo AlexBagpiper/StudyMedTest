@@ -21,19 +21,18 @@ class CVService:
         self,
         student_data: Dict[str, Any],
         reference_data: Dict[str, Any],
-        image_id: Optional[UUID] = None
+        image_id: Optional[UUID] = None,
+        config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Оценка аннотации студента
-        
-        Алгоритм IoU (Intersection over Union): Сравнение полигонов, нарисованных студентом, 
-        с эталонными аннотациями в формате COCO.
-        
-        Метрики качества:
-        - IoU (Accuracy): Точность попадания (50%)
-        - Recall (Completeness): Полнота выделения всех объектов (30%)
-        - Precision: Отсутствие лишних элементов (20%)
         """
+        # Настройки из БД или дефолтные
+        iou_weight = config.get("iou_weight", 0.5) if config else 0.5
+        recall_weight = config.get("recall_weight", 0.3) if config else 0.3
+        precision_weight = config.get("precision_weight", 0.2) if config else 0.2
+        iou_threshold = config.get("iou_threshold", 0.5) if config else 0.5
+
         # Извлечение аннотаций студента
         student_annotations = student_data.get("annotations", [])
         
@@ -84,19 +83,19 @@ class CVService:
         # 1. Точность попадания (IoU) - средний IoU для найденных объектов
         avg_iou = np.mean(all_iou_scores) if all_iou_scores else 0
         
-        # 2. Полнота (Recall) - доля найденных эталонных объектов (IoU > 0.5)
-        true_positives = sum(1 for iou in all_iou_scores if iou >= 0.5)
+        # 2. Полнота (Recall) - доля найденных эталонных объектов (IoU > iou_threshold)
+        true_positives = sum(1 for iou in all_iou_scores if iou >= iou_threshold)
         recall = true_positives / len(ref_polys) if ref_polys else 0
         
         # 3. Прецизионность (Precision) - отсутствие лишних элементов
         # Доля правильных объектов среди всех нарисованных студентом
         precision = true_positives / len(stud_polys) if stud_polys else 0
         
-        # Итоговый взвешенный балл: 50% IoU + 30% Recall + 20% Precision
+        # Итоговый взвешенный балл
         total_score = (
-            avg_iou * 0.5 + 
-            recall * 0.3 + 
-            precision * 0.2
+            avg_iou * iou_weight + 
+            recall * recall_weight + 
+            precision * precision_weight
         ) * 100
         
         return {

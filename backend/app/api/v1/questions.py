@@ -18,6 +18,8 @@ from app.core.security import get_current_user
 from app.core.storage import storage_service
 from app.models.user import User, Role
 from app.models.question import Question, ImageAsset, QuestionType
+from app.models.test import TestQuestion
+from app.models.submission import Answer
 from app.schemas.question import QuestionCreate, QuestionUpdate, QuestionResponse, ImageAssetResponse
 from app.schemas.annotation import AnnotationData
 
@@ -229,6 +231,26 @@ async def delete_question(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
+        )
+    
+    # Проверка зависимостей
+    from sqlalchemy import func
+    test_count = await db.scalar(
+        select(func.count(TestQuestion.id)).where(TestQuestion.question_id == question_id)
+    )
+    if test_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя удалить вопрос: он используется в тестах"
+        )
+
+    answer_count = await db.scalar(
+        select(func.count(Answer.id)).where(Answer.question_id == question_id)
+    )
+    if answer_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя удалить вопрос: на него уже есть ответы студентов"
         )
     
     await db.delete(question)
