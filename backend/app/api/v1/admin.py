@@ -13,6 +13,8 @@ from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.core.database import get_db
 from app.core.security import get_current_user, get_password_hash
 from app.core.storage import storage_service
@@ -32,6 +34,7 @@ from app.schemas.admin import (
     AdminSystemConfigResponse, AdminSystemConfigUpdate, AdminCVConfig,
     AdminLLMConfig, AdminLLMTestResponse,
 )
+from app.schemas.submission import BulkDeleteRequest
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -125,6 +128,8 @@ async def list_users(
     role: Optional[Role] = None,
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    sort_by: str = "created_at",
+    order: str = "desc",
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
@@ -151,7 +156,20 @@ async def list_users(
     
     total = await db.scalar(count_query)
     
-    query = query.order_by(User.created_at.desc()).offset(skip).limit(limit)
+    # Сортировка
+    if not hasattr(User, sort_by):
+        sort_attr = User.created_at
+    else:
+        sort_attr = getattr(User, sort_by)
+        if not hasattr(sort_attr, "desc"):
+            sort_attr = User.created_at
+
+    if order == "desc":
+        query = query.order_by(sort_attr.desc())
+    else:
+        query = query.order_by(sort_attr.asc())
+        
+    query = query.offset(skip).limit(limit)
     result = await db.execute(query)
     users = result.scalars().all()
     
@@ -316,6 +334,65 @@ async def delete_user(
         raise HTTPException(
             status_code=400,
             detail="Ошибка при удалении: возможны зависимости в БД"
+        )
+
+
+@router.post("/users/bulk-delete", status_code=204)
+async def bulk_delete_users(
+    request: BulkDeleteRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Массовое удаление пользователей"""
+    if admin.id in request.ids:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    result = await db.execute(select(User).where(User.id.in_(request.ids)))
+    users = result.scalars().all()
+    
+    if not users:
+        return
+    
+    # Проверка зависимостей для каждого пользователя (преподаватели и админы)
+    for user in users:
+        if user.role in [Role.TEACHER, Role.ADMIN]:
+            # Повторяем те же проверки что и в одиночном удалении
+            # 1. Проверяем сабмишены студентов на тесты этого автора
+            submission_count = await db.scalar(
+                select(func.count(Submission.id))
+                .join(TestVariant, Submission.variant_id == TestVariant.id)
+                .join(Test, TestVariant.test_id == Test.id)
+                .where(Test.author_id == user.id)
+                .where(Submission.student_id != user.id)
+            )
+            if submission_count > 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Нельзя удалить {user.role.value} {user.email}: у студентов есть результаты ({submission_count}) по тестам этого автора"
+                )
+
+            # 2. Проверяем наличие созданных тестов
+            test_count = await db.scalar(select(func.count(Test.id)).where(Test.author_id == user.id))
+            if test_count > 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Нельзя удалить {user.role.value} {user.email}: у пользователя есть созданные тесты ({test_count})"
+                )
+
+    deleted_emails = [u.email for u in users]
+    for user in users:
+        await db.delete(user)
+    
+    await log_admin_action(db, admin, "bulk_delete", "user", details={"emails": deleted_emails, "count": len(users)})
+    
+    try:
+        await db.commit()
+    except SQLAlchemyError as e:
+        await db.rollback()
+        logger.exception("Error bulk deleting users", exc_info=e)
+        raise HTTPException(
+            status_code=400,
+            detail="Ошибка при массовом удалении: возможны зависимости в БД"
         )
 
 

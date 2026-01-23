@@ -12,7 +12,7 @@ import UndoIcon from '@mui/icons-material/Undo'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import { useAnnotationStore } from './hooks/useAnnotationStore'
-import { EditorMode } from '../../types/annotation'
+import { EditorMode, AnnotationData, Annotation, AnnotationLabel } from '../../types/annotation'
 
 import { MessageDialog } from '../common/MessageDialog'
 
@@ -47,6 +47,8 @@ const createRectContainsPoint = (fallbackZoom: number) => {
 interface FabricCanvasProps {
   imageUrl: string
   readOnly?: boolean
+  referenceData?: AnnotationData | null
+  showReference?: boolean
 }
 
 interface ExtendedCanvas extends fabric.Canvas {
@@ -57,7 +59,12 @@ interface ExtendedCanvas extends fabric.Canvas {
   lowerCanvasEl: HTMLCanvasElement
 }
 
-export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly = false }) => {
+export const FabricCanvas: React.FC<FabricCanvasProps> = ({ 
+  imageUrl, 
+  readOnly = false,
+  referenceData = null,
+  showReference = false
+}) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fabricCanvas = useRef<ExtendedCanvas | null>(null)
@@ -75,11 +82,15 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
 
   const annotationsRef = useRef(annotations); const labelsRef = useRef(labels);
   const modeRef = useRef<EditorMode>(mode); const zoomRef = useRef(zoom)
+  const showReferenceRef = useRef(showReference)
+  const referenceDataRef = useRef(referenceData)
 
   useEffect(() => {
     annotationsRef.current = annotations; labelsRef.current = labels;
     modeRef.current = mode; zoomRef.current = zoom;
-  }, [annotations, labels, mode, zoom])
+    showReferenceRef.current = showReference;
+    referenceDataRef.current = referenceData;
+  }, [annotations, labels, mode, zoom, showReference, referenceData])
 
   const polygonPointsRef = useRef<fabric.Point[]>([])
   const activeLineRef = useRef<fabric.Line | null>(null)
@@ -494,8 +505,9 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
       const { scale, left, top } = transformRef.current
       const currentZoom = c.getZoom()
 
+      // Render student annotations
       annotationsRef.current.forEach(ann => {
-        const label = labelsRef.current.find(l => l.id === ann.label_id)
+        const label = labelsRef.current.find(l => String(l.id) === String(ann.label_id))
         if (!label) return
         let obj: fabric.Object | null = null
 
@@ -510,7 +522,6 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
             originX: 'left', originY: 'top'
           })
           
-          // Make rectangle selectable only by stroke
           obj.containsPoint = createRectContainsPoint(currentZoom)
         } else if (ann.type === 'polygon' && ann.points) {
           const fPoints = []
@@ -522,7 +533,6 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
             lockRotation: true, lockScalingX: true, lockScalingY: true
           })
           
-          // Make selectable only by stroke
           obj.containsPoint = function(point: fabric.Point) {
             return findClosestSegment(this as fabric.Polygon, point) !== -1
           }
@@ -538,6 +548,82 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
           obj.setCoords();
         }
       })
+
+      // Render reference annotations if requested
+      const showReferenceVal = showReferenceRef.current
+      const referenceDataVal = referenceDataRef.current
+      
+      if (showReferenceVal && referenceDataVal?.annotations) {
+        // Use labels from the main data (labelsRef.current) instead of referenceData.labels
+        // because COCO annotations don't include labels array
+        const labelsToUse = referenceDataVal.labels && referenceDataVal.labels.length > 0 
+          ? referenceDataVal.labels 
+          : labelsRef.current;
+        
+        referenceDataVal.annotations.forEach((ann: Annotation) => {
+          // COCO annotations use category_id instead of label_id
+          const labelIdToFind = (ann as any).category_id || ann.label_id;
+          
+          // Use loose comparison for IDs (string vs number), and look up in labelsToUse
+          const label = labelsToUse?.find((l: AnnotationLabel) => String(l.id) === String(labelIdToFind))
+          
+          if (!label) {
+            return;
+          }
+          let obj: fabric.Object | null = null
+
+          const commonProps = {
+            fill: 'transparent',
+            stroke: label.color,
+            strokeWidth: 2.5 / currentZoom, // Slightly thicker for visibility
+            strokeDashArray: [5, 5], // Better visible dotted line
+            selectable: false,
+            evented: false,
+            originX: 'left',
+            originY: 'top',
+            objectCaching: false,
+            opacity: 0.9,
+            strokeUniform: true // Keep stroke width consistent regardless of scaling
+          } as any 
+
+          // COCO annotations may have segmentation instead of type/points
+          const cocoSegmentation = (ann as any).segmentation?.[0];
+          
+          if (ann.type === 'rectangle' && ann.bbox) {
+            obj = new fabric.Rect({ 
+              ...commonProps,
+              left: ann.bbox[0] * scale + left, 
+              top: ann.bbox[1] * scale + top, 
+              width: ann.bbox[2] * scale, 
+              height: ann.bbox[3] * scale, 
+            })
+          } else if (ann.type === 'polygon' && ann.points) {
+            const fPoints = []
+            for (let i = 0; i < ann.points.length; i += 2) fPoints.push({ x: ann.points[i] * scale + left, y: ann.points[i+1] * scale + top })
+            obj = new fabric.Polygon(fPoints, { 
+              ...commonProps,
+            })
+          } else if (cocoSegmentation && Array.isArray(cocoSegmentation)) {
+            // COCO format: segmentation is array of x,y coordinates
+            const fPoints = []
+            for (let i = 0; i < cocoSegmentation.length; i += 2) {
+              fPoints.push({ x: cocoSegmentation[i] * scale + left, y: cocoSegmentation[i+1] * scale + top })
+            }
+            obj = new fabric.Polygon(fPoints, { 
+              ...commonProps,
+            })
+          }
+
+          if (obj) {
+            ;(obj as any).id = `ref-${ann.id}`
+            ;(obj as any).isReference = true
+            c.add(obj)
+            obj.setCoords()
+            obj.bringToFront()
+          }
+        })
+      }
+
       c.requestRenderAll()
     }
     loadAnnotationsRef.current = loadAnnotations
@@ -946,10 +1032,10 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({ imageUrl, readOnly =
 
   // Синхронизация аннотаций из хранилища для режима просмотра (review)
   useEffect(() => {
-    if (readOnly && fabricCanvas.current && fabricImageRef.current) {
+    if ((readOnly || showReference) && fabricCanvas.current && fabricImageRef.current) {
       loadAnnotationsRef.current?.(fabricCanvas.current)
     }
-  }, [annotations, labels, readOnly])
+  }, [annotations, labels, readOnly, showReference, referenceData])
 
   useEffect(() => { 
     if (!fabricCanvas.current) return; 

@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { Box, Container, Paper, Typography } from '@mui/material'
+import { APP_CONFIG } from '../config'
 
 export default function AuthLayout() {
   return (
@@ -23,10 +24,10 @@ export default function AuthLayout() {
           }}
         >
           <Typography variant="h4" component="h1" gutterBottom>
-            MedTest Platform
+            {APP_CONFIG.APP_FULL_NAME}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Система тестирования для медицинских студентов
+            {APP_CONFIG.APP_DESCRIPTION}
           </Typography>
           <Outlet />
         </Paper>

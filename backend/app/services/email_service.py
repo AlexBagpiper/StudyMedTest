@@ -70,7 +70,7 @@ async def send_email_change_code(to_email: str, code: str) -> bool:
     """
     Отправка кода подтверждения смены email
     """
-    subject = "Подтверждение смены email - MedTest"
+    subject = f"Подтверждение смены email - {settings.PROJECT_NAME}"
     body = f"""
 Здравствуйте!
 
@@ -83,7 +83,7 @@ async def send_email_change_code(to_email: str, code: str) -> bool:
 Если вы не запрашивали смену email, проигнорируйте это письмо.
 
 С уважением,
-MedTest Platform
+{settings.PROJECT_NAME}
 """
     
     html_body = f"""

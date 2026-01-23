@@ -19,6 +19,7 @@ import { AnnotationData } from '../../types/annotation'
 import { MessageDialog } from '../../components/common/MessageDialog'
 import { adminApi } from '../../lib/api'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import { FormControlLabel, Switch } from '@mui/material'
 
 export default function SubmissionReviewPage() {
   const { id } = useParams()
@@ -38,6 +39,7 @@ export default function SubmissionReviewPage() {
     message: ''
   })
   const [currentLabels, setCurrentLabels] = useState<any[]>([])
+  const [showReferenceOverlay, setShowReferenceOverlay] = useState(false)
 
   const currentQuestion = questions[currentQuestionIndex]
 
@@ -53,6 +55,10 @@ export default function SubmissionReviewPage() {
   }, [currentQuestion])
 
   const loadCVConfig = async () => {
+    // CV config доступен только для админов и преподавателей
+    if (user?.role !== 'admin' && user?.role !== 'teacher') {
+      return
+    }
     try {
       const config = await adminApi.getCVConfig()
       setCvConfig(config)
@@ -275,19 +281,39 @@ export default function SubmissionReviewPage() {
             )}
           </Box>
         ) : (
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={(currentQuestion.reference_data?.annotations || currentQuestion.image?.coco_annotations) ? 6 : 12}>
+          <Box sx={{ mb: 4 }}>
+            {(currentQuestion.reference_data?.annotations || currentQuestion.image?.coco_annotations) && (
+              <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showReferenceOverlay}
+                      onChange={(e) => setShowReferenceOverlay(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: showReferenceOverlay ? 'primary.main' : 'text.secondary' }}>
+                      Наложить эталонные аннотации (пунктир)
+                    </Typography>
+                  }
+                />
+              </Box>
+            )}
+            
+            <Box>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Ответ студента
+                {showReferenceOverlay ? 'Ответ студента с наложенным эталоном' : 'Ответ студента'}
               </Typography>
               <Box sx={{ 
-                height: 'calc(100vh - 500px)', 
-                minHeight: '500px', 
-                border: '1px solid', 
-                borderColor: 'divider', 
+                height: 'calc(100vh - 450px)', 
+                minHeight: '600px', 
+                border: '2px solid', 
+                borderColor: showReferenceOverlay ? 'primary.main' : 'divider', 
                 borderRadius: 1, 
                 overflow: 'hidden',
-                bgcolor: '#1e2125'
+                bgcolor: '#1e2125',
+                transition: 'border-color 0.3s'
               }}>
                 <AnnotationEditor
                   imageUrl={currentQuestion?.image?.presigned_url || ''}
@@ -295,39 +321,14 @@ export default function SubmissionReviewPage() {
                     labels: currentLabels,
                     annotations: (answers[currentQuestion?.id] as AnnotationData)?.annotations || []
                   }}
+                  referenceData={currentQuestion.reference_data?.annotations ? currentQuestion.reference_data : (currentQuestion.image?.coco_annotations || null)}
+                  showReference={showReferenceOverlay}
                   readOnly={true}
                   hideLabels={true}
                 />
               </Box>
-            </Grid>
-            
-            {(currentQuestion.reference_data?.annotations || currentQuestion.image?.coco_annotations) && (
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="primary" fontWeight="bold" gutterBottom>
-                  {t('questions.referenceAnswer')}
-                </Typography>
-                <Box sx={{ 
-                  height: 'calc(100vh - 500px)', 
-                  minHeight: '500px', 
-                  border: '1px solid', 
-                  borderColor: 'primary.main', 
-                  borderRadius: 1, 
-                  overflow: 'hidden',
-                  bgcolor: '#1e2125'
-                }}>
-                  <AnnotationEditor
-                    imageUrl={currentQuestion?.image?.presigned_url || ''}
-                    initialData={{
-                      labels: currentLabels,
-                      annotations: currentQuestion.reference_data?.annotations || currentQuestion.image?.coco_annotations?.annotations || []
-                    }}
-                    readOnly={true}
-                    hideLabels={true}
-                  />
-                </Box>
-              </Grid>
-            )}
-          </Grid>
+            </Box>
+          </Box>
         )}
 
         {/* Результаты оценки */}

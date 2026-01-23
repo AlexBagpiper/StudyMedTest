@@ -248,59 +248,51 @@ export default function SubmissionsPage() {
                   <TableCell sx={{ fontWeight: 'bold' }}>
                     {sub.result?.total_score !== undefined ? `${sub.result.total_score} / ${sub.result.max_score}` : '-'}
                   </TableCell>
-                  <TableCell align="right">
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                      {sub.status === 'in_progress' ? (
-                        <Button 
-                          size="small" 
-                          variant="outlined" 
-                          onClick={() => navigate(`/submissions/${sub.id}`)}
-                        >
-                          {t('tests.action.continue')}
-                        </Button>
-                      ) : (
-                        <>
-                          {(sub.status === 'completed' || sub.status === 'submitted' || sub.status === 'evaluating') && (
-                            <Button 
-                              size="small" 
-                              variant="outlined" 
-                              startIcon={<VisibilityIcon />}
-                              onClick={() => navigate(`/admin/submissions/${sub.id}/review`)}
-                            >
-                              {t('submissions.action.details')}
-                            </Button>
-                          )}
-                          {user?.role === 'teacher' && (
-                            <>
-                              {sub.is_hidden ? (
-                                <Tooltip title={t('submissions.action.restore')}>
-                                  <IconButton 
-                                    size="small" 
-                                    color="primary" 
-                                    onClick={() => handleRestore(sub.id)}
-                                    disabled={restoreMutation.isPending}
-                                  >
-                                    <VisibilityIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              ) : (
-                                <Tooltip title={t('submissions.action.hide')}>
-                                  <IconButton 
-                                    size="small" 
-                                    color="default" 
-                                    onClick={() => handleHide(sub.id)}
-                                    disabled={hideMutation.isPending}
-                                  >
-                                    <VisibilityOffIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-                    </Box>
-                  </TableCell>
+                  {user?.role !== 'student' && (
+                    <TableCell align="right">
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                        {sub.status === 'in_progress' ? (
+                          <Button 
+                            size="small" 
+                            variant="outlined" 
+                            onClick={() => navigate(`/submissions/${sub.id}`)}
+                          >
+                            {t('tests.action.continue')}
+                          </Button>
+                        ) : (
+                          <>
+                            {user?.role === 'teacher' && (
+                              <>
+                                {sub.is_hidden ? (
+                                  <Tooltip title={t('submissions.action.restore')}>
+                                    <IconButton 
+                                      size="small" 
+                                      color="primary" 
+                                      onClick={() => handleRestore(sub.id)}
+                                      disabled={restoreMutation.isPending}
+                                    >
+                                      <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                ) : (
+                                  <Tooltip title={t('submissions.action.hide')}>
+                                    <IconButton 
+                                      size="small" 
+                                      color="default" 
+                                      onClick={() => handleHide(sub.id)}
+                                      disabled={hideMutation.isPending}
+                                    >
+                                      <VisibilityOffIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
+                              </>
+                            )}
+                          </>
+                        )}
+                      </Box>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

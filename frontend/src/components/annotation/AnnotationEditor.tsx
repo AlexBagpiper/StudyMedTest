@@ -17,6 +17,8 @@ import { AnnotationData } from '../../types/annotation'
 interface AnnotationEditorProps {
   imageUrl: string
   initialData?: AnnotationData
+  referenceData?: AnnotationData | null
+  showReference?: boolean
   onChange?: (data: AnnotationData) => void
   readOnly?: boolean
   hideLabels?: boolean
@@ -25,6 +27,8 @@ interface AnnotationEditorProps {
 export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({ 
   imageUrl, 
   initialData, 
+  referenceData = null,
+  showReference = false,
   onChange,
   readOnly = false,
   hideLabels = false
@@ -99,7 +103,12 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
         
         <Box sx={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', gap: 1, height: '100%' }}>
           <Box sx={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden', height: '100%' }}>
-            <FabricCanvas imageUrl={imageUrl} readOnly={readOnly} />
+            <FabricCanvas 
+              imageUrl={imageUrl} 
+              readOnly={readOnly} 
+              referenceData={referenceData}
+              showReference={showReference}
+            />
           </Box>
           <Toolbar readOnly={readOnly} />
         </Box>

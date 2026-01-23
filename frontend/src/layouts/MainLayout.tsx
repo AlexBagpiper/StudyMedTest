@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocale, Locale } from '../contexts/LocaleContext'
+import { APP_CONFIG } from '../config'
 
 const DRAWER_WIDTH = 240
 
@@ -82,7 +83,7 @@ export default function MainLayout() {
     <Box>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
-          MedTest
+          {APP_CONFIG.APP_NAME}
         </Typography>
       </Toolbar>
       <List>
@@ -115,7 +116,7 @@ export default function MainLayout() {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            MedTest Platform
+            {APP_CONFIG.APP_FULL_NAME}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {/* Переключатель языка */}

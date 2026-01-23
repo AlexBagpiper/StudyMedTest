@@ -34,6 +34,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import RestoreIcon from '@mui/icons-material/Restore'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
 import { useState, useEffect, useMemo } from 'react'
@@ -374,7 +375,7 @@ export default function AdminSubmissionsPage() {
                             <Tooltip title={t('submissions.action.restore')}>
                               <IconButton 
                                 size="small" 
-                                color="primary" 
+                                color="success" 
                                 onClick={() => restoreMutation.mutate(sub.id)}
                                 disabled={restoreMutation.isPending}
                               >
@@ -396,13 +397,15 @@ export default function AdminSubmissionsPage() {
                         </>
                       )}
                       {sub.status !== 'in_progress' && (
-                        <Button 
-                          size="small" 
-                          variant="outlined" 
-                          onClick={() => navigate(`/admin/submissions/${sub.id}`)}
-                        >
-                          {t('submissions.action.details')}
-                        </Button>
+                        <Tooltip title={t('submissions.action.details')}>
+                          <IconButton 
+                            size="small" 
+                            color="info" 
+                            onClick={() => navigate(`/admin/submissions/${sub.id}`)}
+                          >
+                            <VisibilityIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       )}
                       {user?.role === 'admin' && (
                         <Tooltip title={t('submissions.action.delete')}>

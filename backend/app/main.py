@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     Управление жизненным циклом приложения
     """
     # Startup
-    print("[*] Starting MedTest Platform...")
+    print(f"[*] Starting {settings.PROJECT_NAME}...")
     
     # Создание таблиц (в production использовать Alembic)
     # async with engine.begin() as conn:
@@ -39,9 +39,9 @@ async def lifespan(app: FastAPI):
 
 # Создание FastAPI приложения
 app = FastAPI(
-    title="MedTest Platform API",
-    description="API для системы тестирования студентов медицинского института",
-    version="0.1.0",
+    title=f"{settings.PROJECT_NAME} API",
+    description=f"API для {settings.PROJECT_NAME}",
+    version=settings.VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -89,8 +89,8 @@ async def health_check():
     return JSONResponse(
         content={
             "status": "healthy",
-            "version": "0.1.0",
-            "service": "medtest-backend"
+            "version": settings.VERSION,
+            "service": f"{settings.PROJECT_NAME.lower().replace(' ', '-')}-backend"
         }
     )
 

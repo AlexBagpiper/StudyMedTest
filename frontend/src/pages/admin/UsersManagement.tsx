@@ -22,6 +22,9 @@ import {
   Tabs,
   Tab,
   InputAdornment,
+  Checkbox,
+  TableSortLabel,
+  Tooltip,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -100,6 +103,13 @@ export default function UsersManagement() {
   const [searchQuery, setSearchQuery] = useState('')
   const [total, setTotal] = useState(0)
 
+  // Selection and Sorting states
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [sortBy, setSortBy] = useState<string>('created_at')
+  const [order, setOrder] = useState<'asc' | 'desc'>('desc')
+
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+
   const roleColors: Record<string, 'error' | 'primary' | 'success'> = {
     admin: 'error',
     teacher: 'primary',
@@ -114,12 +124,17 @@ export default function UsersManagement() {
 
   useEffect(() => {
     loadUsers()
-  }, [roleFilter, searchQuery])
+    setSelectedIds([])
+  }, [roleFilter, searchQuery, sortBy, order])
 
   const loadUsers = async () => {
     try {
       setLoading(true)
-      const params: any = { limit: 100 }
+      const params: any = { 
+        limit: 100,
+        sort_by: sortBy,
+        order: order
+      }
       
       if (roleFilter !== 'all') {
         params.role = roleFilter
@@ -139,6 +154,71 @@ export default function UsersManagement() {
         content: err.response?.data?.detail || 'Ошибка загрузки пользователей',
         severity: 'error'
       })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRequestSort = (property: string) => {
+    const isAsc = sortBy === property && order === 'asc'
+    setOrder(isAsc ? 'desc' : 'asc')
+    setSortBy(property)
+  }
+
+  const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      const newSelecteds = users.map((n) => n.id)
+      setSelectedIds(newSelecteds)
+      return
+    }
+    setSelectedIds([])
+  }
+
+  const handleClick = (id: string) => {
+    const selectedIndex = selectedIds.indexOf(id)
+    let newSelected: string[] = []
+
+    if (selectedIndex === -1) {
+      newSelected = newSelected.concat(selectedIds, id)
+    } else if (selectedIndex === 0) {
+      newSelected = newSelected.concat(selectedIds.slice(1))
+    } else if (selectedIndex === selectedIds.length - 1) {
+      newSelected = newSelected.concat(selectedIds.slice(0, -1))
+    } else if (selectedIndex > 0) {
+      newSelected = newSelected.concat(
+        selectedIds.slice(0, selectedIndex),
+        selectedIds.slice(selectedIndex + 1)
+      )
+    }
+
+    setSelectedIds(newSelected)
+  }
+
+  const handleBulkDelete = async () => {
+    setConfirmBulkDelete(true)
+  }
+
+  const confirmBulkDeleteAction = async () => {
+    try {
+      setLoading(true)
+      await adminApi.bulkDeleteUsers(selectedIds)
+      setMessageDialog({
+        open: true,
+        title: t('common.success'),
+        content: `Успешно удалено пользователей: ${selectedIds.length}`,
+        severity: 'success'
+      })
+      setSelectedIds([])
+      setConfirmBulkDelete(false)
+      loadUsers()
+    } catch (err: any) {
+      setMessageDialog({
+        open: true,
+        title: t('common.error'),
+        content: err.response?.data?.detail || 'Ошибка при массовом удалении',
+        severity: 'error'
+      })
+      setConfirmBulkDelete(false)
     } finally {
       setLoading(false)
     }
@@ -248,13 +328,25 @@ export default function UsersManagement() {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Управление пользователями</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Создать преподавателя
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          {selectedIds.length > 0 && (
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={handleBulkDelete}
+            >
+              Удалить выбранные ({selectedIds.length})
+            </Button>
+          )}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenDialog()}
+          >
+            Создать преподавателя
+          </Button>
+        </Box>
       </Box>
 
       <Paper sx={{ mb: 3 }}>
@@ -294,62 +386,129 @@ export default function UsersManagement() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>ФИО</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Роль</TableCell>
-                <TableCell>Статус</TableCell>
-                <TableCell>Дата создания</TableCell>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    indeterminate={selectedIds.length > 0 && selectedIds.length < users.length}
+                    checked={users.length > 0 && selectedIds.length === users.length}
+                    onChange={handleSelectAllClick}
+                  />
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortBy === 'last_name'}
+                    direction={sortBy === 'last_name' ? order : 'asc'}
+                    onClick={() => handleRequestSort('last_name')}
+                  >
+                    ФИО
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortBy === 'email'}
+                    direction={sortBy === 'email' ? order : 'asc'}
+                    onClick={() => handleRequestSort('email')}
+                  >
+                    Email
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortBy === 'role'}
+                    direction={sortBy === 'role' ? order : 'asc'}
+                    onClick={() => handleRequestSort('role')}
+                  >
+                    Роль
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortBy === 'is_active'}
+                    direction={sortBy === 'is_active' ? order : 'asc'}
+                    onClick={() => handleRequestSort('is_active')}
+                  >
+                    Статус
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={sortBy === 'created_at'}
+                    direction={sortBy === 'created_at' ? order : 'asc'}
+                    onClick={() => handleRequestSort('created_at')}
+                  >
+                    Дата создания
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell align="right">Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     Пользователи не найдены
                   </TableCell>
                 </TableRow>
               ) : (
-                users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{getFullName(user)}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={roleLabels[user.role]}
-                        color={roleColors[user.role]}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={user.is_active ? 'Активен' : 'Неактивен'}
-                        color={user.is_active ? 'success' : 'default'}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {new Date(user.created_at).toLocaleDateString('ru-RU')}
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenDialog(user)}
-                        color="primary"
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(user.id)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
+                users.map((user) => {
+                  const isItemSelected = selectedIds.indexOf(user.id) !== -1
+                  return (
+                    <TableRow 
+                      key={user.id}
+                      hover
+                      onClick={() => handleClick(user.id)}
+                      role="checkbox"
+                      aria-checked={isItemSelected}
+                      selected={isItemSelected}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox checked={isItemSelected} />
+                      </TableCell>
+                      <TableCell>{getFullName(user)}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        <Chip
+                          label={roleLabels[user.role]}
+                          color={roleColors[user.role]}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={user.is_active ? 'Активен' : 'Неактивен'}
+                          color={user.is_active ? 'success' : 'default'}
+                          size="small"
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {new Date(user.created_at).toLocaleDateString('ru-RU')}
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenDialog(user)
+                          }}
+                          color="primary"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(user.id)
+                          }}
+                          color="error"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -466,6 +625,18 @@ export default function UsersManagement() {
         cancelText="Отмена"
         onConfirm={confirmDeleteAction}
         onCancel={() => setConfirmDelete({ open: false, userId: null })}
+        color="error"
+        isLoading={loading}
+      />
+
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        title="Массовое удаление"
+        content={`Вы уверены, что хотите удалить выбранных пользователей (${selectedIds.length})? Это действие нельзя отменить.`}
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmBulkDeleteAction}
+        onCancel={() => setConfirmBulkDelete(false)}
         color="error"
         isLoading={loading}
       />
