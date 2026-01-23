@@ -9,8 +9,10 @@ alembic==1.13.1
 asyncpg==0.29.0
 psycopg2-binary==2.9.9
 
-# Redis (aioredis встроен в redis 5.0+, больше не нужен отдельно)
+# Redis & Task Queue
 redis==5.0.1
+celery==5.3.6
+flower==2.0.1
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
@@ -20,32 +22,13 @@ python-dotenv==1.0.0
 pydantic[email]==2.5.3
 pydantic-settings==2.1.0
 
-# Task Queue
-celery==5.3.6
-flower==2.0.1
-
-# LLM Integration
-langchain==0.1.0
-langchain-openai==0.0.2
-langchain-community==0.0.10
-openai==1.7.2
-anthropic==0.8.1
-tiktoken==0.5.2
-
-# Local LLM
-# vllm==0.2.6  # Раскомментировать при наличии GPU
-# ollama==0.1.0
-
-# Computer Vision
-opencv-python==4.9.0.80
-pycocotools==2.0.7
-shapely==2.0.2
-scikit-image==0.22.0
+# Computer Vision & Image Processing
+# Note: opencv-python and pycocotools removed as they are not used in current implementation
 numpy==1.26.3
+shapely==2.0.2
 pillow==10.2.0
 
 # S3/MinIO
-boto3==1.34.22
 minio==7.2.3
 
 # HTTP Client
@@ -54,13 +37,6 @@ requests==2.31.0
 
 # Monitoring & Logging
 prometheus-client==0.19.0
-sentry-sdk[fastapi]==1.39.2
-python-json-logger==2.0.7
-
-# Utilities
-python-slugify==8.0.1
-pytz==2023.3.post1
-email-validator==2.1.0
 
 # Development & Testing
 pytest==7.4.4
@@ -70,5 +46,3 @@ black==23.12.1
 isort==5.13.2
 flake8==7.0.0
 mypy==1.8.0
-faker==22.0.0
-

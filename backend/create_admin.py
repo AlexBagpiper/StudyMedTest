@@ -5,21 +5,23 @@ from app.core.security import get_password_hash
 from sqlalchemy import select
 
 
+from app.core.config import settings
+
 async def create_admin():
     async with AsyncSessionLocal() as db:
         # Проверяем, есть ли уже админ
         result = await db.execute(
-            select(User).where(User.email == 'admin@example.com')
+            select(User).where(User.email == settings.FIRST_ADMIN_EMAIL)
         )
         existing = result.scalar_one_or_none()
         
         if existing:
-            print('[!] Admin уже существует!')
+            print(f'[!] Admin {settings.FIRST_ADMIN_EMAIL} уже существует!')
             return
         
         admin = User(
-            email='admin@example.com',
-            password_hash=get_password_hash('admin123'),
+            email=settings.FIRST_ADMIN_EMAIL,
+            password_hash=get_password_hash(settings.FIRST_ADMIN_PASSWORD),
             last_name='Администратор',
             first_name='Системы',
             middle_name=None,
@@ -29,9 +31,9 @@ async def create_admin():
         )
         db.add(admin)
         await db.commit()
-        print('[OK] Администратор создан успешно!')
-        print('   Email: admin@example.com')
-        print('   Пароль: admin123')
+        print(f'[OK] Администратор создан успешно!')
+        print(f'   Email: {settings.FIRST_ADMIN_EMAIL}')
+        print(f'   Пароль: {settings.FIRST_ADMIN_PASSWORD}')
         print('   [!] ОБЯЗАТЕЛЬНО смените пароль после первого входа!')
 
 

@@ -71,6 +71,9 @@ logs/
 backup/
 *.sql.gz
 
+# Secrets
+yandexapi.txt
+
 # Certificates
 certs/*.key
 certs/*.pem
