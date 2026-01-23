@@ -58,11 +58,19 @@ export default function AdminSubmissionsPage() {
     message: ''
   })
   
-  const { data: submissions = [], isLoading: loading, error } = useSubmissions({
-    include_hidden: user?.role === 'admin' ? true : showHidden
-  }, {
-    refetchInterval: 10000 // Обновлять каждые 10 секунд
-  })
+  const { data: submissions = [], isLoading: loading, error } = useSubmissions(
+    {
+      include_hidden: user?.role === 'admin' ? true : showHidden
+    },
+    {
+      refetchInterval: (query: any) => {
+        const hasActive = query.state.data?.some(
+          (sub: any) => sub.status === 'evaluating' || sub.status === 'submitted'
+        )
+        return hasActive ? 3000 : 30000 // Poll every 3s if active, else every 30s
+      }
+    }
+  )
 
   useEffect(() => {
     if (error) {

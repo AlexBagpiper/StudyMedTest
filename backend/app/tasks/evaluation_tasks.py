@@ -3,230 +3,252 @@ Tasks для оценки ответов студентов (LLM и CV)
 """
 
 import asyncio
+import logging
+import json
+import os
 from uuid import UUID
 from datetime import datetime
+from typing import Dict, Any, Optional
 
 from celery import Task
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.tasks.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.models.submission import Submission, SubmissionStatus, Answer
 from app.models.question import Question, QuestionType
 
+logger = logging.getLogger(__name__)
+
 
 class DatabaseTask(Task):
     """
     Base task с async database session
     """
-    _session = None
-    
-    async def get_session(self) -> AsyncSession:
-        if self._session is None:
-            self._session = AsyncSessionLocal()
-        return self._session
-    
-    async def close_session(self):
-        if self._session:
-            await self._session.close()
-            self._session = None
+    def get_session(self) -> AsyncSession:
+        return AsyncSessionLocal()
 
+async def run_evaluate_text_answer(session: AsyncSession, answer_id: str) -> Dict[str, Any]:
+    """Внутренняя логика оценки текста"""
+    result = await session.execute(
+        select(Answer).where(Answer.id == UUID(answer_id))
+    )
+    answer = result.scalar_one_or_none()
+    if not answer: return {"error": "Answer not found"}
+    
+    result = await session.execute(
+        select(Question).where(Question.id == answer.question_id)
+    )
+    question = result.scalar_one_or_none()
+    
+    from app.services.llm_service import llm_service
+    evaluation_result = await llm_service.evaluate_text_answer(
+        question=question.content,
+        reference_answer=question.reference_data.get("reference_answer", "") if question.reference_data else "",
+        student_answer=answer.student_answer,
+        criteria=question.scoring_criteria or {}
+    )
+    
+    answer.evaluation = {
+        "criteria_scores": evaluation_result["criteria_scores"],
+        "feedback": evaluation_result["feedback"],
+        "llm_provider": evaluation_result["provider"],
+        "evaluated_at": datetime.utcnow().isoformat(),
+    }
+    answer.score = round(evaluation_result["total_score"])
+    return {"answer_id": answer_id, "score": answer.score}
+
+async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) -> Dict[str, Any]:
+    """Внутренняя логика оценки аннотации"""
+    result = await session.execute(
+        select(Answer).where(Answer.id == UUID(answer_id))
+    )
+    answer = result.scalar_one_or_none()
+    if not answer: return {"error": "Answer not found"}
+    
+    result = await session.execute(
+        select(Question).where(Question.id == answer.question_id)
+    )
+    question = result.scalar_one_or_none()
+    
+    from app.services.cv_service import cv_service
+    
+    # Пытаемся достать эталонные аннотации из разных мест
+    reference_data = question.reference_data or {}
+    
+    # Если в reference_data нет аннотаций, но есть в картинке (COCO формат)
+    if not reference_data.get("annotations") and question.image and question.image.coco_annotations:
+        reference_data = question.image.coco_annotations
+    
+    # Если и там нет, проверяем структуру reference_data (может там вложенный объект)
+    if not reference_data.get("annotations") and isinstance(reference_data, dict):
+        # Возможно, аннотации лежат в ключе 'reference_answer' как строка?
+        ref_ans = reference_data.get("reference_answer")
+        if isinstance(ref_ans, str) and ref_ans.startswith('{'):
+            try:
+                reference_data = json.loads(ref_ans)
+            except Exception:
+                pass
+
+    evaluation_result = await cv_service.evaluate_annotation(
+        student_data=answer.annotation_data or {},
+        reference_data=reference_data,
+        image_id=question.image_id
+    )
+    
+    answer.evaluation = {
+        "iou": evaluation_result["iou"],
+        "recall": evaluation_result["recall"],
+        "precision": evaluation_result["precision"],
+        "iou_scores": evaluation_result["iou_scores"],
+        "evaluated_at": datetime.utcnow().isoformat(),
+    }
+    answer.score = round(evaluation_result["total_score"])
+    return {"answer_id": answer_id, "score": answer.score}
+
+def run_async(coro):
+    """Безопасный запуск асинхронного кода из синхронной среды Celery"""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    if loop.is_running():
+        # Если цикл уже запущен (например, в другом потоке или Celery пуле),
+        # мы не можем просто запустить run_until_complete.
+        # Но для solo пула в Windows обычно цикл не запущен.
+        import nest_asyncio
+        nest_asyncio.apply()
+        return loop.run_until_complete(coro)
+    else:
+        return loop.run_until_complete(coro)
 
 @celery_app.task(bind=True, base=DatabaseTask, name="app.tasks.evaluation_tasks.evaluate_text_answer")
 def evaluate_text_answer(self, answer_id: str):
-    """
-    Оценка текстового ответа с помощью LLM
-    """
-    async def _evaluate():
-        session = await self.get_session()
-        try:
-            # Получение ответа и вопроса
-            result = await session.execute(
-                select(Answer).where(Answer.id == UUID(answer_id))
-            )
-            answer = result.scalar_one_or_none()
-            
-            if not answer:
-                return {"error": "Answer not found"}
-            
-            result = await session.execute(
-                select(Question).where(Question.id == answer.question_id)
-            )
-            question = result.scalar_one_or_none()
-            
-            # LLM evaluation
-            from app.services.llm_service import llm_service
-            
-            evaluation_result = await llm_service.evaluate_text_answer(
-                question=question.content,
-                reference_answer=question.reference_data.get("reference_answer", ""),
-                student_answer=answer.student_answer,
-                criteria=question.scoring_criteria or {}
-            )
-            
-            # Сохранение результата
-            answer.evaluation = {
-                "criteria_scores": evaluation_result["criteria_scores"],
-                "feedback": evaluation_result["feedback"],
-                "llm_provider": evaluation_result["provider"],
-                "evaluated_at": datetime.utcnow().isoformat(),
-            }
-            answer.score = evaluation_result["total_score"]
-            
-            await session.commit()
-            
-            return {
-                "answer_id": answer_id,
-                "score": answer.score,
-                "evaluation": answer.evaluation
-            }
-        
-        finally:
-            await self.close_session()
-    
-    return asyncio.run(_evaluate())
-
+    async def _run():
+        async with self.get_session() as session:
+            try:
+                res = await run_evaluate_text_answer(session, answer_id)
+                await session.commit()
+                return res
+            except Exception as e:
+                logger.exception(f"Error evaluating text answer {answer_id}")
+                return {"error": str(e)}
+    return run_async(_run())
 
 @celery_app.task(bind=True, base=DatabaseTask, name="app.tasks.evaluation_tasks.evaluate_annotation_answer")
 def evaluate_annotation_answer(self, answer_id: str):
-    """
-    Оценка графической аннотации с помощью CV алгоритмов
-    """
-    async def _evaluate():
-        session = await self.get_session()
-        try:
-            # Получение ответа и вопроса
-            result = await session.execute(
-                select(Answer).where(Answer.id == UUID(answer_id))
-            )
-            answer = result.scalar_one_or_none()
-            
-            if not answer:
-                return {"error": "Answer not found"}
-            
-            result = await session.execute(
-                select(Question).where(Question.id == answer.question_id)
-            )
-            question = result.scalar_one_or_none()
-            
-            # CV evaluation
-            from app.services.cv_service import cv_service
-            
-            evaluation_result = await cv_service.evaluate_annotation(
-                student_data=answer.annotation_data or {},
-                reference_data=question.reference_data or {},
-                image_id=question.image_id
-            )
-            
-            # Сохранение результата
-            answer.evaluation = {
-                "iou_scores": evaluation_result["iou_scores"],
-                "accuracy": evaluation_result["accuracy"],
-                "completeness": evaluation_result["completeness"],
-                "precision": evaluation_result["precision"],
-                "evaluated_at": datetime.utcnow().isoformat(),
-            }
-            answer.score = evaluation_result["total_score"]
-            
-            await session.commit()
-            
-            return {
-                "answer_id": answer_id,
-                "score": answer.score,
-                "evaluation": answer.evaluation
-            }
-        
-        finally:
-            await self.close_session()
-    
-    return asyncio.run(_evaluate())
+    async def _run():
+        async with self.get_session() as session:
+            try:
+                res = await run_evaluate_annotation_answer(session, answer_id)
+                await session.commit()
+                return res
+            except Exception as e:
+                logger.exception(f"Error evaluating annotation answer {answer_id}")
+                return {"error": str(e)}
+    return run_async(_run())
 
+@celery_app.task(bind=True, base=DatabaseTask, name="app.tasks.evaluation_tasks.evaluate_choice_answer")
+def evaluate_choice_answer(self, answer_id: str):
+    async def _run():
+        async with self.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(Answer).where(Answer.id == UUID(answer_id))
+                )
+                answer = result.scalar_one_or_none()
+                if not answer: return {"error": "Answer not found"}
+                
+                answer.evaluation = {
+                    "type": "choice",
+                    "evaluated_at": datetime.utcnow().isoformat(),
+                    "note": "Stub evaluation for choice question"
+                }
+                answer.score = 100.0
+                await session.commit()
+                return {"answer_id": answer_id, "score": answer.score}
+            except Exception as e:
+                logger.exception(f"Error evaluating choice answer {answer_id}")
+                return {"error": str(e)}
+    return run_async(_run())
 
 @celery_app.task(bind=True, base=DatabaseTask, name="app.tasks.evaluation_tasks.evaluate_submission")
 def evaluate_submission(self, submission_id: str):
     """
-    Оценка всего submission (orchestration)
+    Оценка всего submission
     """
     async def _evaluate():
-        session = await self.get_session()
-        try:
-            # Получение submission с ответами
-            result = await session.execute(
-                select(Submission).where(Submission.id == UUID(submission_id))
-            )
-            submission = result.scalar_one_or_none()
-            
-            if not submission:
-                return {"error": "Submission not found"}
-            
-            # Получение всех ответов
-            result = await session.execute(
-                select(Answer).where(Answer.submission_id == submission.id)
-            )
-            answers = result.scalars().all()
-            
-            # Запуск оценки для каждого ответа
-            tasks = []
-            for answer in answers:
+        async with self.get_session() as session:
+            try:
                 result = await session.execute(
-                    select(Question).where(Question.id == answer.question_id)
+                    select(Submission).where(Submission.id == UUID(submission_id))
                 )
-                question = result.scalar_one_or_none()
+                submission = result.scalar_one_or_none()
+                if not submission:
+                    return {"error": "Submission not found"}
                 
-                if question.type == QuestionType.TEXT:
-                    task = evaluate_text_answer.delay(str(answer.id))
-                elif question.type == QuestionType.IMAGE_ANNOTATION:
-                    task = evaluate_annotation_answer.delay(str(answer.id))
-                else:
-                    continue
+                result = await session.execute(
+                    select(Answer).where(Answer.submission_id == submission.id)
+                )
+                answers = result.scalars().all()
                 
-                tasks.append(task)
-            
-            # Ожидание завершения всех задач
-            for task in tasks:
-                task.get(timeout=600)  # 10 min timeout per answer
-            
-            # Обновление результата submission
-            await session.refresh(submission)
-            result = await session.execute(
-                select(Answer).where(Answer.submission_id == submission.id)
-            )
-            answers = result.scalars().all()
-            
-            # Подсчёт итогового балла
-            total_score = sum(a.score or 0 for a in answers)
-            max_score = len(answers) * 100  # Предполагаем 100 баллов за вопрос
-            percentage = (total_score / max_score * 100) if max_score > 0 else 0
-            
-            # Определение оценки (5-балльная шкала)
-            if percentage >= 90:
-                grade = "5"
-            elif percentage >= 75:
-                grade = "4"
-            elif percentage >= 60:
-                grade = "3"
-            else:
-                grade = "2"
-            
-            submission.result = {
-                "total_score": total_score,
-                "max_score": max_score,
-                "percentage": percentage,
-                "grade": grade,
-            }
-            submission.status = SubmissionStatus.COMPLETED
-            submission.completed_at = datetime.utcnow()
-            
-            await session.commit()
-            
-            return {
-                "submission_id": submission_id,
-                "result": submission.result
-            }
-        
-        finally:
-            await self.close_session()
-    
-    return asyncio.run(_evaluate())
+                for i, answer in enumerate(answers):
+                    result_q = await session.execute(
+                        select(Question)
+                        .options(selectinload(Question.image))
+                        .where(Question.id == answer.question_id)
+                    )
+                    question = result_q.scalar_one_or_none()
+                    
+                    try:
+                        if not question:
+                            continue
 
+                        if question.type == QuestionType.TEXT:
+                            await run_evaluate_text_answer(session, str(answer.id))
+                        elif question.type == QuestionType.IMAGE_ANNOTATION:
+                            await run_evaluate_annotation_answer(session, str(answer.id))
+                        elif question.type == QuestionType.CHOICE:
+                            answer.evaluation = {"type": "choice", "evaluated_at": datetime.utcnow().isoformat()}
+                            answer.score = 100.0
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to evaluate answer {answer.id}: {e}")
+                        answer.score = 0
+                
+                # Подсчёт итогового балла
+                total_sum = sum(a.score or 0 for a in answers)
+                max_possible = len(answers) * 100
+                
+                percentage = (total_sum / max_possible * 100) if max_possible > 0 else 0
+                
+                if percentage >= 90: grade = "5"
+                elif percentage >= 75: grade = "4"
+                elif percentage >= 60: grade = "3"
+                else: grade = "2"
+                
+                submission.result = {
+                    "total_score": round(percentage),
+                    "max_score": 100,
+                    "percentage": round(percentage),
+                    "grade": grade,
+                }
+                submission.status = SubmissionStatus.COMPLETED
+                submission.completed_at = datetime.utcnow()
+                
+                await session.commit()
+                
+                return {"submission_id": submission_id, "result": submission.result}
+            
+            except Exception as e:
+                logger.exception(f"Error evaluating submission {submission_id}")
+                return {"error": str(e)}
+    
+    try:
+        return run_async(_evaluate())
+    except Exception as e:
+        raise

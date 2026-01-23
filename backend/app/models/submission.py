@@ -65,15 +65,24 @@ class Submission(Base):
     
     @property
     def test_id(self):
-        return self.variant.test_id if self.variant else None
+        try:
+            return self.variant.test_id if self.variant else None
+        except Exception:
+            return None
     
     @property
     def test_title(self):
-        return self.variant.test.title if self.variant and self.variant.test else None
+        try:
+            return self.variant.test.title if self.variant and self.variant.test else None
+        except Exception:
+            return None
     
     @property
     def teacher(self):
-        return self.variant.test.author if self.variant and self.variant.test else None
+        try:
+            return self.variant.test.author if self.variant and self.variant.test else None
+        except Exception:
+            return None
     
     def __repr__(self):
         return f"<Submission {self.id} ({self.status})>"

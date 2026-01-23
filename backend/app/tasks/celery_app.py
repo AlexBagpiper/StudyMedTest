@@ -32,9 +32,10 @@ celery_app.conf.update(
 
 # Routes для разных типов задач
 celery_app.conf.task_routes = {
-    "app.tasks.evaluation_tasks.evaluate_text_answer": {"queue": "llm"},
-    "app.tasks.evaluation_tasks.evaluate_annotation_answer": {"queue": "cv"},
-    "app.tasks.evaluation_tasks.evaluate_submission": {"queue": "default"},
+    "app.tasks.evaluation_tasks.evaluate_text_answer": {"queue": "celery"},
+    "app.tasks.evaluation_tasks.evaluate_annotation_answer": {"queue": "celery"},
+    "app.tasks.evaluation_tasks.evaluate_choice_answer": {"queue": "celery"},
+    "app.tasks.evaluation_tasks.evaluate_submission": {"queue": "celery"},
 }
 
 if __name__ == "__main__":

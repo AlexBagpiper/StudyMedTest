@@ -24,69 +24,113 @@ class CVService:
         image_id: Optional[UUID] = None
     ) -> Dict[str, Any]:
         """
-        Оценка аннотации студента в кастомном формате
+        Оценка аннотации студента
+        
+        Алгоритм IoU (Intersection over Union): Сравнение полигонов, нарисованных студентом, 
+        с эталонными аннотациями в формате COCO.
+        
+        Метрики качества:
+        - IoU (Accuracy): Точность попадания (50%)
+        - Recall (Completeness): Полнота выделения всех объектов (30%)
+        - Precision: Отсутствие лишних элементов (20%)
         """
-        # Извлечение аннотаций
+        # Извлечение аннотаций студента
         student_annotations = student_data.get("annotations", [])
+        
+        # Извлечение аннотаций эталона (COCO формат)
         reference_annotations = reference_data.get("annotations", [])
         
         if not reference_annotations:
             return {
-                "iou_scores": [],
-                "accuracy": 0,
-                "completeness": 0,
+                "iou": 0,
+                "recall": 0,
                 "precision": 0,
-                "total_score": 0
+                "total_score": 0,
+                "iou_scores": []
             }
         
-        # Группировка по label_id для корректного сравнения одинаковых структур
-        ref_by_label = {}
+        # Конвертация эталона в полигоны
+        ref_polys = []
         for ann in reference_annotations:
-            lid = ann.get("label_id")
-            if lid not in ref_by_label: ref_by_label[lid] = []
-            ref_by_label[lid].append(self._custom_to_polygon(ann))
-            
-        stud_by_label = {}
+            poly = self._coco_to_polygon(ann)
+            if poly and poly.is_valid:
+                ref_polys.append(poly)
+        
+        # Конвертация ответов студента в полигоны
+        stud_polys = []
         for ann in student_annotations:
-            lid = ann.get("label_id")
-            if lid not in stud_by_label: stud_by_label[lid] = []
-            stud_by_label[lid].append(self._custom_to_polygon(ann))
+            poly = self._custom_to_polygon(ann)
+            if poly and poly.is_valid:
+                stud_polys.append(poly)
+        
+        if not stud_polys:
+            return {
+                "iou": 0,
+                "recall": 0,
+                "precision": 0,
+                "total_score": 0,
+                "iou_scores": []
+            }
             
+        # Матчинг полигонов
+        matches = self._match_polygons(stud_polys, ref_polys)
+        
         all_iou_scores = []
-        total_ref_count = len(reference_annotations)
-        total_matches = 0
+        for s_poly, r_poly in matches:
+            iou = self._calculate_iou(s_poly, r_poly)
+            all_iou_scores.append(iou)
         
-        # Сравниваем аннотации для каждой метки отдельно
-        for label_id, ref_polys in ref_by_label.items():
-            stud_polys = stud_by_label.get(label_id, [])
-            matches = self._match_polygons(stud_polys, ref_polys)
-            total_matches += len(matches)
-            
-            for s_poly, r_poly in matches:
-                all_iou_scores.append(self._calculate_iou(s_poly, r_poly))
+        # Расчет метрик
+        # 1. Точность попадания (IoU) - средний IoU для найденных объектов
+        avg_iou = np.mean(all_iou_scores) if all_iou_scores else 0
         
-        # Метрики
-        accuracy = np.mean(all_iou_scores) if all_iou_scores else 0
-        completeness = total_matches / total_ref_count if total_ref_count else 0
+        # 2. Полнота (Recall) - доля найденных эталонных объектов (IoU > 0.5)
+        true_positives = sum(1 for iou in all_iou_scores if iou >= 0.5)
+        recall = true_positives / len(ref_polys) if ref_polys else 0
         
-        # Precision
-        true_positives = sum(1 for iou in all_iou_scores if iou > 0.5)
-        precision = true_positives / len(student_annotations) if student_annotations else 0
+        # 3. Прецизионность (Precision) - отсутствие лишних элементов
+        # Доля правильных объектов среди всех нарисованных студентом
+        precision = true_positives / len(stud_polys) if stud_polys else 0
         
+        # Итоговый взвешенный балл: 50% IoU + 30% Recall + 20% Precision
         total_score = (
-            accuracy * 0.5 + 
-            completeness * 0.3 + 
+            avg_iou * 0.5 + 
+            recall * 0.3 + 
             precision * 0.2
         ) * 100
         
         return {
-            "iou_scores": [round(iou, 3) for iou in all_iou_scores],
-            "accuracy": round(accuracy, 3),
-            "completeness": round(completeness, 3),
+            "iou": round(avg_iou, 3),
+            "recall": round(recall, 3),
             "precision": round(precision, 3),
-            "total_score": round(total_score, 2)
+            "total_score": round(total_score, 2),
+            "iou_scores": [round(iou, 3) for iou in all_iou_scores]
         }
     
+    def _coco_to_polygon(self, ann: Dict[str, Any]) -> Optional[Polygon]:
+        """
+        Конвертация COCO аннотации в Shapely Polygon
+        """
+        try:
+            segmentation = ann.get("segmentation")
+            if segmentation:
+                if isinstance(segmentation, list) and len(segmentation) > 0:
+                    pts = segmentation[0]
+                    if len(pts) >= 6: # Минимум 3 точки
+                        coords = [(pts[i], pts[i+1]) for i in range(0, len(pts), 2)]
+                        return Polygon(coords)
+            
+            # Fallback to bbox
+            bbox = ann.get("bbox")
+            if bbox and len(bbox) == 4:
+                x, y, w, h = bbox
+                return Polygon([(x, y), (x+w, y), (x+w, y+h), (x, y+h)])
+                
+            return None
+        except Exception as e:
+            print(f"Error converting COCO to polygon: {e}")
+            return None
+
     def _custom_to_polygon(self, annotation: Dict[str, Any]) -> Optional[Polygon]:
         """
         Конвертация кастомной аннотации в Shapely Polygon
@@ -96,8 +140,9 @@ class CVService:
             
             if ann_type == 'polygon' and "points" in annotation:
                 points = annotation["points"]
-                coords = [(points[i], points[i+1]) for i in range(0, len(points), 2)]
-                return Polygon(coords)
+                if len(points) >= 6:
+                    coords = [(points[i], points[i+1]) for i in range(0, len(points), 2)]
+                    return Polygon(coords)
                 
             elif ann_type == 'rectangle' and "bbox" in annotation:
                 x, y, w, h = annotation["bbox"]
@@ -106,15 +151,9 @@ class CVService:
             elif ann_type == 'ellipse' and "center" in annotation and "radius" in annotation:
                 cx, cy = annotation["center"]
                 rx, ry = annotation["radius"]
-                # Аппроксимация эллипса полигоном
                 t = np.linspace(0, 2*np.pi, 32)
                 coords = [(cx + rx*np.cos(ti), cy + ry*np.sin(ti)) for ti in t]
                 return Polygon(coords)
-                
-            elif ann_type == 'point' and "center" in annotation:
-                cx, cy = annotation["center"]
-                # Точка как маленький круг для IoU
-                return Polygon.from_bounds(cx-1, cy-1, cx+1, cy+1)
                 
             return None
         except Exception as e:
@@ -128,6 +167,11 @@ class CVService:
         try:
             if not poly1 or not poly2:
                 return 0.0
+            
+            if not poly1.is_valid:
+                poly1 = poly1.buffer(0)
+            if not poly2.is_valid:
+                poly2 = poly2.buffer(0)
             
             if not poly1.is_valid or not poly2.is_valid:
                 return 0.0
@@ -148,10 +192,6 @@ class CVService:
     ) -> List[tuple]:
         """
         Matching полигонов используя жадный алгоритм
-        (упрощённая версия Hungarian algorithm)
-        
-        Returns:
-            List[(student_poly, ref_poly), ...]
         """
         matches = []
         used_reference = set()
@@ -179,24 +219,7 @@ class CVService:
                 used_reference.add(best_ref_idx)
         
         return matches
-    
-    def validate_coco_format(self, coco_data: Dict[str, Any]) -> bool:
-        """
-        Валидация COCO формата
-        """
-        required_keys = ["images", "annotations", "categories"]
-        
-        if not all(key in coco_data for key in required_keys):
-            return False
-        
-        # Проверка структуры аннотаций
-        for ann in coco_data.get("annotations", []):
-            if not all(key in ann for key in ["id", "image_id", "category_id", "segmentation"]):
-                return False
-        
-        return True
 
 
 # Singleton
 cv_service = CVService()
-

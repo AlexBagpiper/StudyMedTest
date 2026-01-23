@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { 
   Box, 
   Typography, 
@@ -49,10 +49,24 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
     }
   }, [readOnly, setMode])
 
+  // Track previous data to prevent infinite loops
+  const prevInitialDataRef = useRef<string | null>(null)
+  const prevOnChangeDataRef = useRef<string | null>(null)
+  
   useEffect(() => {
+    // Serialize for comparison to detect actual changes (prevents infinite loops)
+    const serialized = initialData ? JSON.stringify({
+      labels: initialData.labels?.map(l => l.id),
+      annotations: initialData.annotations?.map(a => a.id)
+    }) : null
+    
+    if (serialized === prevInitialDataRef.current) {
+      return
+    }
+    prevInitialDataRef.current = serialized
+    
     if (initialData) {
       setData(initialData)
-      // Если скрываем метки и нет активной, выбираем первую
       if (hideLabels && !activeLabelId && initialData.labels?.length > 0) {
         setActiveLabelId(initialData.labels[0].id)
       }
@@ -61,9 +75,19 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
     }
   }, [initialData, setData, reset, hideLabels, setActiveLabelId])
 
-  // Сообщаем родителю об изменениях
+  // Сообщаем родителю об изменениях (с защитой от бесконечных циклов)
   useEffect(() => {
     if (onChange && !readOnly) {
+      const serialized = JSON.stringify({
+        labels: labels.map(l => ({ id: l.id, name: l.name, color: l.color })),
+        annotations: annotations.map(a => ({ id: a.id, label_id: a.label_id, type: a.type, points: a.points }))
+      })
+      
+      if (serialized === prevOnChangeDataRef.current) {
+        return
+      }
+      prevOnChangeDataRef.current = serialized
+      
       onChange({ labels, annotations })
     }
   }, [labels, annotations, onChange, readOnly])

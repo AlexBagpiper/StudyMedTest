@@ -37,21 +37,35 @@ export default function SubmissionDetailsPage() {
 
   useEffect(() => {
     loadSubmission()
-  }, [id])
+    
+    // Добавляем поллинг если статус "evaluating" или "in_progress"
+    let interval: any
+    if (submission?.status === 'evaluating' || submission?.status === 'in_progress') {
+      interval = setInterval(() => {
+        loadSubmission(false)
+      }, 3000)
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [id, submission?.status])
 
-  const loadSubmission = async () => {
+  const loadSubmission = async (showLoading = true) => {
     try {
-      setIsLoading(true)
+      if (showLoading) setIsLoading(true)
       const subRes = await api.get(`/submissions/${id}`)
       setSubmission(subRes.data)
     } catch (err: any) {
       console.error('Failed to load submission:', err)
-      setErrorDialog({
-        open: true,
-        message: err.response?.data?.detail || t('submissions.error.load')
-      })
+      if (showLoading) {
+        setErrorDialog({
+          open: true,
+          message: err.response?.data?.detail || t('submissions.error.load')
+        })
+      }
     } finally {
-      setIsLoading(false)
+      if (showLoading) setIsLoading(false)
     }
   }
 

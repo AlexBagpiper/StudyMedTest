@@ -8,6 +8,7 @@ import {
   CircularProgress,
   TextField,
   Chip,
+  Grid,
 } from '@mui/material'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../lib/api'
@@ -174,6 +175,84 @@ export default function SubmissionReviewPage() {
             />
           </Box>
         )}
+
+        {/* Результаты оценки */}
+        {(() => {
+          const currentAnswer = submission?.answers?.find((a: any) => a.question_id === currentQuestion?.id);
+          const evaluation = currentAnswer?.evaluation;
+          
+          if (!evaluation) return null;
+
+          if (currentQuestion?.type === 'image_annotation') {
+            return (
+              <Box sx={{ mt: 4, p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom color="primary">
+                  Детализация оценки
+                </Typography>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} sm={3}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Точность
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      {evaluation.iou !== undefined ? `${(evaluation.iou * 100).toFixed(0)}%` : '—'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Вес: 50%</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Полнота
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      {evaluation.recall !== undefined ? `${(evaluation.recall * 100).toFixed(0)}%` : '—'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Вес: 30%</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Достоверность
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      {evaluation.precision !== undefined ? `${(evaluation.precision * 100).toFixed(0)}%` : '—'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">Вес: 20%</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={3}>
+                    <Typography variant="caption" color="primary" fontWeight="bold" display="block">
+                      Итоговый балл
+                    </Typography>
+                    <Typography variant="h4" fontWeight="bold" color="primary">
+                      {currentAnswer.score !== undefined ? currentAnswer.score.toFixed(0) : '—'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+            );
+          }
+
+          if (currentQuestion?.type === 'text') {
+            return (
+              <Box sx={{ mt: 4, p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
+                <Typography variant="h6" fontWeight="bold" gutterBottom color="primary">
+                  Результаты LLM-оценки
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
+                  {evaluation.feedback}
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Модель: {evaluation.llm_provider}
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold" color="primary">
+                    Балл: {currentAnswer.score !== undefined ? currentAnswer.score.toFixed(0) : '—'}
+                  </Typography>
+                </Box>
+              </Box>
+            );
+          }
+
+          return null;
+        })()}
       </Paper>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>

@@ -61,7 +61,7 @@ export interface TestVariant {
   created_at: string
 }
 
-export type QuestionType = 'text' | 'image_annotation'
+export type QuestionType = 'text' | 'image_annotation' | 'choice'
 
 export interface ImageAsset {
   id: string

@@ -273,6 +273,9 @@ async def submit_test(
         
         # Проверка статуса
         if submission.status != SubmissionStatus.IN_PROGRESS:
+            # Если уже завершено или оценивается, просто возвращаем текущее состояние
+            if submission.status in [SubmissionStatus.EVALUATING, SubmissionStatus.COMPLETED]:
+                return submission
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Submission already submitted"
@@ -317,11 +320,14 @@ async def submit_test(
         
         # Добавляем time_limit в объект для схемы
         try:
-            submission.time_limit = submission.variant.test.settings.get("time_limit")
+            val = submission.variant.test.settings.get("time_limit")
+            submission.time_limit = int(val) if val is not None else None
         except Exception:
             submission.time_limit = None
         
-        return submission
+        # Явно конвертируем в схему ВНУТРИ сессии
+        from app.schemas.submission import SubmissionResponse
+        return SubmissionResponse.model_validate(submission)
     except HTTPException:
         raise
     except Exception as e:

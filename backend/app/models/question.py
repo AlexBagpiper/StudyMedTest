@@ -19,6 +19,7 @@ class QuestionType(str, enum.Enum):
     """
     TEXT = "text"  # Текстовый открытый вопрос
     IMAGE_ANNOTATION = "image_annotation"  # Графическая аннотация
+    CHOICE = "choice"  # Тестовый вопрос (выбор варианта)
 
 
 class Question(Base):
