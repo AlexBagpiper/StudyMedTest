@@ -418,7 +418,7 @@ export default function LLMSettings() {
 
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 3, bgcolor: '#f8fafc', mb: 3 }}>
-            <Typography variant="h6" gutterBottom>Информация по стратегиям</Typography>
+            <Typography variant="h6" gutterBottom>Справка</Typography>
             <Typography variant="body2" paragraph>
               <strong>YandexGPT:</strong> стабильное облако Яндекса. Требует Folder ID и API Key.
             </Typography>

@@ -229,7 +229,7 @@ export default function CVSettings() {
 
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 3, bgcolor: '#f8fafc' }}>
-            <Typography variant="h6" gutterBottom>Помощь</Typography>
+            <Typography variant="h6" gutterBottom>Справка</Typography>
             <Typography variant="body2" paragraph>
               <strong>IoU (Intersection over Union)</strong> — основная метрика сравнения двух областей. 
               Рассчитывается как площадь пересечения деленная на площадь объединения (от 0.0 до 1.0).
