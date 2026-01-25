@@ -36,8 +36,8 @@ async def test_cv_evaluation():
     
     result_perfect = await cv_service.evaluate_annotation(student_perfect, reference_data)
     print(f"\nPerfect Match Result:")
-    print(f"Accuracy (IoU): {result_perfect['accuracy']}")
-    print(f"Completeness (Recall): {result_perfect['completeness']}")
+    print(f"IoU: {result_perfect['iou']}")
+    print(f"Recall: {result_perfect['recall']}")
     print(f"Precision: {result_perfect['precision']}")
     print(f"Total Score: {result_perfect['total_score']}")
     
@@ -60,8 +60,8 @@ async def test_cv_evaluation():
     
     result_partial = await cv_service.evaluate_annotation(student_partial, reference_data)
     print(f"\nPartial Match Result (IoU ~0.33):")
-    print(f"Accuracy: {result_partial['accuracy']}")
-    print(f"Completeness: {result_partial['completeness']}")
+    print(f"IoU: {result_partial['iou']}")
+    print(f"Recall: {result_partial['recall']}")
     print(f"Precision: {result_partial['precision']}")
     print(f"Total Score: {result_partial['total_score']}")
     
@@ -85,10 +85,37 @@ async def test_cv_evaluation():
     
     result_extra = await cv_service.evaluate_annotation(student_extra, reference_data)
     print(f"\nExtra Annotation Result (Precision 0.5):")
-    print(f"Accuracy: {result_extra['accuracy']}")
-    print(f"Completeness: {result_extra['completeness']}")
+    print(f"IoU: {result_extra['iou']}")
+    print(f"Recall: {result_extra['recall']}")
     print(f"Precision: {result_extra['precision']}")
     print(f"Total Score: {result_extra['total_score']}")
+
+    # 5. Ответ студента - дубликаты (должны дедуплицироваться)
+    student_duplicates = {
+        "annotations": [
+            {
+                "id": "stud1",
+                "label_id": "label_tumor",
+                "type": "rectangle",
+                "bbox": [10, 10, 10, 10]
+            },
+            {
+                "id": "stud1_dup",
+                "label_id": "label_tumor",
+                "type": "rectangle",
+                "bbox": [10.01, 10.01, 10, 10] # Почти идентичен
+            }
+        ]
+    }
+    
+    result_dup = await cv_service.evaluate_annotation(student_duplicates, reference_data)
+    print(f"\nDuplicate Annotation Result (Should be 100 due to dedup):")
+    print(f"IoU: {result_dup['iou']}")
+    print(f"Recall: {result_dup['recall']}")
+    print(f"Precision: {result_dup['precision']}")
+    print(f"Total Score: {result_dup['total_score']}")
+    
+    assert result_dup['total_score'] == 100.0
 
 if __name__ == "__main__":
     asyncio.run(test_cv_evaluation())

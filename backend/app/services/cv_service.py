@@ -3,12 +3,15 @@ Computer Vision Service - оценка аннотаций в формате COCO
 """
 
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 import numpy as np
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
+
+logger = logging.getLogger(__name__)
 
 
 class CVService:
@@ -30,16 +33,19 @@ class CVService:
         Оценка аннотации студента
         """
         # Настройки из БД или дефолтные
-        iou_weight = config.get("iou_weight", 0.5) if config else 0.5
-        recall_weight = config.get("recall_weight", 0.3) if config else 0.3
-        precision_weight = config.get("precision_weight", 0.2) if config else 0.2
-        iou_threshold = config.get("iou_threshold", 0.5) if config else 0.5
+        config = config or {}
+        iou_weight = config.get("iou_weight", 0.5)
+        recall_weight = config.get("recall_weight", 0.3)
+        precision_weight = config.get("precision_weight", 0.2)
+        iou_threshold = config.get("iou_threshold", 0.5)
 
         # Извлечение аннотаций студента
         student_annotations = student_data.get("annotations", [])
         
         # Извлечение аннотаций эталона
         reference_annotations = reference_data.get("annotations", [])
+        
+        logger.info(f"Evaluating annotation: stud_count={len(student_annotations)}, ref_count={len(reference_annotations)}")
         
         if not reference_annotations:
             return {
@@ -50,20 +56,36 @@ class CVService:
                 "iou_scores": []
             }
         
-        # Конвертация эталона в полигоны (поддерживаем оба формата: COCO и наш внутренний)
+        # Конвертация эталона в полигоны
         ref_polys = []
         for ann in reference_annotations:
             poly = self._any_to_polygon(ann)
-            if poly and poly.is_valid:
+            if poly and poly.is_valid and poly.area > 0.1:
                 ref_polys.append(poly)
         
-        # Конвертация ответов студента в полигоны
+        # Конвертация ответов студента в полигоны с дедупликацией
         stud_polys = []
+        seen_polys = [] # Для простой дедупликации по площади и центру
+        
         for ann in student_annotations:
             poly = self._any_to_polygon(ann)
-            if poly and poly.is_valid:
-                stud_polys.append(poly)
+            if poly and poly.is_valid and poly.area > 0.1:
+                # Простая проверка на дубликаты (если полигоны почти идентичны)
+                is_duplicate = False
+                for existing_poly in seen_polys:
+                    # Если IoU между двумя полигонами студента > 0.99 - это дубликат
+                    if self._calculate_iou(poly, existing_poly) > 0.99:
+                        is_duplicate = True
+                        break
+                
+                if not is_duplicate:
+                    stud_polys.append(poly)
+                    seen_polys.append(poly)
+                else:
+                    logger.warning("Duplicate student polygon detected and ignored")
         
+        logger.info(f"Processed polys: stud_valid={len(stud_polys)}, ref_valid={len(ref_polys)}")
+
         if not stud_polys:
             return {
                 "iou": 0,
@@ -100,12 +122,14 @@ class CVService:
             precision * precision_weight
         ) * 100
         
+        logger.info(f"Evaluation results: iou={avg_iou:.3f}, recall={recall:.3f}, precision={precision:.3f}, score={total_score:.2f}")
+
         return {
-            "iou": round(avg_iou, 3),
-            "recall": round(recall, 3),
-            "precision": round(precision, 3),
-            "total_score": round(total_score, 2),
-            "iou_scores": [round(iou, 3) for iou in all_iou_scores]
+            "iou": round(float(avg_iou), 3),
+            "recall": round(float(recall), 3),
+            "precision": round(float(precision), 3),
+            "total_score": round(float(total_score), 2),
+            "iou_scores": [round(float(iou), 3) for iou in all_iou_scores]
         }
 
     def _any_to_polygon(self, ann: Dict[str, Any]) -> Optional[Polygon]:
