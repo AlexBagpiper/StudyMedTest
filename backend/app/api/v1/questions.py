@@ -23,6 +23,15 @@ from app.models.submission import Answer
 from app.schemas.question import QuestionCreate, QuestionUpdate, QuestionResponse, ImageAssetResponse
 from app.schemas.annotation import AnnotationData
 
+# #region agent log
+import json, time
+def log_debug(msg, data=None):
+    try:
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"location": "backend/app/api/v1/questions.py", "message": msg, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "runId": "debug_run_1"}) + "\n")
+    except: pass
+# #endregion
+
 router = APIRouter()
 
 
@@ -166,12 +175,15 @@ async def get_question(
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
     # Используем копирование, чтобы не повредить объект в сессии
     if current_user.role == Role.STUDENT:
+        log_debug("Hiding data for student", {"ref_data_keys": list(question.reference_data.keys()) if question.reference_data else None})
         if question.reference_data and isinstance(question.reference_data, dict):
             question.reference_data = {k: v for k, v in question.reference_data.items() if k != "annotations"}
+            log_debug("Reference data after filtering", {"keys": list(question.reference_data.keys())})
         
         if question.image and question.image.coco_annotations:
             # Важно: создаем новый дикт, не трогая оригинал в базе
             question.image.coco_annotations = {k: v for k, v in question.image.coco_annotations.items() if k != "annotations"}
+            log_debug("COCO annotations after filtering", {"keys": list(question.image.coco_annotations.keys())})
             
         question.scoring_criteria = None
     
@@ -350,13 +362,22 @@ async def get_question_labels(
             detail="Question not found"
         )
     
+    log_debug("get_question_labels called", {
+        "has_ref_data": question.reference_data is not None,
+        "ref_data_keys": list(question.reference_data.keys()) if isinstance(question.reference_data, dict) else None,
+        "has_image": question.image is not None,
+        "has_coco": question.image.coco_annotations is not None if question.image else False
+    })
+
     # 1. Если есть в reference_data (сохраненные через редактор)
     if question.reference_data and "labels" in question.reference_data:
+        log_debug("Returning labels from reference_data", {"count": len(question.reference_data["labels"])})
         return question.reference_data["labels"]
         
     # 2. Если нет в reference_data, берем категории из COCO аннотаций изображения
     if question.image and question.image.coco_annotations:
         categories = question.image.coco_annotations.get("categories", [])
+        log_debug("Returning labels from coco_annotations", {"count": len(categories)})
         # Приводим к формату {id, name, color}
         labels = []
 

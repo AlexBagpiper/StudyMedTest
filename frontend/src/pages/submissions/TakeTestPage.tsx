@@ -56,6 +56,9 @@ export default function TakeTestPage() {
 
   useEffect(() => {
     if (currentQuestion?.type === 'image_annotation') {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TakeTestPage.tsx:45',message:'Loading labels for question',data:{questionId:currentQuestion.id},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_1',hypothesisId:'V'})}).catch(()=>{});
+      // #endregion
       loadLabels(currentQuestion.id)
     }
   }, [currentQuestion])
@@ -63,6 +66,9 @@ export default function TakeTestPage() {
   const loadLabels = async (questionId: string) => {
     try {
       const res = await api.get(`/questions/${questionId}/labels`)
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TakeTestPage.tsx:52',message:'Labels received from API',data:{count:res.data.length,labels:res.data},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_1',hypothesisId:'V'})}).catch(()=>{});
+      // #endregion
       setCurrentLabels(res.data)
     } catch (err) {
       console.error('Failed to load labels:', err)
