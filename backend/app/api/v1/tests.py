@@ -217,22 +217,28 @@ async def list_tests(
             query_fallback = query_fallback.offset(skip).limit(limit).order_by(Test.created_at.desc())
             
             result = await db.execute(query_fallback)
-            # Получаем результаты как кортежи и создаем объекты Test вручную
+            # Получаем результаты как кортежи и создаем объекты Test через Row mapping
             rows = result.all()
             tests = []
             for row in rows:
-                # Создаем объект Test с явным указанием атрибутов
+                # Используем Row._mapping для создания объекта Test
+                # Создаем словарь из row и используем его для создания объекта
+                test_dict = {
+                    'id': row[0],
+                    'author_id': row[1],
+                    'title': row[2],
+                    'description': row[3],
+                    'settings': row[4] if row[4] else {},
+                    'status': row[5],
+                    'published_at': row[6],
+                    'created_at': row[7],
+                    'updated_at': row[8],
+                    'structure': None
+                }
+                # Создаем объект Test через from_dict или напрямую устанавливаем атрибуты
                 test = Test()
-                test.id = row[0]
-                test.author_id = row[1]
-                test.title = row[2]
-                test.description = row[3]
-                test.settings = row[4] if row[4] else {}
-                test.status = row[5]
-                test.published_at = row[6]
-                test.created_at = row[7]
-                test.updated_at = row[8]
-                test.structure = None  # Устанавливаем None, так как колонки нет
+                for key, value in test_dict.items():
+                    setattr(test, key, value)
                 tests.append(test)
             print(f"[DEBUG] list_tests: Fallback query executed, found {len(tests)} tests")
         else:
