@@ -67,12 +67,19 @@ async def list_questions(
                 expires_seconds=3600
             )
         
-        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем эталонные данные от студентов
+        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
         if current_user.role == Role.STUDENT:
-            question.reference_data = None
+            if question.reference_data and isinstance(question.reference_data, dict):
+                ref_copy = dict(question.reference_data)
+                ref_copy.pop("annotations", None)
+                question.reference_data = ref_copy
+            
+            if question.image and question.image.coco_annotations:
+                coco_copy = dict(question.image.coco_annotations)
+                coco_copy.pop("annotations", None)
+                question.image.coco_annotations = coco_copy
+                
             question.scoring_criteria = None
-            if question.image:
-                question.image.coco_annotations = None
     
     return questions
 
@@ -160,12 +167,19 @@ async def get_question(
             expires_seconds=3600
         )
     
-    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем эталонные данные от студентов
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
     if current_user.role == Role.STUDENT:
-        question.reference_data = None
+        if question.reference_data and isinstance(question.reference_data, dict):
+            ref_copy = dict(question.reference_data)
+            ref_copy.pop("annotations", None)
+            question.reference_data = ref_copy
+        
+        if question.image and question.image.coco_annotations:
+            coco_copy = dict(question.image.coco_annotations)
+            coco_copy.pop("annotations", None)
+            question.image.coco_annotations = coco_copy
+            
         question.scoring_criteria = None
-        if question.image:
-            question.image.coco_annotations = None
     
     return question
 
