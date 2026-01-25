@@ -27,11 +27,13 @@ from app.schemas.submission import (
 )
 
 # #region agent log
-import json, time
+import json, time, os
 def log_debug(msg, data=None):
     try:
-        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
-            f.write(json.dumps({"location": "backend/app/api/v1/submissions.py", "message": msg, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "runId": "debug_run_1"}) + "\n")
+        payload = json.dumps({"location": "backend/app/api/v1/submissions.py", "message": msg, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "runId": "debug_run_1"})
+        print(f"AGENT_LOG: {payload}")
+        with open('/tmp/debug.log', 'a', encoding='utf-8') as f:
+            f.write(payload + "\n")
     except: pass
 # #endregion
 
