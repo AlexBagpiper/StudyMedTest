@@ -76,15 +76,20 @@ async def list_questions(
                 expires_seconds=3600
             )
         
-        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
-        if current_user.role == Role.STUDENT:
-            if question.reference_data and isinstance(question.reference_data, dict):
-                question.reference_data = {k: v for k, v in question.reference_data.items() if k != "annotations"}
-            
-            if question.image and question.image.coco_annotations:
-                question.image.coco_annotations = {k: v for k, v in question.image.coco_annotations.items() if k != "annotations"}
-                
-            question.scoring_criteria = None
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
+    if current_user.role == Role.STUDENT:
+        # Для списка вопросов (хотя студентам он запрещен, на всякий случай)
+        cleaned_questions = []
+        from app.schemas.question import QuestionResponse
+        for question in questions:
+            resp_obj = QuestionResponse.model_validate(question)
+            if resp_obj.reference_data and isinstance(resp_obj.reference_data, dict):
+                resp_obj.reference_data = {k: v for k, v in resp_obj.reference_data.items() if k != "annotations"}
+            if resp_obj.image and resp_obj.image.coco_annotations and isinstance(resp_obj.image.coco_annotations, dict):
+                resp_obj.image.coco_annotations = {k: v for k, v in resp_obj.image.coco_annotations.items() if k != "annotations"}
+            resp_obj.scoring_criteria = None
+            cleaned_questions.append(resp_obj)
+        return cleaned_questions
     
     return questions
 
@@ -173,24 +178,27 @@ async def get_question(
         )
     
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
-    # Используем копирование, чтобы не повредить объект в сессии
+    # Используем трансформацию в dict, чтобы не менять объект в сессии SQLAlchemy
     if current_user.role == Role.STUDENT:
-        log_debug("get_question hiding data", {
+        log_debug("get_question hiding data for student", {
             "q_id": str(question.id),
-            "user": current_user.email,
-            "has_ref": question.reference_data is not None,
-            "has_coco": question.image.coco_annotations is not None if question.image else False
+            "user": current_user.email
         })
-        if question.reference_data and isinstance(question.reference_data, dict):
-            question.reference_data = {k: v for k, v in question.reference_data.items() if k != "annotations"}
-            log_debug("Reference data after filtering", {"keys": list(question.reference_data.keys())})
         
-        if question.image and question.image.coco_annotations:
-            # Важно: создаем новый дикт, не трогая оригинал в базе
-            question.image.coco_annotations = {k: v for k, v in question.image.coco_annotations.items() if k != "annotations"}
-            log_debug("COCO annotations after filtering", {"keys": list(question.image.coco_annotations.keys())})
+        # Конвертируем в схему и обратно в dict для манипуляций
+        from app.schemas.question import QuestionResponse
+        resp_obj = QuestionResponse.model_validate(question)
+        
+        if resp_obj.reference_data and isinstance(resp_obj.reference_data, dict):
+            # Оставляем всё кроме annotations
+            resp_obj.reference_data = {k: v for k, v in resp_obj.reference_data.items() if k != "annotations"}
             
-        question.scoring_criteria = None
+        if resp_obj.image and resp_obj.image.coco_annotations and isinstance(resp_obj.image.coco_annotations, dict):
+            # Оставляем всё кроме annotations
+            resp_obj.image.coco_annotations = {k: v for k, v in resp_obj.image.coco_annotations.items() if k != "annotations"}
+            
+        resp_obj.scoring_criteria = None
+        return resp_obj
     
     return question
 
@@ -379,31 +387,60 @@ async def get_question_labels(
     })
 
     # 1. Если есть в reference_data (сохраненные через редактор)
-    if question.reference_data and "labels" in question.reference_data:
-        log_debug("Returning labels from reference_data", {"count": len(question.reference_data["labels"])})
-        return question.reference_data["labels"]
+    ref_data = question.reference_data
+    # Если это строка (JSON), пытаемся распарсить
+    if isinstance(ref_data, str) and ref_data.startswith('{'):
+        try:
+            ref_data = json.loads(ref_data)
+        except:
+            pass
+            
+    if isinstance(ref_data, dict):
+        # Проверяем вложенный reference_answer
+        if not ref_data.get("labels") and ref_data.get("reference_answer"):
+            inner = ref_data.get("reference_answer")
+            if isinstance(inner, str) and inner.startswith('{'):
+                try:
+                    ref_data = json.loads(inner)
+                except:
+                    pass
+        
+        if ref_data.get("labels"):
+            log_debug("Returning labels from reference_data", {"count": len(ref_data["labels"])})
+            return ref_data["labels"]
         
     # 2. Если нет в reference_data, берем категории из COCO аннотаций изображения
     if question.image and question.image.coco_annotations:
-        categories = question.image.coco_annotations.get("categories", [])
-        log_debug("Returning labels from coco_annotations", {"count": len(categories)})
-        # Приводим к формату {id, name, color}
-        labels = []
+        coco = question.image.coco_annotations
+        # Если это строка, парсим
+        if isinstance(coco, str) and coco.startswith('{'):
+            try:
+                coco = json.loads(coco)
+            except:
+                pass
+        
+        if isinstance(coco, dict):
+            categories = coco.get("categories", [])
+            log_debug("Returning labels from coco_annotations", {"count": len(categories)})
+            # Приводим к формату {id, name, color}
+            labels = []
 
-        for i, cat in enumerate(categories):
-            # Генерируем максимально различные цвета с помощью золотого угла
-            hue = (i * 137.508) / 360.0
-            # Конвертируем HSL в RGB, затем в HEX
-            r, g, b = colorsys.hls_to_rgb(hue, 0.45, 0.75)
-            color = "#{:02x}{:02x}{:02x}".format(int(r*255), int(g*255), int(b*255))
-            
-            name = cat.get("name", "Unknown")
-            labels.append({
-                "id": str(cat.get("id")),
-                "name": name,
-                "color": color
-            })
-        return labels
+            for i, cat in enumerate(categories):
+                # Генерируем максимально различные цвета с помощью золотого угла
+                hue = (i * 137.508) / 360.0
+                # Конвертируем HSL в RGB, затем в HEX
+                r, g, b = colorsys.hls_to_rgb(hue, 0.45, 0.75)
+                color = "#{:02x}{:02x}{:02x}".format(int(r*255), int(g*255), int(b*255))
+                
+                name = cat.get("name", "Unknown")
+                labels.append({
+                    "id": str(cat.get("id")),
+                    "name": name,
+                    "color": color
+                })
+            return labels
+
+    return []
 
     return []
 
