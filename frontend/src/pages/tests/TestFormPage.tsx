@@ -100,9 +100,11 @@ export default function TestFormPage() {
   useEffect(() => {
     if (test) {
       reset({
-        title: test.title,
+        title: test.title || '',
         description: test.description || '',
-        settings: test.settings || {},
+        settings: {
+          time_limit: test.settings?.time_limit || 60,
+        },
         structure: test.structure || [],
       })
       

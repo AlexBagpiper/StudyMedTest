@@ -20,6 +20,7 @@ interface AnnotationEditorProps {
   reference_data?: AnnotationData | null
   showReference?: boolean
   onChange?: (data: AnnotationData) => void
+  onSave?: (data: AnnotationData) => void
   onFinish?: () => void
   onCancel?: () => void
   readOnly?: boolean
@@ -32,6 +33,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   reference_data = null,
   showReference = false,
   onChange,
+  onSave,
   onFinish,
   onCancel,
   readOnly = false,
@@ -64,8 +66,8 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   useEffect(() => {
     // Serialize for comparison to detect actual changes (prevents infinite loops)
     const serialized = initialData ? JSON.stringify({
-      labels: initialData.labels?.map(l => l.id),
-      annotations: initialData.annotations?.map(a => a.id)
+      labels: initialData.labels?.map(l => ({ id: l.id, name: l.name, color: l.color })),
+      annotations: initialData.annotations?.map(a => ({ id: a.id, points: a.points, label_id: a.label_id }))
     }) : null
     
     if (serialized === prevInitialDataRef.current) {
@@ -83,12 +85,12 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
     }
   }, [initialData, setData, reset, hideLabels, setActiveLabelId])
 
-  // Сообщаем родителю об изменениях (с защитой от бесконечных циклов)
+  // Сообщаем родителю об изменениях
   useEffect(() => {
-    if (onChange && !readOnly) {
+    if (onChange && !readOnly && labels.length > 0) {
       const serialized = JSON.stringify({
         labels: labels.map(l => ({ id: l.id, name: l.name, color: l.color })),
-        annotations: annotations.map(a => ({ id: a.id, label_id: a.label_id, type: a.type, points: a.points }))
+        annotations: annotations.map(a => ({ id: a.id, label_id: a.label_id, points: a.points }))
       })
       
       if (serialized === prevOnChangeDataRef.current) {
@@ -179,7 +181,12 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
           {onFinish && (
             <Button 
               variant="contained" 
-              onClick={onFinish}
+              onClick={() => {
+                if (onSave) {
+                  onSave({ labels, annotations })
+                }
+                onFinish()
+              }}
               color="primary"
               sx={{ 
                 fontWeight: 600,

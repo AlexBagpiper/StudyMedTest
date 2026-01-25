@@ -321,7 +321,7 @@ export default function SubmissionReviewPage() {
                     labels: currentLabels,
                     annotations: (answers[currentQuestion?.id] as AnnotationData)?.annotations || []
                   }}
-                  referenceData={currentQuestion.reference_data?.annotations ? currentQuestion.reference_data : (currentQuestion.image?.coco_annotations || null)}
+                  reference_data={currentQuestion.reference_data?.annotations ? currentQuestion.reference_data : (currentQuestion.image?.coco_annotations || null)}
                   showReference={showReferenceOverlay}
                   readOnly={true}
                   hideLabels={true}

@@ -2,6 +2,8 @@
 Computer Vision Service - оценка аннотаций в формате COCO
 """
 
+import json
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 import numpy as np
@@ -36,7 +38,7 @@ class CVService:
         # Извлечение аннотаций студента
         student_annotations = student_data.get("annotations", [])
         
-        # Извлечение аннотаций эталона (COCO формат)
+        # Извлечение аннотаций эталона
         reference_annotations = reference_data.get("annotations", [])
         
         if not reference_annotations:
@@ -48,17 +50,17 @@ class CVService:
                 "iou_scores": []
             }
         
-        # Конвертация эталона в полигоны
+        # Конвертация эталона в полигоны (поддерживаем оба формата: COCO и наш внутренний)
         ref_polys = []
         for ann in reference_annotations:
-            poly = self._coco_to_polygon(ann)
+            poly = self._any_to_polygon(ann)
             if poly and poly.is_valid:
                 ref_polys.append(poly)
         
         # Конвертация ответов студента в полигоны
         stud_polys = []
         for ann in student_annotations:
-            poly = self._custom_to_polygon(ann)
+            poly = self._any_to_polygon(ann)
             if poly and poly.is_valid:
                 stud_polys.append(poly)
         
@@ -105,60 +107,44 @@ class CVService:
             "total_score": round(total_score, 2),
             "iou_scores": [round(iou, 3) for iou in all_iou_scores]
         }
-    
-    def _coco_to_polygon(self, ann: Dict[str, Any]) -> Optional[Polygon]:
+
+    def _any_to_polygon(self, ann: Dict[str, Any]) -> Optional[Polygon]:
         """
-        Конвертация COCO аннотации в Shapely Polygon
+        Универсальная конвертация любой аннотации (COCO или наш формат) в Shapely Polygon
         """
         try:
+            # 1. Проверяем наш формат (points)
+            points = ann.get("points")
+            if points and isinstance(points, list) and len(points) >= 6:
+                coords = [(points[i], points[i+1]) for i in range(0, len(points), 2)]
+                return Polygon(coords)
+
+            # 2. Проверяем COCO segmentation
             segmentation = ann.get("segmentation")
-            if segmentation:
-                if isinstance(segmentation, list) and len(segmentation) > 0:
-                    pts = segmentation[0]
-                    if len(pts) >= 6: # Минимум 3 точки
-                        coords = [(pts[i], pts[i+1]) for i in range(0, len(pts), 2)]
-                        return Polygon(coords)
-            
-            # Fallback to bbox
+            if segmentation and isinstance(segmentation, list) and len(segmentation) > 0:
+                pts = segmentation[0]
+                if len(pts) >= 6:
+                    coords = [(pts[i], pts[i+1]) for i in range(0, len(pts), 2)]
+                    return Polygon(coords)
+
+            # 3. Проверяем bbox (COCO или наш)
             bbox = ann.get("bbox")
             if bbox and len(bbox) == 4:
                 x, y, w, h = bbox
                 return Polygon([(x, y), (x+w, y), (x+w, y+h), (x, y+h)])
-                
-            return None
-        except Exception as e:
-            print(f"Error converting COCO to polygon: {e}")
-            return None
 
-    def _custom_to_polygon(self, annotation: Dict[str, Any]) -> Optional[Polygon]:
-        """
-        Конвертация кастомной аннотации в Shapely Polygon
-        """
-        try:
-            ann_type = annotation.get("type")
-            
-            if ann_type == 'polygon' and "points" in annotation:
-                points = annotation["points"]
-                if len(points) >= 6:
-                    coords = [(points[i], points[i+1]) for i in range(0, len(points), 2)]
-                    return Polygon(coords)
-                
-            elif ann_type == 'rectangle' and "bbox" in annotation:
-                x, y, w, h = annotation["bbox"]
-                return Polygon([(x, y), (x+w, y), (x+w, y+h), (x, y+h)])
-                
-            elif ann_type == 'ellipse' and "center" in annotation and "radius" in annotation:
-                cx, cy = annotation["center"]
-                rx, ry = annotation["radius"]
+            # 4. Ellipse
+            if ann.get("type") == 'ellipse' and "center" in ann and "radius" in ann:
+                cx, cy = ann["center"]
+                rx, ry = ann["radius"]
                 t = np.linspace(0, 2*np.pi, 32)
                 coords = [(cx + rx*np.cos(ti), cy + ry*np.sin(ti)) for ti in t]
                 return Polygon(coords)
-                
+
             return None
-        except Exception as e:
-            print(f"Error converting custom annotation to polygon: {e}")
+        except Exception:
             return None
-    
+
     def _calculate_iou(self, poly1: Polygon, poly2: Polygon) -> float:
         """
         Intersection over Union между двумя полигонами

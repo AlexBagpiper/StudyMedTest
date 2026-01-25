@@ -190,6 +190,7 @@ export default function QuestionFormDialog({
                 imageUrl={imageAsset.presigned_url || ''}
                 initialData={manualAnnotations || undefined}
                 onChange={handleAnnotationsChange}
+                onSave={handleAnnotationsChange}
                 onFinish={() => setShowEditor(false)}
                 onCancel={() => {
                   // При отмене возвращаем предыдущее состояние
@@ -345,10 +346,9 @@ export default function QuestionFormDialog({
                             value={annotationMethod} 
                             onChange={(_, v) => setAnnotationMethod(v)}
                             variant="fullWidth"
-                            disabled={readOnly}
                           >
-                            <Tab label={t('questions.uploadJson')} value="upload" />
-                            <Tab label={t('questions.manualAnnotation')} value="manual" />
+                            <Tab label={t('questions.uploadJson')} value="upload" disabled={readOnly} />
+                            <Tab label={t('questions.manualAnnotation')} value="manual" disabled={readOnly} />
                           </Tabs>
 
                           <Box sx={{ p: 2 }}>
@@ -388,6 +388,27 @@ export default function QuestionFormDialog({
                                             setUploadError(null)
                                             const updated = await questionsApi.uploadAnnotations(imageAsset.id, file)
                                             setImageAsset(updated)
+                                            // Синхронизируем загруженные аннотации с ручным режимом и переключаем метод
+                                            if (updated.coco_annotations) {
+                                              setAnnotationMethod('manual')
+                                              const converted = {
+                                                labels: updated.coco_annotations.categories?.map((c: any, index: number) => {
+                                                  const colors = ['#3f51b5', '#f44336', '#4caf50', '#ff9800', '#9c27b0', '#795548', '#607d8b'];
+                                                  return {
+                                                    id: c.id.toString(),
+                                                    name: c.name,
+                                                    color: c.color || colors[index % colors.length]
+                                                  };
+                                                }) || [],
+                                                annotations: updated.coco_annotations.annotations?.map((a: any) => ({
+                                                  id: a.id.toString(),
+                                                  label_id: a.category_id.toString(),
+                                                  type: 'polygon',
+                                                  points: a.segmentation[0] || []
+                                                })) || []
+                                              }
+                                              setManualAnnotations(converted)
+                                            }
                                           } catch (err: any) {
                                             setUploadError(translateError(err.response?.data?.detail || 'Error uploading annotations'))
                                           } finally {
