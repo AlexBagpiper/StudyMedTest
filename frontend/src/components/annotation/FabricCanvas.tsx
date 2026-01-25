@@ -1022,12 +1022,12 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
     c.requestRenderAll() 
   }, [zoom])
 
-  // Синхронизация аннотаций из хранилища для режима просмотра (review)
+  // Синхронизация аннотаций из хранилища
   useEffect(() => {
     // #region agent log
     fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:583',message:'Sync useEffect triggered',data:{readOnly,showReference,annotationsCount:annotations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
-    if ((readOnly || showReference) && fabricCanvas.current && fabricImageRef.current) {
+    if (fabricCanvas.current && fabricImageRef.current) {
       // #region agent log
       fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:587',message:'Calling loadAnnotations from sync effect',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'E'})}).catch(()=>{});
       // #endregion
