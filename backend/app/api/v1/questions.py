@@ -70,14 +70,10 @@ async def list_questions(
         # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
         if current_user.role == Role.STUDENT:
             if question.reference_data and isinstance(question.reference_data, dict):
-                ref_copy = dict(question.reference_data)
-                ref_copy.pop("annotations", None)
-                question.reference_data = ref_copy
+                question.reference_data = {k: v for k, v in question.reference_data.items() if k != "annotations"}
             
             if question.image and question.image.coco_annotations:
-                coco_copy = dict(question.image.coco_annotations)
-                coco_copy.pop("annotations", None)
-                question.image.coco_annotations = coco_copy
+                question.image.coco_annotations = {k: v for k, v in question.image.coco_annotations.items() if k != "annotations"}
                 
             question.scoring_criteria = None
     
@@ -168,16 +164,14 @@ async def get_question(
         )
     
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
+    # Используем копирование, чтобы не повредить объект в сессии
     if current_user.role == Role.STUDENT:
         if question.reference_data and isinstance(question.reference_data, dict):
-            ref_copy = dict(question.reference_data)
-            ref_copy.pop("annotations", None)
-            question.reference_data = ref_copy
+            question.reference_data = {k: v for k, v in question.reference_data.items() if k != "annotations"}
         
         if question.image and question.image.coco_annotations:
-            coco_copy = dict(question.image.coco_annotations)
-            coco_copy.pop("annotations", None)
-            question.image.coco_annotations = coco_copy
+            # Важно: создаем новый дикт, не трогая оригинал в базе
+            question.image.coco_annotations = {k: v for k, v in question.image.coco_annotations.items() if k != "annotations"}
             
         question.scoring_criteria = None
     
