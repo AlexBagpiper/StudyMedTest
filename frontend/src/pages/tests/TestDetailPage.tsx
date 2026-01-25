@@ -47,7 +47,7 @@ export default function TestDetailPage() {
   const { t } = useLocale()
 
   const { data: test, isLoading, error } = useTest(id)
-  const { data: topics } = useTopics({ limit: 1000 })
+  const { data: topics } = useTopics()
   const publishTest = usePublishTest()
   const unpublishTest = useUnpublishTest()
   const startTest = useStartTest()
@@ -92,6 +92,7 @@ export default function TestDetailPage() {
       title: t('tests.action.publish'),
       content: t('tests.confirm.publish'),
       color: 'success',
+      isLoading: false,
       onConfirm: async () => {
         try {
           await publishTest.mutateAsync(id)
@@ -110,6 +111,7 @@ export default function TestDetailPage() {
       title: t('tests.action.unpublish'),
       content: t('tests.confirm.unpublish'),
       color: 'warning',
+      isLoading: false,
       onConfirm: async () => {
         try {
           await unpublishTest.mutateAsync(id)
@@ -129,6 +131,7 @@ export default function TestDetailPage() {
       title: t('tests.confirm.start.title'),
       content: t('tests.confirm.start.content'),
       color: 'primary',
+      isLoading: false,
       onConfirm: async () => {
         try {
           const submission = await startTest.mutateAsync(id)

@@ -77,6 +77,7 @@ export default function TestsPage() {
       title: t('tests.action.publish'),
       content: t('tests.confirm.publish'),
       color: 'success',
+      isLoading: false,
       onConfirm: async () => {
         try {
           await publishTest.mutateAsync(testId)
@@ -94,6 +95,7 @@ export default function TestsPage() {
       title: t('tests.action.unpublish'),
       content: t('tests.confirm.unpublish'),
       color: 'warning',
+      isLoading: false,
       onConfirm: async () => {
         try {
           await unpublishTest.mutateAsync(testId)
@@ -111,13 +113,14 @@ export default function TestsPage() {
       title: t('common.delete'),
       content: t('tests.confirm.delete'),
       color: 'error',
+      isLoading: false,
       onConfirm: async () => {
         try {
           await deleteTest.mutateAsync(testId)
           closeConfirm()
         } catch (error: any) {
           console.error('Failed to delete test:', error)
-          const message = error.response?.data?.detail || t('common.error.unknown')
+          const message = error.response?.data?.detail || t('tests.error.unknown')
           setErrorDialog({ open: true, message })
         }
       }
@@ -144,6 +147,7 @@ export default function TestsPage() {
       title: t('tests.confirm.start.title'),
       content: t('tests.confirm.start.content'),
       color: 'primary',
+      isLoading: false,
       onConfirm: async () => {
         try {
           const submission = await startTest.mutateAsync(testId)
