@@ -75,6 +75,7 @@ backup/
 
 # Secrets
 yandexapi.txt
+certificate.key
 
 # Certificates
 certs/*.key
