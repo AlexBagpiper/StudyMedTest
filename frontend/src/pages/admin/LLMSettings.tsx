@@ -437,7 +437,7 @@ export default function LLMSettings() {
           </Paper>
 
           <Alert severity="info">
-            Изменения вступят в силу для новых запросов к LLM. Текущие задачи в очереди Celery могут использовать старые настройки.
+            Изменения вступят в силу для новых запросов к LLM.
           </Alert>
         </Grid>
       </Grid>
