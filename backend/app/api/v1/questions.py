@@ -66,6 +66,13 @@ async def list_questions(
                 question.image.storage_path.split("/", 1)[1],
                 expires_seconds=3600
             )
+        
+        # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем эталонные данные от студентов
+        if current_user.role == Role.STUDENT:
+            question.reference_data = None
+            question.scoring_criteria = None
+            if question.image:
+                question.image.coco_annotations = None
     
     return questions
 
@@ -152,6 +159,13 @@ async def get_question(
             question.image.storage_path.split("/", 1)[1],
             expires_seconds=3600
         )
+    
+    # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем эталонные данные от студентов
+    if current_user.role == Role.STUDENT:
+        question.reference_data = None
+        question.scoring_criteria = None
+        if question.image:
+            question.image.coco_annotations = None
     
     return question
 

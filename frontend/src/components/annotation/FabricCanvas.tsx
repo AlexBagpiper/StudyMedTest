@@ -168,46 +168,22 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
           canvas.requestRenderAll()
         }
       } else if (data) {
-        const id = addAnnotation({ ...data, label_id: label.id })
-        
-        const canvas = fabricCanvas.current
-        if (type === 'polygon') {
-          const polygon = new fabric.Polygon(polygonPointsRef.current, { 
-            fill: getFillColor(label.color), stroke: label.color, strokeWidth: 1.75 / canvas.getZoom(), 
-            selectable: !readOnly && modeRef.current === 'select', 
-            hasControls: false, hasBorders: !readOnly, 
-            lockMovementX: true, lockMovementY: true,
-            lockRotation: true, lockScalingX: true, lockScalingY: true, 
-            hoverCursor: 'default', originX: 'left', originY: 'top', 
-            objectCaching: false, evented: !readOnly 
-          })
-          ;(polygon as any).id = id
-          polygon.containsPoint = function(point: fabric.Point) {
-            return findClosestSegment(this as fabric.Polygon, point) !== -1
-          }
-          canvas.add(polygon)
-        } else if (type === 'rectangle') {
-          const rect = activeShapeRef.current as fabric.Rect
-          if (rect) {
-            rect.set({ fill: getFillColor(label.color), stroke: label.color, strokeWidth: 1.75 / canvas.getZoom() })
-            ;(rect as any).id = id
-            rect.containsPoint = createRectContainsPoint(canvas.getZoom())
-            if (modeRef.current === 'select') createEditNodes(canvas, rect)
-          }
-        }
-        canvas.requestRenderAll()
+        // Просто добавляем в стор. useEffect ниже сам вызовет loadAnnotations
+        addAnnotation({ ...data, label_id: label.id })
       }
     }
 
     setLabelPicker(null)
     setSearchQuery('')
-    if (type === 'polygon') {
-      const canvas = fabricCanvas.current
-      canvas.remove(...canvas.getObjects().filter(obj => (obj as any).id === 'temp-line' || (obj as any).id === 'temp-node'))
-      polygonPointsRef.current = []; activeLineRef.current = null;
-    } else if (type === 'rectangle') {
-      activeShapeRef.current = null
+    // Очищаем временные объекты рисования сразу
+    const canvas = fabricCanvas.current
+    if (canvas) {
+      const tempObjs = canvas.getObjects().filter(obj => 
+        (obj as any).id === 'temp' || (obj as any).id === 'temp-line' || (obj as any).id === 'temp-node'
+      )
+      canvas.remove(...tempObjs)
     }
+    polygonPointsRef.current = []; activeLineRef.current = null; activeShapeRef.current = null;
   }
 
   const clearEditNodes = (canvas: fabric.Canvas) => {
@@ -501,8 +477,17 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
 
     const loadAnnotations = (c: ExtendedCanvas) => {
       if (!isMounted || !fabricCanvas.current || !(c as any).lowerCanvasEl) return
-      c.remove(...c.getObjects().filter(obj => (obj as any).id))
+      
+      // Очищаем ВСЕ объекты, кроме фонового изображения
+      const objects = c.getObjects().filter(obj => obj !== c.backgroundImage);
+      c.remove(...objects);
+      
       const { scale, left, top } = transformRef.current
+      if (scale === 1 && left === 0 && top === 0 && fabricImageRef.current) {
+        // Если масштаб еще не рассчитан (начальное состояние), пропускаем отрисовку
+        // чтобы не наплодить контуров в неверном масштабе
+        return;
+      }
       const currentZoom = c.getZoom()
 
       // Render student annotations
