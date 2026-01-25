@@ -12,6 +12,11 @@ CMD ["npm", "run", "dev"]
 # Stage 2: Build
 FROM node:18-alpine as build
 WORKDIR /app
+
+# Build-time argument for API URL (defaults to /api/v1 for nginx proxy)
+ARG VITE_API_URL=/api/v1
+ENV VITE_API_URL=$VITE_API_URL
+
 COPY package*.json ./
 RUN npm ci
 COPY . .

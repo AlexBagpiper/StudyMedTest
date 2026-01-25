@@ -1,8 +1,10 @@
 import axios from 'axios'
 
-// В режиме разработки используем относительный путь (для Vite proxy)
-// В продакшене используем переменную окружения или дефолтный URL
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api/v1'
+// Определяем базовый URL в зависимости от режима:
+// - В разработке (DEV): используем относительный путь /api/v1 для Vite proxy
+// - В продакшене (PROD): используем переменную окружения VITE_API_URL или /api/v1
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 
+  ((import.meta as any).env?.DEV ? '/api/v1' : '/api/v1')
 
 const api = axios.create({
   baseURL: API_BASE_URL,
