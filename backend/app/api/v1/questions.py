@@ -175,7 +175,12 @@ async def get_question(
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
     # Используем копирование, чтобы не повредить объект в сессии
     if current_user.role == Role.STUDENT:
-        log_debug("Hiding data for student", {"ref_data_keys": list(question.reference_data.keys()) if question.reference_data else None})
+        log_debug("get_question hiding data", {
+            "q_id": str(question.id),
+            "user": current_user.email,
+            "has_ref": question.reference_data is not None,
+            "has_coco": question.image.coco_annotations is not None if question.image else False
+        })
         if question.reference_data and isinstance(question.reference_data, dict):
             question.reference_data = {k: v for k, v in question.reference_data.items() if k != "annotations"}
             log_debug("Reference data after filtering", {"keys": list(question.reference_data.keys())})
@@ -363,10 +368,14 @@ async def get_question_labels(
         )
     
     log_debug("get_question_labels called", {
+        "question_id": str(question_id),
         "has_ref_data": question.reference_data is not None,
-        "ref_data_keys": list(question.reference_data.keys()) if isinstance(question.reference_data, dict) else None,
+        "ref_data_type": str(type(question.reference_data)) if question.reference_data else None,
         "has_image": question.image is not None,
-        "has_coco": question.image.coco_annotations is not None if question.image else False
+        "image_id": str(question.image.id) if question.image else None,
+        "image_filename": question.image.filename if question.image else None,
+        "has_coco": question.image.coco_annotations is not None if question.image else False,
+        "coco_keys": list(question.image.coco_annotations.keys()) if (question.image and question.image.coco_annotations and isinstance(question.image.coco_annotations, dict)) else None
     })
 
     # 1. Если есть в reference_data (сохраненные через редактор)
