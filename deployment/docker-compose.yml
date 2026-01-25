@@ -98,6 +98,11 @@ services:
       dockerfile: Dockerfile
     container_name: medtest-celery-worker
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
     environment:
       DATABASE_URL: ${DATABASE_URL}
