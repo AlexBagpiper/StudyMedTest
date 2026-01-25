@@ -392,17 +392,6 @@ async def get_question_labels(
             detail="Question not found"
         )
     
-    log_debug("get_question_labels called", {
-        "question_id": str(question_id),
-        "has_ref_data": question.reference_data is not None,
-        "ref_data_type": str(type(question.reference_data)) if question.reference_data else None,
-        "has_image": question.image is not None,
-        "image_id": str(question.image.id) if question.image else None,
-        "image_filename": question.image.filename if question.image else None,
-        "has_coco": question.image.coco_annotations is not None if question.image else False,
-        "coco_keys": list(question.image.coco_annotations.keys()) if (question.image and question.image.coco_annotations and isinstance(question.image.coco_annotations, dict)) else None
-    })
-
     # 1. Если есть в reference_data (сохраненные через редактор)
     ref_data = question.reference_data
     # Если это строка (JSON), пытаемся распарсить
@@ -423,7 +412,6 @@ async def get_question_labels(
                     pass
         
         if ref_data.get("labels"):
-            log_debug("Returning labels from reference_data", {"count": len(ref_data["labels"])})
             return ref_data["labels"]
         
     # 2. Если нет в reference_data, берем категории из COCO аннотаций изображения
@@ -438,7 +426,6 @@ async def get_question_labels(
         
         if isinstance(coco, dict):
             categories = coco.get("categories", [])
-            log_debug("Returning labels from coco_annotations", {"count": len(categories)})
             # Приводим к формату {id, name, color}
             labels = []
 
