@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.exc import ProgrammingError
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -162,6 +163,10 @@ async def list_tests(
     except: pass
     # #endregion
     
+    # Используем явный выбор колонок без structure, если колонка отсутствует в БД
+    # Это временное решение до применения миграции 20260125_1200_add_tests_structure
+    
+    # Пробуем выполнить запрос с structure
     query = select(Test)
     
     # Students видят только опубликованные тесты
@@ -176,14 +181,14 @@ async def list_tests(
             status = TestStatus(status)
         query = query.where(Test.status == status)
     
+    query = query.offset(skip).limit(limit).order_by(Test.created_at.desc())
+    
     # #region agent log
     try:
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:169","message":"before SQL execute","data":{"query_str":str(query)},"timestamp":int(__import__("time").time()*1000)})+"\n")
     except: pass
     # #endregion
-    
-    query = query.offset(skip).limit(limit).order_by(Test.created_at.desc())
     
     # #region agent log
     try:
@@ -192,6 +197,52 @@ async def list_tests(
         print(f"[DEBUG] list_tests: SQL executed successfully, found {len(tests)} tests")
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:171","message":"after SQL execute","data":{"tests_count":len(tests)},"timestamp":int(__import__("time").time()*1000)})+"\n")
+    except ProgrammingError as e:
+        # Если колонка structure отсутствует, используем запрос без неё
+        if "column tests.structure does not exist" in str(e) or "structure" in str(e).lower():
+            print(f"[WARNING] list_tests: structure column not found, using fallback query")
+            # Создаем запрос с явным указанием колонок без structure
+            query_fallback = select(
+                Test.id, Test.author_id, Test.title, Test.description,
+                Test.settings, Test.status, Test.published_at,
+                Test.created_at, Test.updated_at
+            )
+            # Применяем те же фильтры
+            if current_user.role == Role.STUDENT:
+                query_fallback = query_fallback.where(Test.status == TestStatus.PUBLISHED)
+            elif current_user.role == Role.TEACHER:
+                query_fallback = query_fallback.where(Test.author_id == current_user.id)
+            if status:
+                query_fallback = query_fallback.where(Test.status == status)
+            query_fallback = query_fallback.offset(skip).limit(limit).order_by(Test.created_at.desc())
+            
+            result = await db.execute(query_fallback)
+            # Получаем результаты как кортежи и создаем объекты Test вручную
+            rows = result.all()
+            tests = []
+            for row in rows:
+                # Создаем объект Test с явным указанием атрибутов
+                test = Test()
+                test.id = row[0]
+                test.author_id = row[1]
+                test.title = row[2]
+                test.description = row[3]
+                test.settings = row[4] if row[4] else {}
+                test.status = row[5]
+                test.published_at = row[6]
+                test.created_at = row[7]
+                test.updated_at = row[8]
+                test.structure = None  # Устанавливаем None, так как колонки нет
+                tests.append(test)
+            print(f"[DEBUG] list_tests: Fallback query executed, found {len(tests)} tests")
+        else:
+            # Другая ошибка - пробрасываем дальше
+            error_tb = traceback.format_exc()
+            print(f"[ERROR] list_tests: SQL execute failed: {type(e).__name__}: {str(e)}")
+            print(f"[ERROR] Traceback:\n{error_tb}")
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:171","message":"SQL execute error","data":{"error":str(e),"traceback":error_tb},"timestamp":int(__import__("time").time()*1000)})+"\n")
+            raise
     except Exception as e:
         error_tb = traceback.format_exc()
         print(f"[ERROR] list_tests: SQL execute failed: {type(e).__name__}: {str(e)}")
