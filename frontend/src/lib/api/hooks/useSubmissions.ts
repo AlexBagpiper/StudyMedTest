@@ -56,7 +56,7 @@ export function useCompleteSubmission() {
 
   return useMutation({
     mutationFn: async (submissionId: string) => {
-      const response = await api.post(`/submissions/${submissionId}/complete`)
+      const response = await api.post(`/submissions/${submissionId}/submit`)
       return response.data
     },
     onSuccess: (_, submissionId) => {
@@ -101,7 +101,7 @@ export function useHideSubmission() {
 
   return useMutation({
     mutationFn: async (submissionId: string) => {
-      const response = await api.post(`/submissions/${submissionId}/hide`)
+      const response = await api.patch(`/submissions/${submissionId}/hide`)
       return response.data
     },
     onSuccess: () => {
@@ -115,7 +115,7 @@ export function useRestoreSubmission() {
 
   return useMutation({
     mutationFn: async (submissionId: string) => {
-      const response = await api.post(`/submissions/${submissionId}/restore`)
+      const response = await api.patch(`/submissions/${submissionId}/restore`)
       return response.data
     },
     onSuccess: () => {

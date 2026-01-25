@@ -67,28 +67,28 @@ export default api
 export const adminApi = {
   // LLM Config
   getLLMConfig: async () => {
-    const response = await api.get('/admin/system/llm-config')
+    const response = await api.get('/admin/configs/llm')
     return response.data
   },
 
   updateLLMConfig: async (config: any) => {
-    const response = await api.put('/admin/system/llm-config', config)
+    const response = await api.put('/admin/configs/llm', config)
     return response.data
   },
 
   testLLMConfig: async (config: any) => {
-    const response = await api.post('/admin/system/llm-config/test', config)
+    const response = await api.post('/admin/configs/llm/test', config)
     return response.data
   },
 
   // CV Config
   getCVConfig: async () => {
-    const response = await api.get('/admin/system/cv-config')
+    const response = await api.get('/admin/configs/cv')
     return response.data
   },
 
   updateCVConfig: async (config: any) => {
-    const response = await api.put('/admin/system/cv-config', config)
+    const response = await api.put('/admin/configs/cv', config)
     return response.data
   },
 
@@ -110,7 +110,7 @@ export const adminApi = {
 
   // Analytics
   getAnalytics: async () => {
-    const response = await api.get('/admin/analytics')
+    const response = await api.get('/analytics/admin')
     return response.data
   },
 
@@ -141,7 +141,7 @@ export const questionsApi = {
     if (annotations) {
       formData.append('coco_annotations', JSON.stringify(annotations))
     }
-    const response = await api.post('/questions/upload-image', formData, {
+    const response = await api.post('/questions/images', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -149,9 +149,13 @@ export const questionsApi = {
     return response.data
   },
 
-  uploadAnnotations: async (imageId: string, annotations: any) => {
-    const response = await api.post(`/questions/images/${imageId}/annotations`, {
-      coco_annotations: annotations,
+  uploadAnnotations: async (imageId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await api.post(`/questions/images/${imageId}/annotations`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     })
     return response.data
   },
