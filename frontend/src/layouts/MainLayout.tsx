@@ -9,7 +9,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment'
 import LanguageIcon from '@mui/icons-material/Language'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocale, Locale } from '../contexts/LocaleContext'
 import { APP_CONFIG } from '../config'
@@ -21,6 +21,7 @@ export default function MainLayout() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [langAnchorEl, setLangAnchorEl] = useState<null | HTMLElement>(null)
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout } = useAuth()
   const { t, formatName, formatRole, locale, setLocale } = useLocale()
 
@@ -89,7 +90,14 @@ export default function MainLayout() {
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.path} disablePadding>
-            <ListItemButton onClick={() => navigate(item.path)}>
+            <ListItemButton onClick={() => {
+              // Если кликаем на /admin и уже на /admin, передаем сигнал сброса через state
+              if (location.pathname === item.path && item.path === '/admin') {
+                navigate(item.path, { replace: true, state: { reset: true } })
+              } else {
+                navigate(item.path)
+              }
+            }}>
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
             </ListItemButton>

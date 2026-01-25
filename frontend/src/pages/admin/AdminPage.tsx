@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Box, Typography, Grid, Card, CardContent, Button, Breadcrumbs, Link } from '@mui/material'
 import PeopleIcon from '@mui/icons-material/People'
 import SchoolIcon from '@mui/icons-material/School'
 import SettingsIcon from '@mui/icons-material/Settings'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useLocation } from 'react-router-dom'
 import UsersManagement from './UsersManagement'
 import SystemSettings, { SettingsSection } from './SystemSettings'
 import CVSettings from './CVSettings'
@@ -13,8 +14,20 @@ type AdminSection = 'main' | 'users' | 'schools' | 'settings'
 
 export default function AdminPage() {
   const { t } = useLocale()
+  const location = useLocation()
   const [activeSection, setActiveSection] = useState<AdminSection>('main')
   const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>('menu')
+
+  // Сброс состояния при навигации на /admin (включая клик на тот же путь через state)
+  useEffect(() => {
+    // Проверяем сигнал сброса из state или сбрасываем при первом монтировании на /admin
+    const shouldReset = (location.state as any)?.reset === true || 
+                        (location.pathname === '/admin' && activeSection !== 'main' && activeSettingsSection !== 'menu' && !location.state)
+    if (shouldReset) {
+      setActiveSection('main')
+      setActiveSettingsSection('menu')
+    }
+  }, [location.key, location.pathname, location.state]);
 
   const adminSections = [
     {
