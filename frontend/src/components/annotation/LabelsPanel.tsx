@@ -24,6 +24,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useAnnotationStore } from './hooks/useAnnotationStore'
 import { AnnotationLabel } from '../../types/annotation'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 
 interface LabelsPanelProps {
   readOnly?: boolean
@@ -35,6 +36,9 @@ export const LabelsPanel: React.FC<LabelsPanelProps> = ({ readOnly = false }) =>
   const [editingLabel, setEditingLabel] = useState<AnnotationLabel | null>(null)
   const [labelName, setLabelName] = useState('')
   const [labelColor, setLabelColor] = useState('#3B82F6')
+  
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [labelToDelete, setLabelToDelete] = useState<string | null>(null)
 
   const handleOpenDialog = (label?: AnnotationLabel) => {
     if (label) {
@@ -62,8 +66,15 @@ export const LabelsPanel: React.FC<LabelsPanelProps> = ({ readOnly = false }) =>
 
   const handleDeleteLabel = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    if (window.confirm('Вы уверены, что хотите удалить эту метку и все связанные с ней области?')) {
-      deleteLabel(id)
+    setLabelToDelete(id)
+    setDeleteConfirmOpen(true)
+  }
+
+  const confirmDelete = () => {
+    if (labelToDelete) {
+      deleteLabel(labelToDelete)
+      setLabelToDelete(null)
+      setDeleteConfirmOpen(false)
     }
   }
 
@@ -183,6 +194,17 @@ export const LabelsPanel: React.FC<LabelsPanelProps> = ({ readOnly = false }) =>
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Подтвердите удаление"
+        content="Вы уверены, что хотите удалить эту метку и все связанные с ней области?"
+        confirmText="Удалить"
+        cancelText="Отмена"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirmOpen(false)}
+        color="error"
+      />
     </Paper>
   )
 }
