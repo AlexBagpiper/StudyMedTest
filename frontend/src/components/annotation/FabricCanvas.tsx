@@ -144,6 +144,9 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
   }
 
   const handleLabelSelect = (labelId: string) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:170',message:'handleLabelSelect called',data:{labelId},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     if (!labelPicker || !fabricCanvas.current) return
 
     const { type, data, annotationId } = labelPicker
@@ -478,6 +481,10 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
     const loadAnnotations = (c: ExtendedCanvas) => {
       if (!isMounted || !fabricCanvas.current || !(c as any).lowerCanvasEl) return
       
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:481',message:'loadAnnotations internal called',data:{annotationsCount:annotationsRef.current.length},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
+
       // Очищаем ВСЕ объекты, кроме фонового изображения
       const objects = c.getObjects().filter(obj => obj !== c.backgroundImage);
       c.remove(...objects);
@@ -1017,7 +1024,13 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
 
   // Синхронизация аннотаций из хранилища для режима просмотра (review)
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:583',message:'Sync useEffect triggered',data:{readOnly,showReference,annotationsCount:annotations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
     if ((readOnly || showReference) && fabricCanvas.current && fabricImageRef.current) {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:587',message:'Calling loadAnnotations from sync effect',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'E'})}).catch(()=>{});
+      // #endregion
       loadAnnotationsRef.current?.(fabricCanvas.current)
     }
   }, [annotations, labels, readOnly, showReference, referenceData])
