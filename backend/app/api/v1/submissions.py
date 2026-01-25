@@ -26,6 +26,15 @@ from app.schemas.submission import (
     BulkDeleteRequest,
 )
 
+# #region agent log
+import json, time
+def log_debug(msg, data=None):
+    try:
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"location": "backend/app/api/v1/submissions.py", "message": msg, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "runId": "debug_run_1"}) + "\n")
+    except: pass
+# #endregion
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -127,6 +136,16 @@ async def get_submission(
     # Добавляем time_limit в объект для схемы
     submission.time_limit = submission.variant.test.settings.get("time_limit")
     
+    if current_user.role == Role.STUDENT:
+        for ans in submission.answers:
+            if ans.annotation_data:
+                log_debug("Student answer loaded in get_submission", {
+                    "ans_id": str(ans.id),
+                    "q_id": str(ans.question_id),
+                    "has_annotations": "annotations" in ans.annotation_data if isinstance(ans.annotation_data, dict) else False,
+                    "count": len(ans.annotation_data.get("annotations", [])) if isinstance(ans.annotation_data, dict) else 0
+                })
+
     return submission
 
 
@@ -192,6 +211,11 @@ async def create_or_update_answer(
     if existing_answer:
         existing_answer.student_answer = answer_in.student_answer
         existing_answer.annotation_data = answer_in.annotation_data
+        log_debug("Updating existing answer", {
+            "ans_id": str(existing_answer.id),
+            "has_annotations": "annotations" in answer_in.annotation_data if answer_in.annotation_data else False,
+            "count": len(answer_in.annotation_data.get("annotations", [])) if answer_in.annotation_data else 0
+        })
     else:
         answer = Answer(
             submission_id=submission_id,
@@ -200,6 +224,11 @@ async def create_or_update_answer(
             annotation_data=answer_in.annotation_data,
         )
         db.add(answer)
+        log_debug("Creating new answer", {
+            "q_id": str(answer_in.question_id),
+            "has_annotations": "annotations" in answer_in.annotation_data if answer_in.annotation_data else False,
+            "count": len(answer_in.annotation_data.get("annotations", [])) if answer_in.annotation_data else 0
+        })
     
     await db.commit()
 

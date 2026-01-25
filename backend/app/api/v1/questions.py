@@ -225,9 +225,11 @@ async def get_question(
 
         if resp_obj.reference_data:
             resp_obj.reference_data = clean_data(resp_obj.reference_data)
+            log_debug("Cleaned reference_data keys", {"keys": list(resp_obj.reference_data.keys()) if isinstance(resp_obj.reference_data, dict) else "not a dict"})
             
         if resp_obj.image and resp_obj.image.coco_annotations:
             resp_obj.image.coco_annotations = clean_data(resp_obj.image.coco_annotations)
+            log_debug("Cleaned coco_annotations keys", {"keys": list(resp_obj.image.coco_annotations.keys()) if isinstance(resp_obj.image.coco_annotations, dict) else "not a dict"})
             
         resp_obj.scoring_criteria = None
         return resp_obj
