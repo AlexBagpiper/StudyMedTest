@@ -69,8 +69,6 @@ async def list_questions(
         
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
     if current_user.role == Role.STUDENT:
-        from app.schemas.question import QuestionResponse
-        
         def clean_data(data):
             if not data: return data
             is_string = False
@@ -187,7 +185,6 @@ async def get_question(
     
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
     if current_user.role == Role.STUDENT:
-        from app.schemas.question import QuestionResponse
         resp_obj = QuestionResponse.model_validate(question)
         
         def clean_data(data):
