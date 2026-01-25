@@ -8,8 +8,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
-import traceback
-import json
 
 from app.api.v1 import router as api_v1_router
 from app.core.config import settings
@@ -84,31 +82,15 @@ async def global_exception_handler(request: Request, exc: Exception):
     """
     Глобальный обработчик всех необработанных исключений
     """
-    # #region agent log
+    # Логирование ошибки в stdout (видно в логах сервера)
+    import traceback
     error_traceback = traceback.format_exc()
-    error_info = {
-        "path": str(request.url.path),
-        "method": request.method,
-        "error": str(exc),
-        "error_type": type(exc).__name__,
-        "traceback": error_traceback
-    }
-    
-    # Логирование в файл (если доступен)
-    log_path = r"e:\pythonProject\StudyMedTest\.cursor\debug.log"
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"main.py:exception_handler","message":"unhandled exception","data":error_info,"timestamp":int(__import__("time").time()*1000)})+"\n")
-    except: pass
-    
-    # Логирование в stdout (видно в логах сервера)
     print(f"[ERROR] {request.method} {request.url.path}: {type(exc).__name__}: {str(exc)}")
-    print(f"[ERROR] Traceback:\n{error_traceback}")
-    # #endregion
+    if settings.ENVIRONMENT == "development":
+        print(f"[ERROR] Traceback:\n{error_traceback}")
     
-    # Временно возвращаем детальную информацию для отладки (можно убрать после исправления)
     # В development режиме возвращаем детальную информацию об ошибке
-    if settings.ENVIRONMENT == "development" or "/api/v1/tests" in str(request.url.path):
+    if settings.ENVIRONMENT == "development":
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -120,7 +102,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             }
         )
     else:
-        # В production возвращаем только общую ошибку, но логируем детали
+        # В production возвращаем только общую ошибку
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": "Internal server error"}

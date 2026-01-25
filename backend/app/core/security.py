@@ -140,42 +140,13 @@ async def get_current_user(
     
     Будет реализовано после создания User model
     """
-    # #region agent log
-    import json
-    import traceback
-    log_path = r"e:\pythonProject\StudyMedTest\.cursor\debug.log"
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"security.py:134","message":"get_current_user entry","data":{"user_id":user_id},"timestamp":int(__import__("time").time()*1000)})+"\n")
-    except: pass
-    # #endregion
-    
     from app.models.user import User
     from sqlalchemy import select
     
-    # #region agent log
-    try:
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        print(f"[DEBUG] get_current_user: user_id={user_id}, found={user is not None}, role={str(user.role) if user else None}")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"security.py:147","message":"after user query","data":{"user_id":user_id,"user_found":user is not None,"user_role":str(user.role) if user else None},"timestamp":int(__import__("time").time()*1000)})+"\n")
-    except Exception as e:
-        error_tb = traceback.format_exc()
-        print(f"[ERROR] get_current_user: query failed: {type(e).__name__}: {str(e)}")
-        print(f"[ERROR] Traceback:\n{error_tb}")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"security.py:147","message":"user query error","data":{"user_id":user_id,"error":str(e),"traceback":error_tb},"timestamp":int(__import__("time").time()*1000)})+"\n")
-        raise
-    # #endregion
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
     
     if user is None:
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"security.py:149","message":"user not found","data":{"user_id":user_id},"timestamp":int(__import__("time").time()*1000)})+"\n")
-        except: pass
-        # #endregion
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"

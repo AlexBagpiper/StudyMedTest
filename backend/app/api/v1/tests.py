@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
-from sqlalchemy.exc import ProgrammingError
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -153,20 +152,6 @@ async def list_tests(
     """
     Список тестов
     """
-    # #region agent log
-    import json
-    import traceback
-    log_path = r"e:\pythonProject\StudyMedTest\.cursor\debug.log"
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:144","message":"list_tests entry","data":{"skip":skip,"limit":limit,"status":str(status) if status else None,"user_id":str(current_user.id) if current_user else None,"user_role":str(current_user.role) if current_user else None},"timestamp":int(__import__("time").time()*1000)})+"\n")
-    except: pass
-    # #endregion
-    
-    # Используем явный выбор колонок без structure, если колонка отсутствует в БД
-    # Это временное решение до применения миграции 20260125_1200_add_tests_structure
-    
-    # Пробуем выполнить запрос с structure
     query = select(Test)
     
     # Students видят только опубликованные тесты
@@ -182,143 +167,10 @@ async def list_tests(
         query = query.where(Test.status == status)
     
     query = query.offset(skip).limit(limit).order_by(Test.created_at.desc())
+    result = await db.execute(query)
+    tests = result.scalars().all()
     
-    # #region agent log
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:169","message":"before SQL execute","data":{"query_str":str(query)},"timestamp":int(__import__("time").time()*1000)})+"\n")
-    except: pass
-    # #endregion
-    
-    # #region agent log
-    try:
-        result = await db.execute(query)
-        tests = result.scalars().all()
-        print(f"[DEBUG] list_tests: SQL executed successfully, found {len(tests)} tests")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:171","message":"after SQL execute","data":{"tests_count":len(tests)},"timestamp":int(__import__("time").time()*1000)})+"\n")
-    except ProgrammingError as e:
-        # Если колонка structure отсутствует, используем запрос без неё
-        if "column tests.structure does not exist" in str(e) or "structure" in str(e).lower():
-            print(f"[WARNING] list_tests: structure column not found, using fallback query")
-            # Создаем запрос с явным указанием колонок без structure
-            query_fallback = select(
-                Test.id, Test.author_id, Test.title, Test.description,
-                Test.settings, Test.status, Test.published_at,
-                Test.created_at, Test.updated_at
-            )
-            # Применяем те же фильтры
-            if current_user.role == Role.STUDENT:
-                query_fallback = query_fallback.where(Test.status == TestStatus.PUBLISHED)
-            elif current_user.role == Role.TEACHER:
-                query_fallback = query_fallback.where(Test.author_id == current_user.id)
-            if status:
-                query_fallback = query_fallback.where(Test.status == status)
-            query_fallback = query_fallback.offset(skip).limit(limit).order_by(Test.created_at.desc())
-            
-            result = await db.execute(query_fallback)
-            # Получаем результаты как кортежи и создаем объекты Test через Row mapping
-            rows = result.all()
-            tests = []
-            for row in rows:
-                # Используем Row._mapping для создания объекта Test
-                # Создаем словарь из row и используем его для создания объекта
-                test_dict = {
-                    'id': row[0],
-                    'author_id': row[1],
-                    'title': row[2],
-                    'description': row[3],
-                    'settings': row[4] if row[4] else {},
-                    'status': row[5],
-                    'published_at': row[6],
-                    'created_at': row[7],
-                    'updated_at': row[8],
-                    'structure': None
-                }
-                # Создаем объект Test через from_dict или напрямую устанавливаем атрибуты
-                test = Test()
-                for key, value in test_dict.items():
-                    setattr(test, key, value)
-                tests.append(test)
-            print(f"[DEBUG] list_tests: Fallback query executed, found {len(tests)} tests")
-        else:
-            # Другая ошибка - пробрасываем дальше
-            error_tb = traceback.format_exc()
-            print(f"[ERROR] list_tests: SQL execute failed: {type(e).__name__}: {str(e)}")
-            print(f"[ERROR] Traceback:\n{error_tb}")
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:171","message":"SQL execute error","data":{"error":str(e),"traceback":error_tb},"timestamp":int(__import__("time").time()*1000)})+"\n")
-            raise
-    except Exception as e:
-        error_tb = traceback.format_exc()
-        print(f"[ERROR] list_tests: SQL execute failed: {type(e).__name__}: {str(e)}")
-        print(f"[ERROR] Traceback:\n{error_tb}")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"tests.py:171","message":"SQL execute error","data":{"error":str(e),"traceback":error_tb},"timestamp":int(__import__("time").time()*1000)})+"\n")
-        raise
-    # #endregion
-    
-    # #region agent log
-    for i, test in enumerate(tests):
-        try:
-            test_data = {"id":str(test.id),"author_id":str(test.author_id),"status":str(test.status) if test.status else None,"title":test.title[:50] if test.title else None,"settings_type":type(test.settings).__name__ if test.settings else None,"structure_type":type(test.structure).__name__ if test.structure else None,"created_at":str(test.created_at) if test.created_at else None,"updated_at":str(test.updated_at) if test.updated_at else None,"published_at":str(test.published_at) if test.published_at else None}
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"tests.py:173","message":"test data before serialization","data":{"test_index":i,**test_data},"timestamp":int(__import__("time").time()*1000)})+"\n")
-            if i == 0:  # Логируем только первый тест в stdout
-                print(f"[DEBUG] list_tests: First test data: id={test.id}, status={test.status}, title={test.title[:30] if test.title else None}")
-        except Exception as e:
-            print(f"[ERROR] list_tests: Error reading test {i} data: {str(e)}")
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"tests.py:173","message":"error reading test data","data":{"test_index":i,"error":str(e)},"timestamp":int(__import__("time").time()*1000)})+"\n")
-    # #endregion
-    
-    # #region agent log
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"tests.py:173","message":"before return serialization","data":{"tests_count":len(tests)},"timestamp":int(__import__("time").time()*1000)})+"\n")
-    except: pass
-    # #endregion
-    
-    try:
-        print(f"[DEBUG] list_tests: Attempting to serialize {len(tests)} tests")
-        # Попытка сериализации каждого теста отдельно для выявления проблемного
-        serialized_tests = []
-        for i, test in enumerate(tests):
-            try:
-                # Пробуем создать TestListResponse для каждого теста
-                from app.schemas.test import TestListResponse
-                test_response = TestListResponse.model_validate(test)
-                serialized_tests.append(test_response)
-            except Exception as test_error:
-                # #region agent log
-                error_tb = traceback.format_exc()
-                print(f"[ERROR] list_tests: Failed to serialize test {i} (id={test.id if hasattr(test, 'id') else 'unknown'}): {type(test_error).__name__}: {str(test_error)}")
-                print(f"[ERROR] Test data: structure_type={type(test.structure).__name__ if hasattr(test, 'structure') and test.structure else None}, settings_type={type(test.settings).__name__ if hasattr(test, 'settings') else None}")
-                print(f"[ERROR] Traceback:\n{error_tb}")
-                try:
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"tests.py:219","message":"test serialization error","data":{"test_index":i,"test_id":str(test.id) if hasattr(test, 'id') else None,"error":str(test_error),"error_type":type(test_error).__name__,"structure":str(test.structure)[:200] if hasattr(test, 'structure') and test.structure else None,"traceback":error_tb},"timestamp":int(__import__("time").time()*1000)})+"\n")
-                except: pass
-                # #endregion
-                # Пропускаем проблемный тест или пробуем исправить структуру
-                # Временно пропускаем проблемный тест для отладки
-                print(f"[WARNING] Skipping test {i} due to serialization error")
-                continue
-        
-        print(f"[DEBUG] list_tests: Successfully serialized {len(serialized_tests)}/{len(tests)} tests")
-        return serialized_tests
-    except Exception as e:
-        # #region agent log
-        error_traceback = traceback.format_exc()
-        error_info = {"error":str(e),"error_type":type(e).__name__,"traceback":error_traceback}
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"tests.py:173","message":"serialization error","data":error_info,"timestamp":int(__import__("time").time()*1000)})+"\n")
-        except: pass
-        print(f"[ERROR] list_tests serialization error: {type(e).__name__}: {str(e)}")
-        print(f"[ERROR] Traceback:\n{error_traceback}")
-        # #endregion
-        raise
+    return tests
 
 
 async def check_test_structure_availability(
