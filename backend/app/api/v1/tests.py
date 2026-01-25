@@ -224,7 +224,32 @@ async def list_tests(
     
     try:
         print(f"[DEBUG] list_tests: Attempting to serialize {len(tests)} tests")
-        return tests
+        # Попытка сериализации каждого теста отдельно для выявления проблемного
+        serialized_tests = []
+        for i, test in enumerate(tests):
+            try:
+                # Пробуем создать TestListResponse для каждого теста
+                from app.schemas.test import TestListResponse
+                test_response = TestListResponse.model_validate(test)
+                serialized_tests.append(test_response)
+            except Exception as test_error:
+                # #region agent log
+                error_tb = traceback.format_exc()
+                print(f"[ERROR] list_tests: Failed to serialize test {i} (id={test.id if hasattr(test, 'id') else 'unknown'}): {type(test_error).__name__}: {str(test_error)}")
+                print(f"[ERROR] Test data: structure_type={type(test.structure).__name__ if hasattr(test, 'structure') and test.structure else None}, settings_type={type(test.settings).__name__ if hasattr(test, 'settings') else None}")
+                print(f"[ERROR] Traceback:\n{error_tb}")
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"tests.py:219","message":"test serialization error","data":{"test_index":i,"test_id":str(test.id) if hasattr(test, 'id') else None,"error":str(test_error),"error_type":type(test_error).__name__,"structure":str(test.structure)[:200] if hasattr(test, 'structure') and test.structure else None,"traceback":error_tb},"timestamp":int(__import__("time").time()*1000)})+"\n")
+                except: pass
+                # #endregion
+                # Пропускаем проблемный тест или пробуем исправить структуру
+                # Временно пропускаем проблемный тест для отладки
+                print(f"[WARNING] Skipping test {i} due to serialization error")
+                continue
+        
+        print(f"[DEBUG] list_tests: Successfully serialized {len(serialized_tests)}/{len(tests)} tests")
+        return serialized_tests
     except Exception as e:
         # #region agent log
         error_traceback = traceback.format_exc()

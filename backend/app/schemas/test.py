@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.test import TestStatus
 
@@ -100,8 +100,80 @@ class TestListResponse(TestBase):
     published_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    
+    # Переопределяем structure для более гибкой обработки некорректных данных
+    structure: Optional[List[Dict[str, Any]]] = None
 
     model_config = {"from_attributes": True}
+    
+    @model_validator(mode='before')
+    @classmethod
+    def validate_structure(cls, data: Any) -> Any:
+        """
+        Валидация с обработкой некорректных данных structure и settings
+        """
+        # Обработка structure
+        if isinstance(data, dict):
+            structure = data.get('structure')
+            settings = data.get('settings')
+        elif hasattr(data, 'structure'):
+            structure = data.structure
+            settings = getattr(data, 'settings', None)
+        else:
+            structure = None
+            settings = None
+            
+        if structure is not None:
+            try:
+                # Если structure - это список, проверяем элементы
+                if isinstance(structure, list):
+                    # Преобразуем в список dict для более гибкой сериализации
+                    validated_structure = []
+                    for item in structure:
+                        if isinstance(item, dict):
+                            validated_structure.append(item)
+                        elif hasattr(item, '__dict__'):
+                            validated_structure.append(dict(item))
+                        else:
+                            # Пропускаем некорректные элементы
+                            continue
+                    if isinstance(data, dict):
+                        data['structure'] = validated_structure if validated_structure else None
+                    elif hasattr(data, '__dict__'):
+                        data.structure = validated_structure if validated_structure else None
+                else:
+                    # Если structure не список, устанавливаем None
+                    if isinstance(data, dict):
+                        data['structure'] = None
+                    elif hasattr(data, '__dict__'):
+                        data.structure = None
+            except Exception:
+                # В случае любой ошибки устанавливаем None
+                if isinstance(data, dict):
+                    data['structure'] = None
+                elif hasattr(data, '__dict__'):
+                    data.structure = None
+        
+        # Обработка settings - убеждаемся, что это dict
+        if settings is None:
+            if isinstance(data, dict):
+                data['settings'] = {}
+            elif hasattr(data, '__dict__'):
+                data.settings = {}
+        elif not isinstance(settings, dict):
+            # Если settings не dict, пытаемся преобразовать или устанавливаем пустой dict
+            try:
+                if isinstance(data, dict):
+                    data['settings'] = dict(settings) if hasattr(settings, '__iter__') else {}
+                elif hasattr(data, '__dict__'):
+                    data.settings = dict(settings) if hasattr(settings, '__iter__') else {}
+            except Exception:
+                if isinstance(data, dict):
+                    data['settings'] = {}
+                elif hasattr(data, '__dict__'):
+                    data.settings = {}
+        
+        return data
 
 
 class TestVariantResponse(BaseModel):
