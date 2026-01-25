@@ -23,19 +23,6 @@ from app.models.submission import Answer
 from app.schemas.question import QuestionCreate, QuestionUpdate, QuestionResponse, ImageAssetResponse
 from app.schemas.annotation import AnnotationData
 
-# #region agent log
-import json, time, os
-def log_debug(msg, data=None):
-    try:
-        payload = json.dumps({"location": "backend/app/api/v1/questions.py", "message": msg, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "runId": "debug_run_1"})
-        # Печатаем в консоль (будет видно в docker logs)
-        print(f"AGENT_LOG: {payload}")
-        # Пишем в файл (универсальный путь для контейнера)
-        with open('/tmp/debug.log', 'a', encoding='utf-8') as f:
-            f.write(payload + "\n")
-    except: pass
-# #endregion
-
 router = APIRouter()
 
 
@@ -200,13 +187,7 @@ async def get_question(
     
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
     if current_user.role == Role.STUDENT:
-        log_debug("get_question hiding data for student", {
-            "q_id": str(question.id),
-            "user": current_user.email
-        })
-        
         from app.schemas.question import QuestionResponse
-        resp_obj = QuestionResponse.model_validate(question)
         
         def clean_data(data):
             if not data: return data
@@ -229,11 +210,9 @@ async def get_question(
 
         if resp_obj.reference_data:
             resp_obj.reference_data = clean_data(resp_obj.reference_data)
-            log_debug("Cleaned reference_data keys", {"keys": list(resp_obj.reference_data.keys()) if isinstance(resp_obj.reference_data, dict) else "not a dict"})
             
         if resp_obj.image and resp_obj.image.coco_annotations:
             resp_obj.image.coco_annotations = clean_data(resp_obj.image.coco_annotations)
-            log_debug("Cleaned coco_annotations keys", {"keys": list(resp_obj.image.coco_annotations.keys()) if isinstance(resp_obj.image.coco_annotations, dict) else "not a dict"})
             
         resp_obj.scoring_criteria = None
         return resp_obj
