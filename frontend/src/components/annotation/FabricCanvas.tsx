@@ -481,12 +481,14 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
     const loadAnnotations = (c: ExtendedCanvas) => {
       if (!isMounted || !fabricCanvas.current || !(c as any).lowerCanvasEl) return
       
+      const objects = c.getObjects().filter(obj => obj !== c.backgroundImage);
+      const studentAnnsCount = annotationsRef.current.length;
+      const hasRefData = !!(referenceDataRef.current?.annotations?.length || (referenceDataRef.current as any)?.segmentation?.length);
+
       // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:481',message:'loadAnnotations internal called',data:{annotationsCount:annotationsRef.current.length},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'E'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7244/ingest/03bf02da-717c-4a71-938b-c15549135d01',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'FabricCanvas.tsx:481',message:'loadAnnotations internal called',data:{studentAnnsCount,hasRefData,showReference:showReferenceRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'debug_run_canvas',hypothesisId:'V'})}).catch(()=>{});
       // #endregion
 
-      // Очищаем ВСЕ объекты, кроме фонового изображения
-      const objects = c.getObjects().filter(obj => obj !== c.backgroundImage);
       c.remove(...objects);
       
       const { scale, left, top } = transformRef.current

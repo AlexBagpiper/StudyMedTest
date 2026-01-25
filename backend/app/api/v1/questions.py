@@ -78,15 +78,32 @@ async def list_questions(
         
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
     if current_user.role == Role.STUDENT:
-        # Для списка вопросов (хотя студентам он запрещен, на всякий случай)
-        cleaned_questions = []
         from app.schemas.question import QuestionResponse
+        
+        def clean_data(data):
+            if not data: return data
+            is_string = False
+            if isinstance(data, str) and data.strip().startswith('{'):
+                try:
+                    data = json.loads(data)
+                    is_string = True
+                except: pass
+            
+            if isinstance(data, dict):
+                cleaned = {k: clean_data(v) if isinstance(v, (dict, list)) else v 
+                          for k, v in data.items() if k not in ["annotations", "segmentation", "scoring_criteria"]}
+                return json.dumps(cleaned) if is_string else cleaned
+            elif isinstance(data, list):
+                return [clean_data(item) if isinstance(item, (dict, list)) else item for item in data]
+            return data
+
+        cleaned_questions = []
         for question in questions:
             resp_obj = QuestionResponse.model_validate(question)
-            if resp_obj.reference_data and isinstance(resp_obj.reference_data, dict):
-                resp_obj.reference_data = {k: v for k, v in resp_obj.reference_data.items() if k != "annotations"}
-            if resp_obj.image and resp_obj.image.coco_annotations and isinstance(resp_obj.image.coco_annotations, dict):
-                resp_obj.image.coco_annotations = {k: v for k, v in resp_obj.image.coco_annotations.items() if k != "annotations"}
+            if resp_obj.reference_data:
+                resp_obj.reference_data = clean_data(resp_obj.reference_data)
+            if resp_obj.image and resp_obj.image.coco_annotations:
+                resp_obj.image.coco_annotations = clean_data(resp_obj.image.coco_annotations)
             resp_obj.scoring_criteria = None
             cleaned_questions.append(resp_obj)
         return cleaned_questions
@@ -178,24 +195,39 @@ async def get_question(
         )
     
     # КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Скрываем только контуры от студентов, оставляя метки
-    # Используем трансформацию в dict, чтобы не менять объект в сессии SQLAlchemy
     if current_user.role == Role.STUDENT:
         log_debug("get_question hiding data for student", {
             "q_id": str(question.id),
             "user": current_user.email
         })
         
-        # Конвертируем в схему и обратно в dict для манипуляций
         from app.schemas.question import QuestionResponse
         resp_obj = QuestionResponse.model_validate(question)
         
-        if resp_obj.reference_data and isinstance(resp_obj.reference_data, dict):
-            # Оставляем всё кроме annotations
-            resp_obj.reference_data = {k: v for k, v in resp_obj.reference_data.items() if k != "annotations"}
+        def clean_data(data):
+            if not data: return data
+            # Если это строка (JSON), парсим её
+            is_string = False
+            if isinstance(data, str) and data.strip().startswith('{'):
+                try:
+                    data = json.loads(data)
+                    is_string = True
+                except: pass
             
-        if resp_obj.image and resp_obj.image.coco_annotations and isinstance(resp_obj.image.coco_annotations, dict):
-            # Оставляем всё кроме annotations
-            resp_obj.image.coco_annotations = {k: v for k, v in resp_obj.image.coco_annotations.items() if k != "annotations"}
+            if isinstance(data, dict):
+                # Рекурсивно удаляем 'annotations' и 'segmentation' (COCO)
+                cleaned = {k: clean_data(v) if isinstance(v, (dict, list)) else v 
+                          for k, v in data.items() if k not in ["annotations", "segmentation", "scoring_criteria"]}
+                return json.dumps(cleaned) if is_string else cleaned
+            elif isinstance(data, list):
+                return [clean_data(item) if isinstance(item, (dict, list)) else item for item in data]
+            return data
+
+        if resp_obj.reference_data:
+            resp_obj.reference_data = clean_data(resp_obj.reference_data)
+            
+        if resp_obj.image and resp_obj.image.coco_annotations:
+            resp_obj.image.coco_annotations = clean_data(resp_obj.image.coco_annotations)
             
         resp_obj.scoring_criteria = None
         return resp_obj
