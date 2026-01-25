@@ -221,6 +221,14 @@ const translations = {
     'questions.annotationsRequired': 'Для графического вопроса наличие аннотаций обязательно',
     'questions.uploadAnnotations': 'Загрузить аннотации (JSON)',
     'questions.imageUploadedAnnotationsRejected': 'Изображение загружено, но файл аннотаций отклонен: {error}',
+    'questions.backToForm': 'Вернуться к форме',
+    'questions.uploadJson': 'Загрузить JSON',
+    'questions.manualAnnotation': 'Ручная разметка',
+    'questions.noAnnotations': 'Аннотации отсутствуют',
+    'questions.annotationsSummary': 'Метки: {labels}, Области: {annotations}',
+    'questions.openEditor': 'Открыть редактор разметки',
+    'questions.viewAnnotation': 'Просмотреть разметку',
+    'questions.atLeastOneAnnotation': 'Необходимо разметить хотя бы одну область',
     
     // Тесты
     'tests.title.student': 'Доступные тесты',
@@ -519,6 +527,14 @@ const translations = {
     'questions.annotationsRequired': 'Annotations are required for image questions',
     'questions.uploadAnnotations': 'Upload annotations (JSON)',
     'questions.imageUploadedAnnotationsRejected': 'Image uploaded, but annotations file rejected: {error}',
+    'questions.backToForm': 'Back to form',
+    'questions.uploadJson': 'Upload JSON',
+    'questions.manualAnnotation': 'Manual annotation',
+    'questions.noAnnotations': 'No annotations',
+    'questions.annotationsSummary': 'Labels: {labels}, Annotations: {annotations}',
+    'questions.openEditor': 'Open annotation editor',
+    'questions.viewAnnotation': 'View annotation',
+    'questions.atLeastOneAnnotation': 'At least one annotation is required',
 
     // Tests
     'tests.title.student': 'Available Tests',

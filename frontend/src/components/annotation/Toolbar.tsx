@@ -62,11 +62,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
             height: 40,
             margin: '1px 0',
             '&.Mui-selected': {
-              bgcolor: '#00d2be',
+              bgcolor: 'primary.main',
               color: '#fff',
-              borderColor: '#00d2be',
+              borderColor: 'primary.main',
               '&:hover': {
-                bgcolor: '#00b3a3',
+                bgcolor: 'primary.dark',
               }
             },
             '&:hover': {
@@ -76,14 +76,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
         }}
       >
         {!readOnly && (
-          <Tooltip title="Выделение (V)" placement="left">
+          <Tooltip title="Выделение" placement="left">
             <ToggleButton value="select">
               <NearMeIcon fontSize="small" />
             </ToggleButton>
           </Tooltip>
         )}
         
-        <Tooltip title="Рука (H)" placement="left">
+        <Tooltip title="Рука" placement="left">
           <ToggleButton value="hand">
             <PanToolIcon fontSize="small" />
           </ToggleButton>
