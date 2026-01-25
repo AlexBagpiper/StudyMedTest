@@ -1,4 +1,4 @@
-cd fro#!/bin/bash
+#!/bin/bash
 
 # StudyMedTest - VPS Server Setup Script (Ubuntu)
 # Run as: curl -s https://.../server_setup.sh | bash
