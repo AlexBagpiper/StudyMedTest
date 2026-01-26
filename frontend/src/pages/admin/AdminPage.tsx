@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Box, Typography, Grid, Card, CardContent, Button, Breadcrumbs, Link } from '@mui/material'
 import PeopleIcon from '@mui/icons-material/People'
-import SchoolIcon from '@mui/icons-material/School'
 import SettingsIcon from '@mui/icons-material/Settings'
 import EmailIcon from '@mui/icons-material/Email'
+import AssignmentIcon from '@mui/icons-material/Assignment'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useLocation } from 'react-router-dom'
 import UsersManagement from './UsersManagement'
 import SystemSettings, { SettingsSection } from './SystemSettings'
 import CVSettings from './CVSettings'
 import LLMSettings from './LLMSettings'
+import TeacherApplicationsManagement from './TeacherApplicationsManagement'
 
-type AdminSection = 'main' | 'users' | 'schools' | 'settings' | 'mail'
+type AdminSection = 'main' | 'users' | 'settings' | 'mail' | 'teacher-applications'
 
 export default function AdminPage() {
   const { t } = useLocale()
@@ -39,11 +40,11 @@ export default function AdminPage() {
       color: '#3B82F6',
     },
     {
-      id: 'schools' as AdminSection,
-      title: 'Учебные заведения',
-      description: 'Управление учебными заведениями',
-      icon: <SchoolIcon sx={{ fontSize: 40 }} />,
-      color: '#8B5CF6',
+      id: 'teacher-applications' as AdminSection,
+      title: 'Заявки преподавателей',
+      description: 'Рассмотрение заявок на регистрацию',
+      icon: <AssignmentIcon sx={{ fontSize: 40 }} />,
+      color: '#F59E0B',
     },
     {
       id: 'settings' as AdminSection,
@@ -109,17 +110,8 @@ export default function AdminPage() {
       case 'users':
         return <UsersManagement />
       
-      case 'schools':
-        return (
-          <Box>
-            <Typography variant="h4" gutterBottom>
-              Учебные заведения
-            </Typography>
-            <Typography color="text.secondary">
-              Функционал в разработке
-            </Typography>
-          </Box>
-        )
+      case 'teacher-applications':
+        return <TeacherApplicationsManagement />
       
       case 'settings':
         if (activeSettingsSection === 'cv') {

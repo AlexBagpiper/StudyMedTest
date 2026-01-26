@@ -339,13 +339,6 @@ export default function UsersManagement() {
               Удалить выбранные ({selectedIds.length})
             </Button>
           )}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenDialog()}
-          >
-            Создать преподавателя
-          </Button>
         </Box>
       </Box>
 

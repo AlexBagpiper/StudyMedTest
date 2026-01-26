@@ -165,3 +165,168 @@ async def send_verification_email(to_email: str, code: str) -> bool:
 """
     
     return await send_email(to_email, subject, body, html_body)
+
+
+async def send_teacher_application_notification(
+    admin_email: str,
+    teacher_email: str,
+    full_name: str
+) -> bool:
+    """
+    Уведомление администратору о новой заявке преподавателя
+    """
+    subject = f"Новая заявка на регистрацию преподавателя - {settings.PROJECT_NAME}"
+    
+    body = f"""
+Здравствуйте!
+
+Поступила новая заявка на регистрацию преподавателя.
+
+Преподаватель: {full_name}
+Email: {teacher_email}
+
+Для рассмотрения заявки перейдите в панель администратора.
+
+С уважением,
+Система {settings.PROJECT_NAME}
+"""
+    
+    html_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
+    <div style="text-align: center; padding: 20px 0;">
+        <h1 style="color: #3B82F6; margin: 0;">{settings.PROJECT_NAME}</h1>
+    </div>
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 40px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+        <h2 style="margin-top: 0; color: #111827;">Новая заявка преподавателя</h2>
+        <p>Поступила новая заявка на регистрацию в системе.</p>
+        
+        <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 8px 0;"><strong>Преподаватель:</strong> {full_name}</p>
+            <p style="margin: 8px 0;"><strong>Email:</strong> {teacher_email}</p>
+        </div>
+        
+        <p>Для рассмотрения заявки перейдите в панель администратора.</p>
+    </div>
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        © {datetime.utcnow().year} {settings.PROJECT_NAME}. Все права защищены.
+    </div>
+</body>
+</html>
+"""
+    
+    return await send_email(admin_email, subject, body, html_body)
+
+
+async def send_teacher_account_created(
+    teacher_email: str,
+    full_name: str,
+    temporary_password: str
+) -> bool:
+    """
+    Уведомление преподавателю об одобрении заявки и создании аккаунта
+    """
+    subject = f"Ваш аккаунт преподавателя создан - {settings.PROJECT_NAME}"
+    
+    body = f"""
+Здравствуйте, {full_name}!
+
+Ваша заявка на регистрацию в качестве преподавателя одобрена.
+Аккаунт успешно создан!
+
+Данные для входа:
+Email: {teacher_email}
+Временный пароль: {temporary_password}
+
+ВАЖНО: При первом входе в систему обязательно смените пароль на постоянный.
+
+Для входа перейдите на сайт и используйте указанные данные.
+
+С уважением,
+Команда {settings.PROJECT_NAME}
+"""
+    
+    html_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
+    <div style="text-align: center; padding: 20px 0;">
+        <h1 style="color: #3B82F6; margin: 0;">{settings.PROJECT_NAME}</h1>
+    </div>
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 40px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+        <h2 style="margin-top: 0; color: #10B981;">✓ Аккаунт создан</h2>
+        <p>Здравствуйте, <strong>{full_name}</strong>!</p>
+        <p>Ваша заявка на регистрацию в качестве преподавателя <strong style="color: #10B981;">одобрена</strong>.</p>
+        
+        <div style="background: #f0fdf4; border-left: 4px solid #10B981; padding: 20px; margin: 20px 0;">
+            <p style="margin: 8px 0;"><strong>Email:</strong> {teacher_email}</p>
+            <p style="margin: 8px 0;"><strong>Временный пароль:</strong></p>
+            <div style="background: white; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; margin: 10px 0; color: #111827; border-radius: 4px; border: 2px dashed #10B981;">
+                {temporary_password}
+            </div>
+        </div>
+        
+        <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0;">
+            <p style="margin: 0; color: #92400e;"><strong>⚠️ ВАЖНО:</strong> При первом входе обязательно смените пароль на постоянный!</p>
+        </div>
+        
+        <p>Войдите в систему, используя указанные данные, и начните работу.</p>
+    </div>
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        © {datetime.utcnow().year} {settings.PROJECT_NAME}. Все права защищены.
+    </div>
+</body>
+</html>
+"""
+    
+    return await send_email(teacher_email, subject, body, html_body)
+
+
+async def send_teacher_application_rejected(
+    teacher_email: str,
+    full_name: str,
+    admin_comment: Optional[str] = None
+) -> bool:
+    """
+    Уведомление преподавателю об отклонении заявки
+    """
+    subject = f"Заявка на регистрацию - {settings.PROJECT_NAME}"
+    
+    comment_text = f"\n\nКомментарий администратора:\n{admin_comment}" if admin_comment else ""
+    
+    body = f"""
+Здравствуйте, {full_name}!
+
+К сожалению, ваша заявка на регистрацию в качестве преподавателя не была одобрена.{comment_text}
+
+Если у вас есть вопросы, пожалуйста, свяжитесь с администрацией.
+
+С уважением,
+Команда {settings.PROJECT_NAME}
+"""
+    
+    html_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
+    <div style="text-align: center; padding: 20px 0;">
+        <h1 style="color: #3B82F6; margin: 0;">{settings.PROJECT_NAME}</h1>
+    </div>
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 40px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+        <h2 style="margin-top: 0; color: #ef4444;">Заявка не одобрена</h2>
+        <p>Здравствуйте, <strong>{full_name}</strong>!</p>
+        <p>К сожалению, ваша заявка на регистрацию в качестве преподавателя не была одобрена.</p>
+        
+        {f'''<div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0; color: #7f1d1d;"><strong>Комментарий администратора:</strong></p>
+            <p style="margin: 10px 0 0 0; color: #991b1b;">{admin_comment}</p>
+        </div>''' if admin_comment else ''}
+        
+        <p>Если у вас есть вопросы или вы хотите повторно подать заявку, пожалуйста, свяжитесь с администрацией.</p>
+    </div>
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        © {datetime.utcnow().year} {settings.PROJECT_NAME}. Все права защищены.
+    </div>
+</body>
+</html>
+"""
+    
+    return await send_email(teacher_email, subject, body, html_body)

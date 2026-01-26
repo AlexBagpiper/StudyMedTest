@@ -10,6 +10,7 @@ from app.models.test import Test, TestStatus, TestQuestion, TestVariant
 from app.models.submission import Submission, SubmissionStatus, Answer
 from app.models.audit import AuditLog
 from app.models.system_config import SystemConfig
+from app.models.teacher_application import TeacherApplication, ApplicationStatus
 
 __all__ = [
     "Base",
@@ -28,5 +29,7 @@ __all__ = [
     "Answer",
     "AuditLog",
     "SystemConfig",
+    "TeacherApplication",
+    "ApplicationStatus",
 ]
 

@@ -76,6 +76,13 @@ export default function LoginPage() {
         </Link>
       </Typography>
 
+      <Typography variant="body2" align="center" sx={{ mt: 1 }}>
+        Преподаватель?{' '}
+        <Link to="/register-teacher" style={{ color: '#3B82F6', textDecoration: 'none' }}>
+          Подать заявку на регистрацию
+        </Link>
+      </Typography>
+
       <MessageDialog
         open={messageDialog.open}
         title={t('common.error')}

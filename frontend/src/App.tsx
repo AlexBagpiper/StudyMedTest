@@ -9,6 +9,7 @@ import AuthLayout from './layouts/AuthLayout'
 // Pages
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
+import TeacherRegisterPage from './pages/auth/TeacherRegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import TestsPage from './pages/tests/TestsPage'
 import TestDetailPage from './pages/tests/TestDetailPage'
@@ -86,6 +87,7 @@ function App() {
       <Route element={<AuthLayout />}>
         <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
         <Route path="/register" element={user ? <Navigate to="/" /> : <RegisterPage />} />
+        <Route path="/register-teacher" element={user ? <Navigate to="/" /> : <TeacherRegisterPage />} />
       </Route>
 
       {/* Protected routes */}
