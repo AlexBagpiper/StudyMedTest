@@ -78,8 +78,8 @@ export default function MainLayout() {
     },
     ...(user?.role === 'admin' ? [
       { text: t('nav.admin'), icon: <AdminPanelSettingsIcon />, path: '/admin' },
+      { text: t('nav.mail'), icon: <EmailIcon />, path: 'https://mail.med-testing.ru', isExternal: true },
     ] : []),
-    { text: t('nav.mail'), icon: <EmailIcon />, path: 'https://mail.med-testing.ru', isExternal: true },
   ]
 
   const drawer = (
