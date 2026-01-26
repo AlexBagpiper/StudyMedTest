@@ -18,6 +18,7 @@ import { AnnotationEditor } from '../../components/annotation/AnnotationEditor'
 import { AnnotationData } from '../../types/annotation'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
+import { useAnnotationStore } from '../../components/annotation/hooks/useAnnotationStore'
 
 export default function TakeTestPage() {
   const { id } = useParams()
@@ -26,6 +27,7 @@ export default function TakeTestPage() {
   const { user } = useAuth()
   const { t } = useLocale()
   const submitTest = useSubmitTest()
+  const { reset: resetAnnotationStore } = useAnnotationStore()
   
   const [submission, setSubmission] = useState<any>(null)
   const [questions, setQuestions] = useState<any[]>([])
@@ -53,6 +55,19 @@ export default function TakeTestPage() {
   useEffect(() => {
     loadSubmission()
   }, [id])
+
+  // Сброс глобального annotation store при загрузке нового теста (submission)
+  // Это предотвращает "протекание" аннотаций между разными тестами
+  useEffect(() => {
+    if (submission?.id) {
+      // #region agent log
+      console.log('[DEBUG H1] Resetting annotation store for new submission', {
+        submission_id: submission.id
+      })
+      // #endregion
+      resetAnnotationStore()
+    }
+  }, [submission?.id, resetAnnotationStore])
 
   useEffect(() => {
     if (currentQuestion?.type === 'image_annotation') {
