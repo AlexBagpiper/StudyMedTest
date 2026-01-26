@@ -160,6 +160,9 @@ services:
     container_name: medtest-mail
     restart: always
     working_dir: /data
+    extra_hosts:
+      - "med-testing.ru:127.0.0.1"
+      - "mail.med-testing.ru:127.0.0.1"
     # Mox handles its own TLS if ports 80/443 are available, 
     # but since we have Nginx, we'll let Nginx handle webmail proxying 
     # and Mox handle SMTP/IMAP directly.

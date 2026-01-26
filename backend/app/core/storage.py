@@ -35,10 +35,9 @@ class StorageService:
                 self.client.make_bucket(self.bucket)
                 print(f"[+] Created bucket: {self.bucket}")
             
-            # В режиме разработки делаем bucket публичным для чтения
+            # Делаем bucket публичным для чтения в любом окружении
             # Это решает проблемы с presigned URLs через прокси
-            if settings.ENVIRONMENT == "development":
-                self._set_public_read_policy()
+            self._set_public_read_policy()
         except S3Error as e:
             print(f"[-] Error with bucket: {e}")
             
