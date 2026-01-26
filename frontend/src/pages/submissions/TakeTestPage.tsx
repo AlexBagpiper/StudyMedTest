@@ -60,11 +60,6 @@ export default function TakeTestPage() {
   // Это предотвращает "протекание" аннотаций между разными тестами
   useEffect(() => {
     if (submission?.id) {
-      // #region agent log
-      console.log('[DEBUG H1] Resetting annotation store for new submission', {
-        submission_id: submission.id
-      })
-      // #endregion
       resetAnnotationStore()
     }
   }, [submission?.id, resetAnnotationStore])
@@ -95,20 +90,6 @@ export default function TakeTestPage() {
       setIsLoading(true)
       const subRes = await api.get(`/submissions/${id}`)
       const subData = subRes.data
-      
-      // #region agent log
-      console.log('[DEBUG H1,H2] loadSubmission: received subData', {
-        submission_id: subData.id,
-        variant_id: subData.variant_id,
-        answers_count: subData.answers?.length || 0,
-        answers: subData.answers?.map((a: any) => ({
-          id: a.id,
-          question_id: a.question_id,
-          submission_id: a.submission_id,
-          has_annotation: !!a.annotation_data
-        }))
-      })
-      // #endregion
       
       // Если тест уже не в процессе, перенаправляем на результаты
       if (subData.status !== 'in_progress') {
@@ -150,13 +131,6 @@ export default function TakeTestPage() {
   }
 
   const handleAnswerChange = (questionId: string, value: any) => {
-    // #region agent log
-    console.log('[DEBUG H5] handleAnswerChange called', {
-      questionId,
-      value_type: typeof value,
-      has_annotations: value?.annotations?.length > 0
-    })
-    // #endregion
     setAnswers(prev => {
       const next = { ...prev, [questionId]: value }
       answersRef.current = next
@@ -419,23 +393,10 @@ export default function TakeTestPage() {
             <AnnotationEditor
               key={`${submission?.id}-${currentQuestion?.id}`}
               imageUrl={currentQuestion?.image?.presigned_url || ''}
-              initialData={(() => {
-                // #region agent log
-                const currentAnswerData = answers[currentQuestion?.id] as AnnotationData
-                const initialData = {
-                  labels: currentLabels,
-                  annotations: currentAnswerData?.annotations || []
-                }
-                console.log('[DEBUG H1,H5] AnnotationEditor initialData', {
-                  questionId: currentQuestion?.id,
-                  submissionId: submission?.id,
-                  has_answer_in_state: !!currentAnswerData,
-                  annotations_count: initialData.annotations.length,
-                  annotations: initialData.annotations
-                })
-                return initialData
-                // #endregion
-              })()}
+              initialData={{
+                labels: currentLabels,
+                annotations: (answers[currentQuestion?.id] as AnnotationData)?.annotations || []
+              }}
               onChange={(data) => handleAnswerChange(currentQuestion.id, data)}
               readOnly={false}
               hideLabels={true}
