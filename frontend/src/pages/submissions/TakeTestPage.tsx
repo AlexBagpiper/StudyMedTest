@@ -114,12 +114,6 @@ export default function TakeTestPage() {
           initialAnswers[a.question_id] = a.student_answer || a.annotation_data
         })
       }
-      // #region agent log
-      console.log('[DEBUG H1,H3] loadSubmission: initialAnswers built', {
-        answers_keys: Object.keys(initialAnswers),
-        first_answer_sample: Object.values(initialAnswers)[0]
-      })
-      // #endregion
       setAnswers(initialAnswers)
       
     } catch (err: any) {
