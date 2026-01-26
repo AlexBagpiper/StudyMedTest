@@ -82,6 +82,8 @@ class SubmissionResponse(BaseModel):
     
     # Добавляем лимит времени для фронтенда
     time_limit: Optional[int] = None # в минутах
+    # Оставшееся время в секундах (вычисляется на сервере для точности)
+    remaining_seconds: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

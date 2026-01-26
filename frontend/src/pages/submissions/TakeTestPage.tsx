@@ -259,37 +259,30 @@ export default function TakeTestPage() {
       return
     }
 
-    const calculateTimeLeft = () => {
-      const dateStr = submission.started_at;
-      const normalizedDateStr = (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) 
-        ? `${dateStr}Z` 
-        : dateStr;
-        
-      const startedAt = new Date(normalizedDateStr).getTime()
-      const limitMs = (submission.time_limit || 0) * 60 * 1000
-      const now = new Date().getTime()
-      const remaining = Math.max(0, Math.floor((startedAt + limitMs - now) / 1000))
-      
-      // #region agent log
-      console.log('[DEBUG TIMER] calculateTimeLeft', {
-        submission_id: submission.id,
-        started_at_str: dateStr,
-        started_at_ms: startedAt,
-        time_limit_min: submission.time_limit,
-        limit_ms: limitMs,
-        now_ms: now,
-        diff_ms: startedAt + limitMs - now,
-        remaining_sec: remaining
-      })
-      // #endregion
-      
-      if (remaining <= 0) {
-        return 0
-      }
-      return remaining
-    }
-
-    const initial = calculateTimeLeft()
+    // Используем remaining_seconds с сервера (если есть), иначе вычисляем на клиенте
+    const initial = submission.remaining_seconds !== undefined && submission.remaining_seconds !== null
+      ? submission.remaining_seconds
+      : (() => {
+          const dateStr = submission.started_at;
+          const normalizedDateStr = (dateStr && !dateStr.endsWith('Z') && !dateStr.includes('+')) 
+            ? `${dateStr}Z` 
+            : dateStr;
+            
+          const startedAt = new Date(normalizedDateStr).getTime()
+          const limitMs = (submission.time_limit || 0) * 60 * 1000
+          const now = new Date().getTime()
+          return Math.max(0, Math.floor((startedAt + limitMs - now) / 1000))
+        })()
+    
+    // #region agent log
+    console.log('[DEBUG TIMER] Timer initialized', {
+      submission_id: submission.id,
+      initial_seconds: initial,
+      from_server: submission.remaining_seconds !== undefined,
+      server_value: submission.remaining_seconds
+    })
+    // #endregion
+    
     setTimeLeft(initial)
     
     if (initial === 0 && submission && submission.status === 'in_progress') {

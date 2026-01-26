@@ -145,6 +145,18 @@ async def get_submission(
     # Добавляем time_limit в объект для схемы
     submission.time_limit = submission.variant.test.settings.get("time_limit")
     
+    # Вычисляем оставшееся время на сервере для точности
+    if submission.status == SubmissionStatus.IN_PROGRESS and submission.time_limit:
+        limit_ms = submission.time_limit * 60 * 1000
+        elapsed_ms = (datetime.utcnow() - submission.started_at).total_seconds() * 1000
+        remaining_ms = max(0, limit_ms - elapsed_ms)
+        submission.remaining_seconds = int(remaining_ms / 1000)
+        # #region agent log
+        print(f"[DEBUG TIMER] Calculated remaining: id={submission.id}, limit_min={submission.time_limit}, elapsed_ms={elapsed_ms}, remaining_sec={submission.remaining_seconds}")
+        # #endregion
+    else:
+        submission.remaining_seconds = None
+    
     return submission
 
 
