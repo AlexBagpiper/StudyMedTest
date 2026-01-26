@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user, get_password_hash
+from app.core.redis import set_json, get_json, delete_key
 from app.models.user import User, Role
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, EmailChangeRequest, EmailChangeConfirm
 from app.services.email_service import send_email_change_code
@@ -76,12 +77,13 @@ async def request_email_change(
     # Генерируем 6-значный код
     code = ''.join([str(secrets.randbelow(10)) for _ in range(6)])
     
-    # Сохраняем pending email и код
-    current_user.pending_email = new_email
-    current_user.email_change_code = code
-    current_user.email_change_expires = datetime.utcnow() + timedelta(minutes=15)
-    
-    await db.commit()
+    # Сохраняем данные в Redis (на 15 минут)
+    change_data = {
+        "new_email": new_email,
+        "code": code,
+        "user_id": str(current_user.id)
+    }
+    await set_json(f"email_change:{current_user.id}", change_data, expire=900)
     
     # Отправляем код на новый email
     await send_email_change_code(new_email, code)
@@ -102,54 +104,48 @@ async def confirm_email_change(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Подтверждение смены email по коду из письма.
+    Подтверждение смены email по коду из письма (данные из Redis).
     """
-    # Проверяем что есть pending email
-    if not current_user.pending_email or not current_user.email_change_code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No pending email change request"
-        )
+    # Ищем данные в Redis
+    change_data = await get_json(f"email_change:{current_user.id}")
     
-    # Проверяем срок действия
-    if current_user.email_change_expires and current_user.email_change_expires < datetime.utcnow():
-        # Очищаем просроченный запрос
-        current_user.pending_email = None
-        current_user.email_change_code = None
-        current_user.email_change_expires = None
-        await db.commit()
+    if not change_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Confirmation code expired"
+            detail="No pending email change request or code expired"
         )
     
     # Проверяем код
-    if current_user.email_change_code != request.code:
+    if change_data["code"] != request.code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid confirmation code"
         )
     
+    new_email = change_data["new_email"]
+    
     # Ещё раз проверяем что email не занят (на случай race condition)
-    result = await db.execute(select(User).where(User.email == current_user.pending_email))
+    result = await db.execute(select(User).where(User.email == new_email))
     if result.scalar_one_or_none():
-        current_user.pending_email = None
-        current_user.email_change_code = None
-        current_user.email_change_expires = None
-        await db.commit()
+        await delete_key(f"email_change:{current_user.id}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
     
-    # Меняем email
+    # Меняем email в основной БД
     old_email = current_user.email
-    current_user.email = current_user.pending_email
+    current_user.email = new_email
+    
+    # Очищаем старые поля (если они были заполнены ранее)
     current_user.pending_email = None
     current_user.email_change_code = None
     current_user.email_change_expires = None
     
     await db.commit()
+    
+    # Удаляем данные из Redis
+    await delete_key(f"email_change:{current_user.id}")
     
     return {"message": "Email changed successfully", "old_email": old_email, "new_email": current_user.email}
 
@@ -162,11 +158,7 @@ async def cancel_email_change(
     """
     Отмена запроса на смену email.
     """
-    current_user.pending_email = None
-    current_user.email_change_code = None
-    current_user.email_change_expires = None
-    await db.commit()
-    
+    await delete_key(f"email_change:{current_user.id}")
     return {"message": "Email change request cancelled"}
 
 

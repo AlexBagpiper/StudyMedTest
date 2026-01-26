@@ -66,11 +66,6 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     
-    # Email change verification
-    pending_email = Column(String(255), nullable=True)  # Новый email ожидающий подтверждения
-    email_change_code = Column(String(6), nullable=True)  # 6-значный код
-    email_change_expires = Column(DateTime, nullable=True)  # Срок действия кода
-    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
