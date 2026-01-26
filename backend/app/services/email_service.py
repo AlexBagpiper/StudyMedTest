@@ -4,6 +4,7 @@ Email service для отправки писем
 
 import logging
 import smtplib
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
@@ -52,8 +53,10 @@ async def send_email(
             msg.attach(part2)
         
         # Отправка
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            server.starttls()
+        smtp_class = smtplib.SMTP_SSL if settings.SMTP_PORT == 465 else smtplib.SMTP
+        with smtp_class(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+            if settings.SMTP_PORT != 465:
+                server.starttls()
             if settings.SMTP_USER and settings.SMTP_PASSWORD:
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_FROM, to_email, msg.as_string())
@@ -101,6 +104,62 @@ async def send_email_change_code(to_email: str, code: str) -> bool:
     <p style="color: #9ca3af; font-size: 12px;">
         Если вы не запрашивали смену email, проигнорируйте это письмо.
     </p>
+</body>
+</html>
+"""
+    
+    return await send_email(to_email, subject, body, html_body)
+
+
+async def send_verification_email(to_email: str, code: str) -> bool:
+    """
+    Отправка кода подтверждения регистрации
+    """
+    subject = f"Подтверждение регистрации - {settings.PROJECT_NAME}"
+    body = f"""
+Здравствуйте!
+
+Добро пожаловать в {settings.PROJECT_NAME}.
+
+Для завершения регистрации, пожалуйста, используйте следующий код подтверждения:
+
+{code}
+
+Код действителен 24 часа.
+
+Если вы не регистрировались на нашем сервисе, просто проигнорируйте это письмо.
+
+С уважением,
+Команда {settings.PROJECT_NAME}
+"""
+    
+    html_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #374151;">
+    <div style="text-align: center; padding: 20px 0;">
+        <h1 style="color: #3B82F6; margin: 0;">{settings.PROJECT_NAME}</h1>
+    </div>
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 40px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+        <h2 style="margin-top: 0; color: #111827;">Подтверждение почты</h2>
+        <p>Здравствуйте!</p>
+        <p>Спасибо за регистрацию в <strong>{settings.PROJECT_NAME}</strong>. Для подтверждения вашего email адреса используйте код ниже:</p>
+        
+        <div style="background: #f3f4f6; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 30px 0; color: #111827; border-radius: 4px;">
+            {code}
+        </div>
+        
+        <p style="color: #6b7280; font-size: 14px;">Код действителен в течение 24 часов.</p>
+        <p>Введите этот код на странице подтверждения в приложении.</p>
+        
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+        
+        <p style="color: #9ca3af; font-size: 12px; margin-bottom: 0;">
+            Если вы не создавали аккаунт, просто проигнорируйте это письмо.
+        </p>
+    </div>
+    <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+        © {datetime.utcnow().year} {settings.PROJECT_NAME}. Все права защищены.
+    </div>
 </body>
 </html>
 """

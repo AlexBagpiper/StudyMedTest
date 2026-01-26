@@ -59,6 +59,21 @@ class EmailChangeConfirm(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
 
 
+class EmailVerificationRequest(BaseModel):
+    """
+    Запрос на подтверждение email
+    """
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class ResendVerificationRequest(BaseModel):
+    """
+    Запрос на повторную отправку кода
+    """
+    email: EmailStr
+
+
 class UserInDB(UserBase):
     """
     Схема пользователя из БД

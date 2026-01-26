@@ -3,6 +3,7 @@ import { Box, Typography, Grid, Card, CardContent, Button, Breadcrumbs, Link } f
 import PeopleIcon from '@mui/icons-material/People'
 import SchoolIcon from '@mui/icons-material/School'
 import SettingsIcon from '@mui/icons-material/Settings'
+import EmailIcon from '@mui/icons-material/Email'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useLocation } from 'react-router-dom'
 import UsersManagement from './UsersManagement'
@@ -10,7 +11,7 @@ import SystemSettings, { SettingsSection } from './SystemSettings'
 import CVSettings from './CVSettings'
 import LLMSettings from './LLMSettings'
 
-type AdminSection = 'main' | 'users' | 'schools' | 'settings'
+type AdminSection = 'main' | 'users' | 'schools' | 'settings' | 'mail'
 
 export default function AdminPage() {
   const { t } = useLocale()
@@ -50,6 +51,15 @@ export default function AdminPage() {
       description: 'Конфигурация платформы',
       icon: <SettingsIcon sx={{ fontSize: 40 }} />,
       color: '#10B981',
+    },
+    {
+      id: 'mail' as AdminSection,
+      title: 'Почта',
+      description: 'Корпоративный почтовый сервер',
+      icon: <EmailIcon sx={{ fontSize: 40 }} />,
+      color: '#EA4335',
+      isExternal: true,
+      url: 'https://webmail.med-testing.ru',
     },
   ]
 
@@ -148,7 +158,13 @@ export default function AdminPage() {
                         boxShadow: 4,
                       },
                     }}
-                    onClick={() => setActiveSection(section.id)}
+                    onClick={() => {
+                      if ('isExternal' in section && section.isExternal) {
+                        window.open(section.url as string, '_blank')
+                      } else {
+                        setActiveSection(section.id)
+                      }
+                    }}
                   >
                     <CardContent
                       sx={{

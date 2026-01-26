@@ -18,6 +18,8 @@ interface AuthContextType {
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, lastName: string, firstName: string, middleName?: string) => Promise<void>
+  verifyEmail: (email: string, code: string) => Promise<void>
+  resendVerification: (email: string) => Promise<void>
   logout: () => void
 }
 
@@ -86,9 +88,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       first_name: firstName,
       middle_name: middleName || null,
     })
+  }
 
-    // Auto-login after registration
-    await login(email, password)
+  const verifyEmail = async (email: string, code: string) => {
+    await api.post('/auth/verify-email', { email, code })
+  }
+
+  const resendVerification = async (email: string) => {
+    await api.post('/auth/resend-verification', { email })
   }
 
   const logout = () => {
@@ -107,6 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     login,
     register,
+    verifyEmail,
+    resendVerification,
     logout,
   }
 

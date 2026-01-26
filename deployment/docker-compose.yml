@@ -134,7 +134,7 @@ services:
     networks:
       - medtest-network
 
-  # Nginx (Reverse Proxy)
+    # Nginx (Reverse Proxy)
   nginx:
     image: nginx:alpine
     container_name: medtest-nginx
@@ -149,6 +149,24 @@ services:
     depends_on:
       - backend
       - frontend
+    networks:
+      - medtest-network
+
+  # Mail Server (Mox) - Lightweight all-in-one SMTP, IMAP, Webmail
+  mail:
+    image: mjl/mox:latest
+    container_name: medtest-mail
+    restart: always
+    # Mox handles its own TLS if ports 80/443 are available, 
+    # but since we have Nginx, we'll let Nginx handle webmail proxying 
+    # and Mox handle SMTP/IMAP directly.
+    ports:
+      - "25:25"     # SMTP
+      - "465:465"   # SMTP (TLS)
+      - "587:587"   # Submission (STARTTLS)
+      - "993:993"   # IMAP (TLS)
+    volumes:
+      - ./mox-data:/data
     networks:
       - medtest-network
 

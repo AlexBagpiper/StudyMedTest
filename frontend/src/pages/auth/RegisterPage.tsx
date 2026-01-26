@@ -1,6 +1,18 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, TextField, Button, Typography, IconButton, InputAdornment } from '@mui/material'
+import { 
+  Box, 
+  TextField, 
+  Button, 
+  Typography, 
+  IconButton, 
+  InputAdornment,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
+} from '@mui/material'
 import Visibility from '@mui/icons-material/Visibility'
 import VisibilityOff from '@mui/icons-material/VisibilityOff'
 import { useAuth } from '../../contexts/AuthContext'
@@ -20,7 +32,14 @@ export default function RegisterPage() {
     message: ''
   })
   const [loading, setLoading] = useState(false)
-  const { register } = useAuth()
+  
+  // Состояния для подтверждения почты
+  const [verifyDialogOpen, setVerifyDialogOpen] = useState(false)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verifying, setVerifying] = useState(false)
+  const [resending, setResending] = useState(false)
+
+  const { register, verifyEmail, resendVerification, login } = useAuth()
   const { t } = useLocale()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,6 +70,7 @@ export default function RegisterPage() {
 
     try {
       await register(email, password, lastName, firstName, middleName || undefined)
+      setVerifyDialogOpen(true)
     } catch (err: any) {
       const detail = err.response?.data?.detail
       let message = t('common.error')
@@ -62,6 +82,46 @@ export default function RegisterPage() {
       setMessageDialog({ open: true, message })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleVerifyCode = async () => {
+    if (verificationCode.length !== 6) return
+    
+    setVerifying(true)
+    try {
+      await verifyEmail(email, verificationCode)
+      // После успешной верификации — логинимся
+      await login(email, password)
+      setVerifyDialogOpen(false)
+    } catch (err: any) {
+      const detail = err.response?.data?.detail
+      setMessageDialog({ 
+        open: true, 
+        message: typeof detail === 'string' ? detail : "Неверный код подтверждения" 
+      })
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  const handleResendCode = async () => {
+    setResending(true)
+    try {
+      await resendVerification(email)
+      // В реальном приложении здесь лучше использовать Snackbar
+      alert("Код отправлен повторно")
+    } catch (err: any) {
+      console.error(err)
+    } finally {
+      setResending(false)
+    }
+  }
+
+  const handleCloseVerifyDialog = () => {
+    if (!verifying) {
+      setVerifyDialogOpen(false)
+      setVerificationCode('')
     }
   }
 
@@ -157,7 +217,7 @@ export default function RegisterPage() {
         sx={{ mt: 3, mb: 2 }}
         disabled={loading}
       >
-        {loading ? t('auth.registering') : t('auth.register')}
+        {loading ? <CircularProgress size={24} color="inherit" /> : t('auth.register')}
       </Button>
 
       <Typography variant="body2" align="center">
@@ -166,6 +226,70 @@ export default function RegisterPage() {
           {t('auth.login')}
         </Link>
       </Typography>
+
+      {/* Диалог подтверждения почты */}
+      <Dialog 
+        open={verifyDialogOpen} 
+        onClose={handleCloseVerifyDialog}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ textAlign: 'center', pt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ width: 40 }} /> 
+          Подтверждение почты
+          <IconButton
+            onClick={handleCloseVerifyDialog}
+            disabled={verifying}
+            sx={{ color: 'text.secondary' }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 3, textAlign: 'center', color: 'text.secondary' }}>
+            Мы отправили 6-значный код на адрес:<br/>
+            <strong>{email}</strong>
+          </Typography>
+          <TextField
+            fullWidth
+            label="Код подтверждения"
+            value={verificationCode}
+            autoFocus
+            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            inputProps={{ 
+              style: { 
+                textAlign: 'center', 
+                fontSize: '28px', 
+                letterSpacing: '8px',
+                fontWeight: 'bold'
+              } 
+            }}
+            placeholder="000000"
+          />
+          <Typography variant="caption" sx={{ mt: 1, display: 'block', textAlign: 'center', color: 'text.secondary' }}>
+            Код действителен в течение 24 часов
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 4, flexDirection: 'column', gap: 2 }}>
+          <Button 
+            onClick={handleVerifyCode} 
+            variant="contained" 
+            fullWidth
+            size="large"
+            disabled={verificationCode.length !== 6 || verifying}
+          >
+            {verifying ? <CircularProgress size={26} color="inherit" /> : 'Подтвердить'}
+          </Button>
+          <Button 
+            onClick={handleResendCode} 
+            color="primary" 
+            disabled={resending || verifying}
+            sx={{ textTransform: 'none' }}
+          >
+            {resending ? 'Отправка...' : 'Отправить код повторно'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <MessageDialog
         open={messageDialog.open}
