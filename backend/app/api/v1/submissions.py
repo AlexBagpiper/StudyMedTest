@@ -124,6 +124,13 @@ async def get_submission(
             detail="Not enough permissions"
         )
     
+    # ВАЖНО: Если это первый запрос к submission (нет ответов), 
+    # обновляем started_at на текущий момент
+    # Это гарантирует, что таймер начинается с момента открытия страницы теста
+    if submission.status == SubmissionStatus.IN_PROGRESS and not submission.answers:
+        submission.started_at = datetime.utcnow()
+        await db.commit()
+    
     # Добавляем time_limit в объект для схемы
     submission.time_limit = submission.variant.test.settings.get("time_limit")
     
