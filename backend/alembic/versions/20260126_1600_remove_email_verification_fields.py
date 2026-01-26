@@ -19,9 +19,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.drop_column('users', 'email_change_expires')
-    op.drop_column('users', 'email_change_code')
-    op.drop_column('users', 'pending_email')
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('users')]
+    
+    if 'email_change_expires' in columns:
+        op.drop_column('users', 'email_change_expires')
+    if 'email_change_code' in columns:
+        op.drop_column('users', 'email_change_code')
+    if 'pending_email' in columns:
+        op.drop_column('users', 'pending_email')
 
 
 def downgrade() -> None:

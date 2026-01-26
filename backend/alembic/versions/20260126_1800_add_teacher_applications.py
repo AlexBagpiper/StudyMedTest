@@ -17,26 +17,32 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        'teacher_applications',
-        sa.Column('id', UUID(as_uuid=True), primary_key=True),
-        sa.Column('email', sa.String(255), nullable=False, index=True),
-        sa.Column('last_name', sa.String(100), nullable=False),
-        sa.Column('first_name', sa.String(100), nullable=False),
-        sa.Column('middle_name', sa.String(100), nullable=True),
-        sa.Column('institution', sa.String(255), nullable=True),  # Учебное заведение
-        sa.Column('department', sa.String(255), nullable=True),    # Кафедра
-        sa.Column('position', sa.String(100), nullable=True),      # Должность
-        sa.Column('phone', sa.String(20), nullable=True),          # Телефон
-        sa.Column('comment', sa.Text, nullable=True),              # Комментарий от преподавателя
-        sa.Column('status', sa.String(20), nullable=False, default='pending', index=True),  # pending, approved, rejected
-        sa.Column('admin_comment', sa.Text, nullable=True),        # Комментарий администратора
-        sa.Column('reviewed_by', UUID(as_uuid=True), nullable=True),  # ID админа
-        sa.Column('reviewed_at', sa.DateTime, nullable=True),
-        sa.Column('created_at', sa.DateTime, nullable=False, server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime, nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
-        sa.ForeignKeyConstraint(['reviewed_by'], ['users.id'], ondelete='SET NULL'),
-    )
+    # Проверяем наличие таблицы перед созданием
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    tables = inspector.get_table_names()
+    
+    if 'teacher_applications' not in tables:
+        op.create_table(
+            'teacher_applications',
+            sa.Column('id', UUID(as_uuid=True), primary_key=True),
+            sa.Column('email', sa.String(255), nullable=False, index=True),
+            sa.Column('last_name', sa.String(100), nullable=False),
+            sa.Column('first_name', sa.String(100), nullable=False),
+            sa.Column('middle_name', sa.String(100), nullable=True),
+            sa.Column('institution', sa.String(255), nullable=True),  # Учебное заведение
+            sa.Column('department', sa.String(255), nullable=True),    # Кафедра
+            sa.Column('position', sa.String(100), nullable=True),      # Должность
+            sa.Column('phone', sa.String(20), nullable=True),          # Телефон
+            sa.Column('comment', sa.Text, nullable=True),              # Комментарий от преподавателя
+            sa.Column('status', sa.String(20), nullable=False, default='pending', index=True),  # pending, approved, rejected
+            sa.Column('admin_comment', sa.Text, nullable=True),        # Комментарий администратора
+            sa.Column('reviewed_by', UUID(as_uuid=True), nullable=True),  # ID админа
+            sa.Column('reviewed_at', sa.DateTime, nullable=True),
+            sa.Column('created_at', sa.DateTime, nullable=False, server_default=sa.func.now()),
+            sa.Column('updated_at', sa.DateTime, nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
+            sa.ForeignKeyConstraint(['reviewed_by'], ['users.id'], ondelete='SET NULL'),
+        )
 
 
 def downgrade() -> None:

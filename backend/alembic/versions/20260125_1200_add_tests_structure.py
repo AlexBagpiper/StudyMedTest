@@ -17,8 +17,13 @@ depends_on = None
 
 
 def upgrade():
-    # Добавляем колонку structure в таблицу tests
-    op.add_column('tests', sa.Column('structure', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    # Проверяем наличие колонки перед добавлением
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('tests')]
+    
+    if 'structure' not in columns:
+        op.add_column('tests', sa.Column('structure', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
 
 
 def downgrade():
