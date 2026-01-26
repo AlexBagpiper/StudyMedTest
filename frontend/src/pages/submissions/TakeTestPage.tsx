@@ -270,6 +270,19 @@ export default function TakeTestPage() {
       const now = new Date().getTime()
       const remaining = Math.max(0, Math.floor((startedAt + limitMs - now) / 1000))
       
+      // #region agent log
+      console.log('[DEBUG TIMER] calculateTimeLeft', {
+        submission_id: submission.id,
+        started_at_str: dateStr,
+        started_at_ms: startedAt,
+        time_limit_min: submission.time_limit,
+        limit_ms: limitMs,
+        now_ms: now,
+        diff_ms: startedAt + limitMs - now,
+        remaining_sec: remaining
+      })
+      // #endregion
+      
       if (remaining <= 0) {
         return 0
       }

@@ -123,6 +123,10 @@ async def start_test(
     db.add(submission)
     await db.commit()
     
+    # #region agent log
+    print(f"[DEBUG TIMER] Created submission: id={submission.id}, started_at={submission.started_at}")
+    # #endregion
+    
     # Релоад со всеми связями для ответа (нужно для SubmissionResponse)
     result = await db.execute(
         select(Submission)
