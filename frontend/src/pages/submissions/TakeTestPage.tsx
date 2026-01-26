@@ -274,15 +274,6 @@ export default function TakeTestPage() {
           return Math.max(0, Math.floor((startedAt + limitMs - now) / 1000))
         })()
     
-    // #region agent log
-    console.log('[DEBUG TIMER] Timer initialized', {
-      submission_id: submission.id,
-      initial_seconds: initial,
-      from_server: submission.remaining_seconds !== undefined,
-      server_value: submission.remaining_seconds
-    })
-    // #endregion
-    
     setTimeLeft(initial)
     
     if (initial === 0 && submission && submission.status === 'in_progress') {

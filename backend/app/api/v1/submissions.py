@@ -127,20 +127,9 @@ async def get_submission(
     # ВАЖНО: Если это первый запрос к submission (нет ответов), 
     # обновляем started_at на текущий момент
     # Это гарантирует, что таймер начинается с момента открытия страницы теста
-    # #region agent log
-    old_started_at = submission.started_at
-    answers_count = len(submission.answers) if submission.answers else 0
-    # #endregion
     if submission.status == SubmissionStatus.IN_PROGRESS and not submission.answers:
         submission.started_at = datetime.utcnow()
         await db.commit()
-        # #region agent log
-        print(f"[DEBUG TIMER] Updated started_at: id={submission.id}, old={old_started_at}, new={submission.started_at}, answers_count={answers_count}")
-        # #endregion
-    else:
-        # #region agent log
-        print(f"[DEBUG TIMER] Did NOT update started_at: id={submission.id}, status={submission.status}, answers_count={answers_count}, started_at={submission.started_at}")
-        # #endregion
     
     # Добавляем time_limit в объект для схемы
     submission.time_limit = submission.variant.test.settings.get("time_limit")
@@ -153,13 +142,7 @@ async def get_submission(
             elapsed_ms = (datetime.utcnow() - submission.started_at).total_seconds() * 1000
             remaining_ms = max(0, limit_ms - elapsed_ms)
             submission.remaining_seconds = int(remaining_ms / 1000)
-            # #region agent log
-            print(f"[DEBUG TIMER] Calculated remaining: id={submission.id}, limit_min={time_limit_int}, elapsed_ms={elapsed_ms}, remaining_sec={submission.remaining_seconds}")
-            # #endregion
-        except (ValueError, TypeError) as e:
-            # #region agent log
-            print(f"[DEBUG TIMER] Error calculating remaining: {e}, time_limit type={type(submission.time_limit)}, value={submission.time_limit}")
-            # #endregion
+        except (ValueError, TypeError):
             submission.remaining_seconds = None
     else:
         submission.remaining_seconds = None
