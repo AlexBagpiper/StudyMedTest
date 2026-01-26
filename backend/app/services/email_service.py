@@ -4,6 +4,7 @@ Email service для отправки писем
 
 import logging
 import smtplib
+import json
 from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -38,6 +39,10 @@ async def send_email(
         return True
     
     try:
+        # #region agent log
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({'sessionId':'debug-session','runId':'run1','hypothesisId':'B','location':'email_service.py:40','message':'Attempting SMTP connection','data':{'host':settings.SMTP_HOST,'port':settings.SMTP_PORT,'timeout':10},'timestamp':datetime.utcnow().timestamp()}) + '\n')
+        # #endregion
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = settings.SMTP_FROM
@@ -54,17 +59,37 @@ async def send_email(
         
         # Отправка
         smtp_class = smtplib.SMTP_SSL if settings.SMTP_PORT == 465 else smtplib.SMTP
-        with smtp_class(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+        # #region agent log
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({'sessionId':'debug-session','runId':'run1','hypothesisId':'C','location':'email_service.py:60','message':'Connecting using smtp_class','data':{'class':smtp_class.__name__},'timestamp':datetime.utcnow().timestamp()}) + '\n')
+        # #endregion
+        with smtp_class(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
+            # #region agent log
+            with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a') as f:
+                f.write(json.dumps({'sessionId':'debug-session','runId':'run1','hypothesisId':'C','location':'email_service.py:64','message':'Connected successfully','timestamp':datetime.utcnow().timestamp()}) + '\n')
+            # #endregion
             if settings.SMTP_PORT != 465:
                 server.starttls()
             if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                # #region agent log
+                with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a') as f:
+                    f.write(json.dumps({'sessionId':'debug-session','runId':'run1','hypothesisId':'B','location':'email_service.py:69','message':'Attempting login','data':{'user':settings.SMTP_USER},'timestamp':datetime.utcnow().timestamp()}) + '\n')
+                # #endregion
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_FROM, to_email, msg.as_string())
         
+        # #region agent log
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({'sessionId':'debug-session','runId':'run1','hypothesisId':'ALL','location':'email_service.py:76','message':'Email sent successfully','timestamp':datetime.utcnow().timestamp()}) + '\n')
+        # #endregion
         logger.info(f"Email sent to {to_email}")
         return True
         
     except Exception as e:
+        # #region agent log
+        with open(r'e:\pythonProject\StudyMedTest\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({'sessionId':'debug-session','runId':'run1','hypothesisId':'ALL','location':'email_service.py:81','message':'SMTP Error','data':{'error':str(e)},'timestamp':datetime.utcnow().timestamp()}) + '\n')
+        # #endregion
         logger.error(f"Failed to send email to {to_email}: {e}")
         return False
 
