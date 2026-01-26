@@ -147,13 +147,20 @@ async def get_submission(
     
     # Вычисляем оставшееся время на сервере для точности
     if submission.status == SubmissionStatus.IN_PROGRESS and submission.time_limit:
-        limit_ms = submission.time_limit * 60 * 1000
-        elapsed_ms = (datetime.utcnow() - submission.started_at).total_seconds() * 1000
-        remaining_ms = max(0, limit_ms - elapsed_ms)
-        submission.remaining_seconds = int(remaining_ms / 1000)
-        # #region agent log
-        print(f"[DEBUG TIMER] Calculated remaining: id={submission.id}, limit_min={submission.time_limit}, elapsed_ms={elapsed_ms}, remaining_sec={submission.remaining_seconds}")
-        # #endregion
+        try:
+            time_limit_int = int(submission.time_limit)
+            limit_ms = time_limit_int * 60 * 1000
+            elapsed_ms = (datetime.utcnow() - submission.started_at).total_seconds() * 1000
+            remaining_ms = max(0, limit_ms - elapsed_ms)
+            submission.remaining_seconds = int(remaining_ms / 1000)
+            # #region agent log
+            print(f"[DEBUG TIMER] Calculated remaining: id={submission.id}, limit_min={time_limit_int}, elapsed_ms={elapsed_ms}, remaining_sec={submission.remaining_seconds}")
+            # #endregion
+        except (ValueError, TypeError) as e:
+            # #region agent log
+            print(f"[DEBUG TIMER] Error calculating remaining: {e}, time_limit type={type(submission.time_limit)}, value={submission.time_limit}")
+            # #endregion
+            submission.remaining_seconds = None
     else:
         submission.remaining_seconds = None
     
