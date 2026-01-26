@@ -152,11 +152,12 @@ services:
     networks:
       - medtest-network
 
-  # Mail Server (Mox) - Lightweight all-in-one SMTP, IMAP, Webmail
+    # Mail Server (Mox) - Lightweight all-in-one SMTP, IMAP, Webmail
   mail:
-    image: mjl/mox:latest
+    image: r.xmox.nl/mox:latest
     container_name: medtest-mail
     restart: always
+    working_dir: /data
     # Mox handles its own TLS if ports 80/443 are available, 
     # but since we have Nginx, we'll let Nginx handle webmail proxying 
     # and Mox handle SMTP/IMAP directly.
@@ -167,6 +168,7 @@ services:
       - "993:993"   # IMAP (TLS)
     volumes:
       - ./mox-data:/data
+      - ./nginx/certs:/certs:ro
     networks:
       - medtest-network
 

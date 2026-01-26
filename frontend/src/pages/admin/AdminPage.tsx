@@ -59,7 +59,7 @@ export default function AdminPage() {
       icon: <EmailIcon sx={{ fontSize: 40 }} />,
       color: '#EA4335',
       isExternal: true,
-      url: 'https://webmail.med-testing.ru',
+      url: 'https://mail.med-testing.ru',
     },
   ]
 
