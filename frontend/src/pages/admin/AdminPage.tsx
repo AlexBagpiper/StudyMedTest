@@ -54,12 +54,12 @@ export default function AdminPage() {
     },
     {
       id: 'mail' as AdminSection,
-      title: 'Почта',
-      description: 'Корпоративный почтовый сервер',
+      title: t('nav.mailAdmin'),
+      description: 'Управление почтовым сервером (Mox)',
       icon: <EmailIcon sx={{ fontSize: 40 }} />,
       color: '#EA4335',
       isExternal: true,
-      url: 'https://mail.med-testing.ru',
+      url: 'https://mail.med-testing.ru/admin/',
     },
   ]
 

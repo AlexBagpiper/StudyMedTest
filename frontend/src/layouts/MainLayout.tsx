@@ -8,6 +8,7 @@ import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer'
 import AssignmentIcon from '@mui/icons-material/Assignment'
 import LanguageIcon from '@mui/icons-material/Language'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
+import EmailIcon from '@mui/icons-material/Email'
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
@@ -78,6 +79,7 @@ export default function MainLayout() {
     ...(user?.role === 'admin' ? [
       { text: t('nav.admin'), icon: <AdminPanelSettingsIcon />, path: '/admin' },
     ] : []),
+    { text: t('nav.mail'), icon: <EmailIcon />, path: 'https://mail.med-testing.ru', isExternal: true },
   ]
 
   const drawer = (
@@ -91,6 +93,10 @@ export default function MainLayout() {
         {menuItems.map((item) => (
           <ListItem key={item.path} disablePadding>
             <ListItemButton onClick={() => {
+              if ('isExternal' in item && item.isExternal) {
+                window.open(item.path, '_blank')
+                return
+              }
               // Если кликаем на /admin и уже на /admin, передаем сигнал сброса через state
               if (location.pathname === item.path && item.path === '/admin') {
                 navigate(item.path, { replace: true, state: { reset: true } })

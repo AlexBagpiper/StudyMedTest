@@ -19,6 +19,8 @@ const translations = {
     'nav.logout': 'Выйти',
     'nav.admin': 'Админ-панель',
     'nav.topics': 'Темы',
+    'nav.mail': 'Почта',
+    'nav.mailAdmin': 'Почта (Админ)',
     
     // Авторизация
     'auth.login': 'Войти',
@@ -325,6 +327,8 @@ const translations = {
     'nav.logout': 'Logout',
     'nav.admin': 'Admin Panel',
     'nav.topics': 'Topics',
+    'nav.mail': 'Mail',
+    'nav.mailAdmin': 'Mail (Admin)',
     
     // Auth
     'auth.login': 'Login',
