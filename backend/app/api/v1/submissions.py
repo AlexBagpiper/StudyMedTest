@@ -100,6 +100,9 @@ async def get_submission(
     """
     Получение submission с ответами
     """
+    # #region agent log
+    print(f"[DEBUG H2,H3] GET submission entry: submission_id={submission_id}, user_id={current_user.id}")
+    # #endregion
     result = await db.execute(
         select(Submission)
         .options(
@@ -110,6 +113,14 @@ async def get_submission(
         .where(Submission.id == submission_id)
     )
     submission = result.scalar_one_or_none()
+    
+    # #region agent log
+    if submission and submission.answers:
+        answers_info = [f"{{id={a.id}, q_id={a.question_id}, sub_id={a.submission_id}, has_annot={bool(a.annotation_data)}}}" for a in submission.answers]
+        print(f"[DEBUG H2,H3] GET submission after_query: sub_id={submission_id}, answers_count={len(submission.answers)}, answers={answers_info}")
+    else:
+        print(f"[DEBUG H2,H3] GET submission after_query: sub_id={submission_id}, no answers or submission not found")
+    # #endregion
     
     if not submission:
         raise HTTPException(
@@ -140,6 +151,9 @@ async def create_or_update_answer(
     """
     Создание или обновление ответа на вопрос
     """
+    # #region agent log
+    print(f"[DEBUG H4] POST answer entry: sub_id={submission_id}, q_id={answer_in.question_id}, has_annotation={bool(answer_in.annotation_data)}")
+    # #endregion
     # Проверка submission
     result = await db.execute(
         select(Submission)
@@ -189,6 +203,10 @@ async def create_or_update_answer(
     )
     existing_answer = result.scalar_one_or_none()
     
+    # #region agent log
+    print(f"[DEBUG H4] Before save: existing_answer_id={existing_answer.id if existing_answer else None}, sub_id={submission_id}, q_id={answer_in.question_id}, is_update={bool(existing_answer)}")
+    # #endregion
+    
     if existing_answer:
         existing_answer.student_answer = answer_in.student_answer
         existing_answer.annotation_data = answer_in.annotation_data
@@ -202,6 +220,11 @@ async def create_or_update_answer(
         db.add(answer)
     
     await db.commit()
+    
+    # #region agent log
+    saved_answer = existing_answer if existing_answer else answer
+    print(f"[DEBUG H4] After save: answer_id={saved_answer.id}, sub_id={saved_answer.submission_id}, q_id={saved_answer.question_id}")
+    # #endregion
 
     # Если время вышло, завершаем тест после сохранения последнего ответа
     if is_late:
