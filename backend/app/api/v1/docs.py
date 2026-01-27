@@ -18,9 +18,30 @@ ROLE_DOCS = {
 }
 
 # Путь к Wiki-документации
-# В Docker он будет /app/docs/wiki или смонтирован в /docs/wiki
-BASE_DIR = Path(__file__).resolve().parents[4]
-WIKI_DIR = Path(os.getenv("WIKI_DIR", str(BASE_DIR / "docs" / "wiki")))
+# В Docker он будет /app/docs/wiki (parents[3]), локально - в корне проекта (parents[4])
+def get_wiki_dir():
+    # 1. Проверяем переменную окружения
+    env_path = os.getenv("WIKI_DIR")
+    if env_path:
+        return Path(env_path)
+    
+    # 2. Пытаемся найти папку docs/wiki, поднимаясь вверх от текущего файла
+    current = Path(__file__).resolve().parent
+    for _ in range(5):
+        potential_path = current / "docs" / "wiki"
+        if potential_path.exists() and potential_path.is_dir():
+            return potential_path
+        current = current.parent
+    
+    # 3. Путь по умолчанию для Docker (/app/docs/wiki)
+    docker_path = Path(__file__).resolve().parents[3] / "docs" / "wiki"
+    if docker_path.exists():
+        return docker_path
+        
+    # 4. Путь по умолчанию для локальной разработки
+    return Path(__file__).resolve().parents[4] / "docs" / "wiki"
+
+WIKI_DIR = get_wiki_dir()
 
 @router.get("/list")
 async def list_wiki_docs(
