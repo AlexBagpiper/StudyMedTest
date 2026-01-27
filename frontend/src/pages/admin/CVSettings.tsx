@@ -133,7 +133,7 @@ export default function CVSettings() {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="subtitle2">Вес IoU (Accuracy)</Typography>
+                  <Typography variant="subtitle2">Вес геометрической точности (IoU)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
                     {(cvConfig.iou_weight * 100).toFixed(0)}%
                   </Typography>
@@ -153,7 +153,7 @@ export default function CVSettings() {
 
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="subtitle2">Вес Recall (Completeness)</Typography>
+                  <Typography variant="subtitle2">Вес полноты (Recall)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
                     {(cvConfig.recall_weight * 100).toFixed(0)}%
                   </Typography>
@@ -173,7 +173,7 @@ export default function CVSettings() {
 
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="subtitle2">Вес Precision</Typography>
+                  <Typography variant="subtitle2">Вес точности (Precision)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
                     {(cvConfig.precision_weight * 100).toFixed(0)}%
                   </Typography>
@@ -239,7 +239,7 @@ export default function CVSettings() {
               установите вес IoU на 1.0, а остальные на 0.
             </Typography>
             <Typography variant="body2" paragraph>
-              <strong>Порог IoU</strong> — это «проходной балл» для каждого объекта. Если пересечение области студента с эталоном выше этого порога, объект считается найденным верно (True Positive).
+              <strong>Порог IoU</strong> — это «проходной балл» для каждого объекта. Если пересечение области студента с эталоном выше этого порога, объект считается найденным верно.
             </Typography>
             <Typography variant="body2" component="div">
               <strong>Как выбрать порог:</strong>

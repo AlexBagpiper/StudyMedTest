@@ -165,3 +165,15 @@ export const questionsApi = {
     return response.data
   },
 }
+
+// Docs API
+export const docsApi = {
+  listDocs: async () => {
+    const response = await api.get('/docs/list')
+    return response.data
+  },
+  getDoc: async (filename: string) => {
+    const response = await api.get(`/docs/${filename}`)
+    return response.data
+  },
+}

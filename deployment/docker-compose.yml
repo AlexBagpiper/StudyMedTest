@@ -63,6 +63,8 @@ services:
     container_name: medtest-backend
     restart: always
     env_file: .env
+    volumes:
+      - ../docs/wiki:/app/docs/wiki:ro
     # Migrations + Start server
     command: >
       sh -c "alembic upgrade head && 

@@ -4,7 +4,7 @@ API v1 Router
 
 from fastapi import APIRouter
 
-from app.api.v1 import auth, users, topics, questions, tests, submissions, analytics, admin, teacher_applications
+from app.api.v1 import auth, users, topics, questions, tests, submissions, analytics, admin, teacher_applications, docs
 
 router = APIRouter()
 
@@ -17,4 +17,5 @@ router.include_router(submissions.router, prefix="/submissions", tags=["submissi
 router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 router.include_router(admin.router, prefix="/admin", tags=["admin"])
 router.include_router(teacher_applications.router, prefix="/teacher-applications", tags=["teacher-applications"])
+router.include_router(docs.router, prefix="/docs", tags=["docs"])
 

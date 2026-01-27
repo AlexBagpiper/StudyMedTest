@@ -347,7 +347,7 @@ export default function SubmissionReviewPage() {
                 <Grid container spacing={3}>
                   <Grid item xs={12} sm={3}>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      Точность
+                      Геометрическая точность (IoU)
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
                       {evaluation.iou !== undefined ? `${(evaluation.iou * 100).toFixed(0)}%` : '—'}
@@ -358,7 +358,7 @@ export default function SubmissionReviewPage() {
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      Полнота
+                      Полнота (Recall)
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
                       {evaluation.recall !== undefined ? `${(evaluation.recall * 100).toFixed(0)}%` : '—'}
@@ -369,7 +369,7 @@ export default function SubmissionReviewPage() {
                   </Grid>
                   <Grid item xs={12} sm={3}>
                     <Typography variant="caption" color="text.secondary" display="block">
-                      Достоверность
+                      Точность (Precision)
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
                       {evaluation.precision !== undefined ? `${(evaluation.precision * 100).toFixed(0)}%` : '—'}

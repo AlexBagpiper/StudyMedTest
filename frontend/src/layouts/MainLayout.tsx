@@ -9,11 +9,13 @@ import AssignmentIcon from '@mui/icons-material/Assignment'
 import LanguageIcon from '@mui/icons-material/Language'
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import EmailIcon from '@mui/icons-material/Email'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLocale, Locale } from '../contexts/LocaleContext'
 import { APP_CONFIG } from '../config'
+import WikiDialog from '../components/docs/WikiDialog'
 
 const DRAWER_WIDTH = 240
 
@@ -21,6 +23,7 @@ export default function MainLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [langAnchorEl, setLangAnchorEl] = useState<null | HTMLElement>(null)
+  const [wikiOpen, setWikiOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuth()
@@ -133,6 +136,11 @@ export default function MainLayout() {
             {APP_CONFIG.APP_FULL_NAME}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Кнопка справки */}
+            <IconButton color="inherit" onClick={() => setWikiOpen(true)} title={t('common.help') || 'Help'}>
+              <HelpOutlineIcon />
+            </IconButton>
+
             {/* Переключатель языка */}
             <IconButton color="inherit" onClick={handleLangMenuOpen} size="small">
               <LanguageIcon />
@@ -218,6 +226,11 @@ export default function MainLayout() {
       >
         <Outlet />
       </Box>
+
+      <WikiDialog 
+        open={wikiOpen} 
+        onClose={() => setWikiOpen(false)} 
+      />
     </Box>
   )
 }

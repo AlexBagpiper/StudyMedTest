@@ -104,6 +104,16 @@ const translations = {
     'common.language': 'Язык',
     'common.confirm': 'Подтвердить',
     'common.ok': 'OK',
+    'common.help': 'Справка',
+    
+    // Wiki
+    'wiki.AdminGuide': 'Руководство администратора',
+    'wiki.TeacherGuide': 'Руководство преподавателя',
+    'wiki.StudentGuide': 'Руководство студента',
+    'wiki.ScoringMethodology': 'Методология оценки',
+    'wiki.FAQ': 'Частые вопросы (FAQ)',
+    'wiki.Home': 'Главная',
+    'wiki.Roles': 'Роли и права',
     
     // Админ-панель
     'admin.title': 'Админ-панель',
@@ -412,6 +422,16 @@ const translations = {
     'common.language': 'Language',
     'common.confirm': 'Confirm',
     'common.ok': 'OK',
+    'common.help': 'Help',
+
+    // Wiki
+    'wiki.AdminGuide': 'Administrator Guide',
+    'wiki.TeacherGuide': 'Teacher Guide',
+    'wiki.StudentGuide': 'Student Guide',
+    'wiki.ScoringMethodology': 'Scoring Methodology',
+    'wiki.FAQ': 'FAQ',
+    'wiki.Home': 'Home',
+    'wiki.Roles': 'Roles and Permissions',
     
     // Admin Panel
     'admin.title': 'Admin Panel',
