@@ -200,12 +200,12 @@ const WikiDialog: React.FC<WikiDialogProps> = ({ open, onClose }) => {
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
-                  h1: ({node, ...props}) => <Typography variant="h4" gutterBottom {...props} />,
-                  h2: ({node, ...props}) => <Typography variant="h5" gutterBottom sx={{ mt: 3 }} {...props} />,
-                  h3: ({node, ...props}) => <Typography variant="h6" gutterBottom sx={{ mt: 2 }} {...props} />,
-                  p: ({node, ...props}) => <Typography variant="body1" paragraph {...props} />,
-                  li: ({node, ...props}) => <Typography component="li" variant="body1" {...props} />,
-                  table: ({node, ...props}) => (
+                  h1: ({node, ref, ...props}: any) => <Typography variant="h4" gutterBottom {...props} />,
+                  h2: ({node, ref, ...props}: any) => <Typography variant="h5" gutterBottom sx={{ mt: 3 }} {...props} />,
+                  h3: ({node, ref, ...props}: any) => <Typography variant="h6" gutterBottom sx={{ mt: 2 }} {...props} />,
+                  p: ({node, ref, ...props}: any) => <Typography variant="body1" paragraph {...props} />,
+                  li: ({node, ref, ...props}: any) => <Typography component="li" variant="body1" {...props} />,
+                  table: ({node, ref, ...props}: any) => (
                     <Paper variant="outlined" sx={{ my: 2, overflow: 'hidden' }}>
                       <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', '& td, & th': { border: '1px solid #e0e0e0', p: 1 } }} {...props} />
                     </Paper>
