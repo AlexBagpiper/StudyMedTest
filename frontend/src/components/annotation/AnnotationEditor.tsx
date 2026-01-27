@@ -59,6 +59,37 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
     }
   }, [readOnly, setMode])
 
+  // Горячие клавиши для инструментов
+  useEffect(() => {
+    if (readOnly) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Игнорируем, если фокус в поле ввода (например, поиск метки)
+      if (
+        document.activeElement?.tagName === 'INPUT' || 
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return
+      }
+
+      const key = e.key.toLowerCase()
+      
+      // Поддержка разных раскладок (v=м, h=р, p=з, r=к)
+      if (key === 'v' || key === 'м') {
+        setMode('select')
+      } else if (key === 'h' || key === 'р') {
+        setMode('hand')
+      } else if (key === 'p' || key === 'з') {
+        setMode('polygon')
+      } else if (key === 'r' || key === 'к') {
+        setMode('rectangle')
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [readOnly, setMode])
+
   // Track previous data to prevent infinite loops
   const prevInitialDataRef = useRef<string | null>(null)
   const prevOnChangeDataRef = useRef<string | null>(null)

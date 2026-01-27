@@ -76,14 +76,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
         }}
       >
         {!readOnly && (
-          <Tooltip title="Выделение" placement="left">
+          <Tooltip title="Выделение (V)" placement="left">
             <ToggleButton value="select">
               <NearMeIcon fontSize="small" />
             </ToggleButton>
           </Tooltip>
         )}
         
-        <Tooltip title="Рука" placement="left">
+        <Tooltip title="Рука (H)" placement="left">
           <ToggleButton value="hand">
             <PanToolIcon fontSize="small" />
           </ToggleButton>
@@ -91,13 +91,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
 
         {!readOnly && (
           <>
-            <Tooltip title="Полигон" placement="left">
+            <Tooltip title="Полигон (P)" placement="left">
               <ToggleButton value="polygon">
                 <PolylineIcon fontSize="small" />
               </ToggleButton>
             </Tooltip>
 
-            <Tooltip title="Прямоугольник" placement="left">
+            <Tooltip title="Прямоугольник (R)" placement="left">
               <ToggleButton value="rectangle">
                 <CropSquareIcon fontSize="small" />
               </ToggleButton>

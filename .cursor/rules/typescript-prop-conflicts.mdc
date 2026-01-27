@@ -1,0 +1,52 @@
+---
+description: Resolves type conflicts when passing 3rd-party library props to UI components (MUI, etc.)
+globs: frontend/src/**/*.tsx
+---
+
+# TypeScript & 3rd-party Props Integration
+
+When using 3rd-party libraries that render custom components (render-props, component injection), type conflicts are common. Controller libraries often inject internal props (e.g., `node`, `ref`, `meta`) that are not supported by UI libraries like MUI.
+
+## The Problem
+"No overload matches this call" or "Property '...' does not exist on type '...'" errors during `npm run build`. This happens when you blindly spread `{...props}` from a controller library into a UI component.
+
+## Rule
+When receiving props from 3rd-party renderers to be passed into UI components (especially MUI):
+
+1. **Always destructure internal/service props** so they don't leak into the `{...props}` spread.
+2. **Use `any` or `unknown` for the incoming props object** if the library's types are too complex or conflict with the target component.
+3. **Clean the `props` object** before passing it to the MUI component.
+
+### Examples
+
+#### 1. React Markdown
+```tsx
+// Bad: {...props} contains 'node' and 'ref' which MUI's Typography doesn't accept
+h1: (props) => <Typography {...props} /> 
+
+// Good: destructure 'node' and 'ref', pass only valid props
+h1: ({node, ref, ...props}: any) => <Typography {...props} />
+```
+
+#### 2. Form Controllers (e.g., react-hook-form)
+```tsx
+// If the library passes metadata that MUI doesn't understand
+render={({ field, fieldState }) => (
+  <TextField 
+    {...field} 
+    error={!!fieldState.error}
+    // Do NOT pass fieldState entirely, only specific properties
+  />
+)}
+```
+
+#### 3. Lists or Tables (e.g., react-window)
+```tsx
+const Row = ({ index, style, data }: any) => {
+  // Use 'style' and 'data' specifically, don't spread 'data' into ListItem
+  return <ListItem style={style}>{data[index]}</ListItem>;
+};
+```
+
+## Why it matters
+Prevents frontend build failures and keeps the DOM clean from invalid attributes (e.g., `<h1 node="...">`), which triggers React warnings in the console.
