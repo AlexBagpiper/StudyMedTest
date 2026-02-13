@@ -86,7 +86,7 @@ export default function MainLayout() {
   ]
 
   const drawer = (
-    <Box>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
           {APP_CONFIG.APP_NAME}
@@ -113,6 +113,11 @@ export default function MainLayout() {
           </ListItem>
         ))}
       </List>
+      <Box sx={{ p: 2, mt: 'auto' }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center' }}>
+          Version {APP_CONFIG.VERSION}
+        </Typography>
+      </Box>
     </Box>
   )
 

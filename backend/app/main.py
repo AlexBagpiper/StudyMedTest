@@ -121,7 +121,8 @@ async def health_check():
     return JSONResponse(
         content={
             "status": "healthy",
-            "version": settings.VERSION,
+            "version": settings.APP_VERSION,
+            "revision": settings.APP_REVISION,
             "service": f"{settings.PROJECT_NAME.lower().replace(' ', '-')}-backend"
         }
     )
@@ -134,7 +135,8 @@ async def root():
     """
     return {
         "message": "MedTest Platform API",
-        "version": "0.1.0",
+        "version": settings.APP_VERSION,
+        "revision": settings.APP_REVISION,
         "docs": "/docs",
         "health": "/health"
     }

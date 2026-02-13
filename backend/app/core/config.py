@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     YANDEX_API_KEY: Optional[str] = None
     YANDEX_FOLDER_ID: Optional[str] = None
     
+    # Versioning
+    APP_VERSION: str = "0.7.0"
+    APP_REVISION: str = "dev"
+    
     # Yandex Search API (for plagiarism check)
     YANDEX_SEARCH_API_KEY: Optional[str] = None
     YANDEX_SEARCH_FOLDER_ID: Optional[str] = None
