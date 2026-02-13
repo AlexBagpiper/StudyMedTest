@@ -161,8 +161,7 @@ async def run_evaluate_text_answer(session: AsyncSession, answer_id: str) -> Dic
                 answer.score = 0
                 await session.commit()
         except Exception as e_inner:
-            logger.exception(f"Critical error updating failed answer state for {answer_id}")
-            pass
+            logger.error(f"Critical error updating failed answer state for {answer_id}: {e_inner}")
         raise e
 
 async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) -> Dict[str, Any]:
@@ -196,7 +195,8 @@ async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) 
         if isinstance(ref_ans, str) and ref_ans.startswith('{'):
             try:
                 reference_data = json.loads(ref_ans)
-            except Exception:
+            except Exception:  # nosec B110
+                # Если и там не удалось, просто идем дальше
                 pass
 
     # Получаем настройки CV из БД

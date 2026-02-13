@@ -37,6 +37,8 @@ AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+# Alias for backward compatibility in some tests
+async_session_maker = AsyncSessionLocal
 
 # Декларативная база для моделей
 Base = declarative_base()

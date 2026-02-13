@@ -3,12 +3,12 @@ Pytest configuration and fixtures
 """
 
 import asyncio
-from typing import AsyncGenerator, Generator
+import uuid
+from typing import AsyncGenerator
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
@@ -17,38 +17,36 @@ from app.main import app
 from app.models.user import User
 from app.core.security import get_password_hash
 
-# Test database URL
-TEST_DATABASE_URL = "postgresql+asyncpg://test_user:test_password@localhost:5432/medtest_test"
+# Используем основную БД, но через транзакции. 
+# Это безопаснее, если не удается создать тестовую БД.
+TEST_DATABASE_URL = settings.async_database_url
 
 # Create async test engine
 test_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 
 # Create async session maker
-TestSessionLocal = sessionmaker(
+TestSessionLocal = async_sessionmaker(
     test_engine, class_=AsyncSession, expire_on_commit=False
 )
 
-
-@pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """Create event loop for async tests"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
+@pytest.fixture(scope="session", autouse=True)
+async def setup_test_db():
+    """Ensure tables exist"""
+    async with test_engine.begin() as conn:
+        # Мы НЕ удаляем таблицы, только создаем если их нет
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 
 @pytest.fixture(scope="function")
 async def db() -> AsyncGenerator[AsyncSession, None]:
-    """Create test database session"""
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-
-    async with TestSessionLocal() as session:
-        yield session
-
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    """Create test database session with transaction rollback"""
+    # Используем одну транзакцию на весь тест
+    async with test_engine.connect() as conn:
+        trans = await conn.begin()
+        async with TestSessionLocal(bind=conn) as session:
+            yield session
+            await session.rollback()
+        await trans.rollback()
 
 
 @pytest.fixture(scope="function")
@@ -70,7 +68,7 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 async def test_user(db: AsyncSession) -> User:
     """Create test user (student)"""
     user = User(
-        email="test@example.com",
+        email=f"test_student_{uuid.uuid4().hex[:6]}@example.com",
         password_hash=get_password_hash("testpassword"),
         last_name="Тестов",
         first_name="Тест",
@@ -79,8 +77,7 @@ async def test_user(db: AsyncSession) -> User:
         is_active=True,
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    await db.flush()
     return user
 
 
@@ -88,7 +85,7 @@ async def test_user(db: AsyncSession) -> User:
 async def test_teacher(db: AsyncSession) -> User:
     """Create test teacher"""
     user = User(
-        email="teacher@example.com",
+        email=f"test_teacher_{uuid.uuid4().hex[:6]}@example.com",
         password_hash=get_password_hash("teacherpassword"),
         last_name="Учителев",
         first_name="Учитель",
@@ -97,8 +94,7 @@ async def test_teacher(db: AsyncSession) -> User:
         is_active=True,
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    await db.flush()
     return user
 
 
@@ -106,7 +102,7 @@ async def test_teacher(db: AsyncSession) -> User:
 async def test_admin(db: AsyncSession) -> User:
     """Create test admin"""
     user = User(
-        email="admin@example.com",
+        email=f"test_admin_{uuid.uuid4().hex[:6]}@example.com",
         password_hash=get_password_hash("adminpassword"),
         last_name="Админов",
         first_name="Админ",
@@ -115,63 +111,49 @@ async def test_admin(db: AsyncSession) -> User:
         is_active=True,
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    await db.flush()
     return user
 
 
 @pytest.fixture
-def auth_headers_student(test_user: User) -> dict:
-    """Get auth headers for student"""
+async def auth_headers_student(test_user: User) -> dict:
     from app.core.security import create_access_token
     token = create_access_token(str(test_user.id), additional_claims={"role": test_user.role})
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def auth_headers_teacher(test_teacher: User) -> dict:
-    """Get auth headers for teacher"""
+async def auth_headers_teacher(test_teacher: User) -> dict:
     from app.core.security import create_access_token
     token = create_access_token(str(test_teacher.id), additional_claims={"role": test_teacher.role})
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def auth_headers_admin(test_admin: User) -> dict:
-    """Get auth headers for admin"""
+async def auth_headers_admin(test_admin: User) -> dict:
     from app.core.security import create_access_token
     token = create_access_token(str(test_admin.id), additional_claims={"role": test_admin.role})
     return {"Authorization": f"Bearer {token}"}
 
 
-# Aliases for test_admin_users.py compatibility
 @pytest.fixture
 async def async_client(client: AsyncClient) -> AsyncClient:
-    """Alias for client fixture"""
     return client
-
 
 @pytest.fixture
 async def db_session(db: AsyncSession) -> AsyncSession:
-    """Alias for db fixture"""
     return db
-
 
 @pytest.fixture
 async def admin_user(test_admin: User) -> User:
-    """Alias for test_admin fixture"""
     return test_admin
 
-
 @pytest.fixture
-def admin_token(test_admin: User) -> str:
-    """Get admin token"""
+async def admin_token(test_admin: User) -> str:
     from app.core.security import create_access_token
     return create_access_token(str(test_admin.id), additional_claims={"role": test_admin.role})
 
-
 @pytest.fixture
-def teacher_token(test_teacher: User) -> str:
-    """Get teacher token"""
+async def teacher_token(test_teacher: User) -> str:
     from app.core.security import create_access_token
     return create_access_token(str(test_teacher.id), additional_claims={"role": test_teacher.role})

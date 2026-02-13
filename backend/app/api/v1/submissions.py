@@ -293,7 +293,7 @@ async def create_or_update_answer(
             from app.tasks.evaluation_tasks import evaluate_submission
             evaluate_submission.delay(str(submission.id))
         except Exception as e:
-            pass
+            logger.error(f"Failed to start evaluation task: {e}")
         
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -381,9 +381,9 @@ async def submit_test(
         try:
             from app.tasks.evaluation_tasks import evaluate_submission
             evaluate_submission.delay(str(submission.id))
-        except Exception:
+        except Exception as e:
             # Мы не выбрасываем ошибку здесь, так как статус уже изменен в БД
-            pass
+            logger.error(f"Failed to start evaluation task: {e}")
         
         # Релоад со всеми связями ПОСЛЕ commit (важно для асинхронной сериализации)
         result = await db.execute(

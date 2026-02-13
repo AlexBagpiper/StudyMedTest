@@ -5,7 +5,6 @@ Tests for questions endpoints
 import pytest
 from httpx import AsyncClient
 
-
 @pytest.mark.asyncio
 async def test_create_question_as_teacher(client: AsyncClient, auth_headers_teacher):
     """Test creating question as teacher"""
@@ -13,8 +12,8 @@ async def test_create_question_as_teacher(client: AsyncClient, auth_headers_teac
         "/api/v1/questions",
         json={
             "type": "text",
-            "title": "Test Question",
             "content": "What is the human heart?",
+            "difficulty": 1,
             "reference_data": {
                 "reference_answer": "The heart is a muscular organ..."
             },
@@ -29,7 +28,7 @@ async def test_create_question_as_teacher(client: AsyncClient, auth_headers_teac
     )
     assert response.status_code == 201
     data = response.json()
-    assert data["title"] == "Test Question"
+    assert data["content"] == "What is the human heart?"
     assert data["type"] == "text"
 
 
@@ -40,8 +39,8 @@ async def test_create_question_as_student_forbidden(client: AsyncClient, auth_he
         "/api/v1/questions",
         json={
             "type": "text",
-            "title": "Test Question",
             "content": "Test content",
+            "difficulty": 1
         },
         headers=auth_headers_student,
     )
@@ -56,8 +55,8 @@ async def test_list_questions_as_teacher(client: AsyncClient, auth_headers_teach
         "/api/v1/questions",
         json={
             "type": "text",
-            "title": "Question 1",
             "content": "Content 1",
+            "difficulty": 1
         },
         headers=auth_headers_teacher,
     )
@@ -69,4 +68,3 @@ async def test_list_questions_as_teacher(client: AsyncClient, auth_headers_teach
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 1
-

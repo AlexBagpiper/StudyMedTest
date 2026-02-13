@@ -3,6 +3,7 @@
 """
 
 import pytest
+import uuid
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,7 @@ async def test_create_teacher_by_admin(
 ):
     """Тест создания преподавателя администратором"""
     teacher_data = {
-        "email": "teacher@test.com",
+        "email": f"teacher_{uuid.uuid4().hex[:6]}@test.com",
         "password": "teacher123",
         "last_name": "Преподавателев",
         "first_name": "Преподаватель",

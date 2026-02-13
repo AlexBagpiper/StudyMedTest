@@ -151,7 +151,7 @@ export default function SubmissionDetailsPage() {
           }}
         >
           <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-            История попыток этого студента:
+            История попыток:
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {allSubmissions

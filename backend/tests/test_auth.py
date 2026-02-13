@@ -24,9 +24,8 @@ async def test_register_student(client: AsyncClient):
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "newstudent@example.com"
-    assert data["role"] == "student"
-    assert data["last_name"] == "Студентов"
-    assert data["first_name"] == "Новый"
+    # Регистрация возвращает сообщение о коде, а не данные пользователя
+    assert "message" in data
 
 
 @pytest.mark.asyncio

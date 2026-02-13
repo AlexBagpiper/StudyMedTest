@@ -141,7 +141,7 @@ export default function CVSettings() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Вес геометрической точности (IoU)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
-                    {(cvConfig.iou_weight * 100).toFixed(0)}%
+                    {((cvConfig.iou_weight || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
@@ -161,7 +161,7 @@ export default function CVSettings() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Вес полноты (Recall)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
-                    {(cvConfig.recall_weight * 100).toFixed(0)}%
+                    {((cvConfig.recall_weight || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
@@ -181,7 +181,7 @@ export default function CVSettings() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Вес точности (Precision)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
-                    {(cvConfig.precision_weight * 100).toFixed(0)}%
+                    {((cvConfig.precision_weight || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
@@ -225,7 +225,7 @@ export default function CVSettings() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Минимальный порог включения (Inclusion)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
-                    {(cvConfig.inclusion_threshold * 100).toFixed(0)}%
+                    {((cvConfig.inclusion_threshold || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
@@ -245,7 +245,7 @@ export default function CVSettings() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Минимальное покрытие (Coverage)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
-                    {(cvConfig.min_coverage_threshold * 100).toFixed(0)}%
+                    {((cvConfig.min_coverage_threshold || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
@@ -265,7 +265,7 @@ export default function CVSettings() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Коэффициент лояльности (Loyalty Factor)</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
-                    {cvConfig.loyalty_factor.toFixed(1)}
+                    {(cvConfig.loyalty_factor || 0).toFixed(1)}
                   </Typography>
                 </Box>
                 <Slider

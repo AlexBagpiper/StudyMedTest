@@ -148,8 +148,9 @@ class YandexGPTProvider(BaseLLMProvider):
             if extra_prompts:
                 try:
                     extra_prompts = extra_prompts.format(**prompt_vars)
-                except Exception:
+                except Exception:  # nosec B110
                     # Если не удалось отформатировать доп. промпт, оставляем как есть
+                    # Мы не логируем это как ошибку, так как это допустимое поведение для некоторых шаблонов
                     pass
         except KeyError as e:
             # Если в промпте есть лишние скобки или переменные, которых нет в vars, 
@@ -405,7 +406,7 @@ class GigaChatProvider(YandexGPTProvider):
         import httpx
         import uuid
         
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://ngw.devices.sberbank.ru:9443/api/v2/oauth",
                 headers={
@@ -446,7 +447,7 @@ class GigaChatProvider(YandexGPTProvider):
 Критерии: {self._format_criteria(criteria)}
 Верни JSON: {{"criteria_scores": {{{criteria_template}}}, "total_score": 0, "feedback": ""}}"""
 
-            async with httpx.AsyncClient(verify=False) as client:
+            async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "https://gigachat.devices.sberbank.ru/api/v1/chat/completions",
                     headers={"Authorization": f"Bearer {token}"},
@@ -633,6 +634,92 @@ class LLMService:
             logger.error(f"Error fetching LLM config from DB: {e}")
             return {}
     
+    async def generate_test_code(
+        self,
+        file_content: str,
+        file_path: str,
+        db: Optional[AsyncSession] = None,
+        config: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Генерация кода теста для указанного файла на основе его содержимого
+        """
+        db_config = config
+        if db_config is None and db:
+            db_config = await self._get_db_config(db)
+        
+        db_config = (db_config or {}).copy()
+        strategy = db_config.get("strategy") or settings.LLM_STRATEGY
+        provider = self.router.get_provider(strategy, config=db_config)
+
+        prompt = f"""Ты — эксперт по автоматизированному тестированию. 
+Напиши качественный, готовый к выполнению тест для следующего файла: `{file_path}`.
+
+СОДЕРЖИМОЕ ФАЙЛА:
+{file_content}
+
+ТРЕБОВАНИЯ:
+1. Используй {'pytest' if file_path.endswith('.py') else 'vitest'}.
+2. Покрывай основные функции и пограничные случаи.
+3. Верни ТОЛЬКО чистый код теста без markdown-разметки (без ```).
+4. Импортируй все необходимые зависимости.
+5. Если это React-компонент, используй react-testing-library.
+"""
+
+        try:
+            # Используем провайдер напрямую для генерации (через внутренний метод подготовки промпта если нужно, 
+            # или просто вызвав completion если бы он был открыт. 
+            # В текущей реализации мы можем адаптировать запрос.)
+            
+            # Так как у нас провайдеры заточены под evaluate_answer, 
+            # добавим им поддержку универсального запроса или используем существующий.
+            # Для простоты, мы можем временно пропатчить вызов или расширить провайдеры.
+            
+            # Но самый чистый путь - добавить метод в BaseLLMProvider
+            if hasattr(provider, 'generate_completion'):
+                 return await provider.generate_completion(prompt, db_config)
+            else:
+                # Если нет специального метода, попробуем использовать логику вызова API напрямую
+                # Для YandexGPT это будет:
+                if isinstance(provider, YandexGPTProvider):
+                    return await self._call_yandex_directly(prompt, db_config)
+                return "# LLM Provider does not support general generation yet"
+        except Exception as e:
+            logger.error(f"Error generating test code: {e}")
+            return f"# Error during generation: {str(e)}"
+
+    async def _call_yandex_directly(self, prompt: str, config: Dict[str, Any]) -> str:
+        import httpx
+        api_key = config.get("yandex_api_key") or settings.YANDEX_API_KEY
+        folder_id = config.get("yandex_folder_id") or settings.YANDEX_FOLDER_ID
+        
+        if not api_key or not folder_id:
+            return "# YandexGPT API Key or Folder ID is missing. Check your .env file."
+            
+        model_name = "yandexgpt/latest"
+        
+        auth_header = f"Api-Key {api_key}"
+        if api_key and api_key.startswith("t1."):
+            auth_header = f"Bearer {api_key}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://llm.api.cloud.yandex.net/foundationModels/v1/completion",
+                headers={"Authorization": auth_header, "x-folder-id": folder_id},
+                json={
+                    "modelUri": f"gpt://{folder_id}/{model_name}",
+                    "completionOptions": {"stream": False, "temperature": 0.2, "maxTokens": 4000},
+                    "messages": [
+                        {"role": "system", "text": "Ты помощник-программист, который пишет тесты."},
+                        {"role": "user", "text": prompt}
+                    ]
+                },
+                timeout=90.0
+            )
+            if response.status_code == 200:
+                return response.json()["result"]["alternatives"][0]["message"]["text"].strip()
+            return f"# API Error: {response.status_code}"
+
     async def evaluate_text_answer(
         self,
         question: str,

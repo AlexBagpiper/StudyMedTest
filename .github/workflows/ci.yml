@@ -59,10 +59,18 @@ jobs:
     - name: Run linting
       working-directory: ./backend
       run: |
-        pip install black isort flake8
+        pip install black isort flake8 bandit pip-audit
         black --check app/
         isort --check-only app/
         flake8 app/ --max-line-length=100
+    
+    - name: Security scan (Bandit)
+      working-directory: ./backend
+      run: bandit -r app/
+    
+    - name: Security scan (pip-audit)
+      working-directory: ./backend
+      run: pip-audit -r requirements.txt
     
     - name: Run tests
       working-directory: ./backend
@@ -103,6 +111,10 @@ jobs:
     - name: Run linting
       working-directory: ./frontend
       run: npm run lint
+    
+    - name: Security scan (npm audit)
+      working-directory: ./frontend
+      run: npm audit
     
     - name: Run tests
       working-directory: ./frontend

@@ -79,7 +79,8 @@ async def list_questions(
                 try:
                     data = json.loads(data)
                     is_string = True
-                except: pass
+                except (json.JSONDecodeError, TypeError):
+                    pass
             
             if isinstance(data, dict):
                 cleaned = {k: clean_data(v) if isinstance(v, (dict, list)) else v 
@@ -206,7 +207,8 @@ async def get_question(
                 try:
                     data = json.loads(data)
                     is_string = True
-                except: pass
+                except (json.JSONDecodeError, TypeError):
+                    pass
             
             if isinstance(data, dict):
                 # Рекурсивно удаляем 'annotations' и 'segmentation' (COCO)
@@ -480,7 +482,7 @@ async def get_question_labels(
     if isinstance(ref_data, str) and ref_data.startswith('{'):
         try:
             ref_data = json.loads(ref_data)
-        except:
+        except (json.JSONDecodeError, TypeError):
             pass
             
     if isinstance(ref_data, dict):
@@ -490,7 +492,7 @@ async def get_question_labels(
             if isinstance(inner, str) and inner.startswith('{'):
                 try:
                     ref_data = json.loads(inner)
-                except:
+                except (json.JSONDecodeError, TypeError):
                     pass
         
         if ref_data.get("labels"):
@@ -503,7 +505,7 @@ async def get_question_labels(
         if isinstance(coco, str) and coco.startswith('{'):
             try:
                 coco = json.loads(coco)
-            except:
+            except (json.JSONDecodeError, TypeError):  # nosec B110
                 pass
         
         if isinstance(coco, dict):

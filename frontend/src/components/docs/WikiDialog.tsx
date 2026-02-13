@@ -137,7 +137,7 @@ const WikiDialog: React.FC<WikiDialogProps> = ({ open, onClose }) => {
       }}
     >
       <DialogTitle component="div" sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-        <Typography variant="h6">Справка MedTest Platform</Typography>
+        <Typography variant="h6">Справка</Typography>
         <IconButton onClick={onClose}>
           <CloseIcon />
         </IconButton>

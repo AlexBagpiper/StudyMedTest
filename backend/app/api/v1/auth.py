@@ -235,7 +235,7 @@ async def login(
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer"
+        "token_type": "bearer"  # nosec B105
     }
 
 
@@ -277,7 +277,7 @@ async def refresh_token(
         return {
             "access_token": access_token,
             "refresh_token": new_refresh_token,
-            "token_type": "bearer"
+            "token_type": "bearer"  # nosec B105
         }
     
     except Exception:

@@ -138,10 +138,13 @@ async def start_test(
             detail="No questions available for this test"
         )
         
+    # Convert UUIDs to strings for JSONB serialization
+    question_ids_str = [str(qid) for qid in question_ids]
+    
     variant = TestVariant(
         test_id=test.id,
         variant_code=secrets.token_urlsafe(8),
-        question_order=question_ids,
+        question_order=question_ids_str,
     )
     db.add(variant)
     await db.flush() # Получаем ID варианта
@@ -331,7 +334,8 @@ async def create_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test.id)
     )
@@ -355,7 +359,8 @@ async def get_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test_id)
     )
@@ -406,7 +411,8 @@ async def update_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test_id)
     )
@@ -475,7 +481,8 @@ async def update_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test.id)
     )
@@ -499,7 +506,8 @@ async def publish_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test_id)
     )
@@ -549,10 +557,13 @@ async def publish_test(
         # Если нет структуры, используем только привязанные вопросы
         question_ids = fixed_question_ids
     
+    # Convert UUIDs to strings for JSONB serialization
+    question_ids_str = [str(qid) for qid in question_ids]
+    
     variant = TestVariant(
         test_id=test.id,
         variant_code=secrets.token_urlsafe(8),
-        question_order=question_ids,
+        question_order=question_ids_str,
     )
     
     db.add(variant)
@@ -564,7 +575,8 @@ async def publish_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test.id)
     )
@@ -588,7 +600,8 @@ async def unpublish_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test_id)
     )
@@ -623,7 +636,8 @@ async def unpublish_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test.id)
     )
@@ -654,7 +668,8 @@ async def duplicate_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == test_id)
     )
@@ -704,7 +719,8 @@ async def duplicate_test(
         .options(
             selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
-            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.author)
         )
         .where(Test.id == new_test.id)
     )
@@ -755,7 +771,7 @@ async def generate_test_variant_questions(
             # берем максимум возможного из того что осталось
             selected_ids.extend(available_ids)
         else:
-            picked = random.sample(available_ids, count_needed)
+            picked = random.sample(available_ids, count_needed)  # nosec B311
             selected_ids.extend(picked)
                 
     return selected_ids
