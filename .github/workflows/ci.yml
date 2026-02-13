@@ -119,12 +119,26 @@ jobs:
     
     steps:
     - uses: actions/checkout@v3
-    
+      with:
+        fetch-depth: '0'
+
+    - name: Minor version for merges
+      id: tag_version
+      uses: anothrNick/github-tag-action@1.64.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        WITH_V: true
+        DEFAULT_BUMP: patch
+
     - name: Build Backend Docker image
-      run: docker build -t medtest-backend:${{ github.sha }} ./backend
+      run: docker build -t medtest-backend:${{ steps.tag_version.outputs.new_tag }} ./backend
     
     - name: Build Frontend Docker image
-      run: docker build -t medtest-frontend:${{ github.sha }} ./frontend
+      run: |
+        docker build \
+          -t medtest-frontend:${{ steps.tag_version.outputs.new_tag }} \
+          --build-arg VITE_APP_VERSION=${{ steps.tag_version.outputs.new_tag }} \
+          ./frontend
     
     # Раскомментировать для push в registry
     # - name: Push images
