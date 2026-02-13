@@ -35,9 +35,11 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import RestoreIcon from '@mui/icons-material/Restore'
+import ReplayIcon from '@mui/icons-material/Replay'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
 import { useState, useEffect, useMemo } from 'react'
+import { useGrantRetake } from '../../lib/api/hooks/useSubmissions'
 
 export default function AdminSubmissionsPage() {
   const { user } = useAuth()
@@ -47,16 +49,25 @@ export default function AdminSubmissionsPage() {
   const bulkDeleteSubmissions = useBulkDeleteSubmissions()
   const hideMutation = useHideSubmission()
   const restoreMutation = useRestoreSubmission()
+  const grantRetake = useGrantRetake()
   
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [grantRetakeId, setGrantRetakeId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [orderBy, setOrderBy] = useState('started_at')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
-  const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
+  const [errorDialog, setErrorDialog] = useState<{ 
+    open: boolean; 
+    message: string; 
+    title?: string; 
+    severity?: 'error' | 'success' | 'info' | 'warning' 
+  }>({
     open: false,
-    message: ''
+    message: '',
+    title: '',
+    severity: 'error'
   })
   
   const { data: submissions = [], isLoading: loading, error } = useSubmissions(
@@ -174,6 +185,29 @@ export default function AdminSubmissionsPage() {
       setErrorDialog({
         open: true,
         message: t('submissions.error.delete')
+      })
+    }
+  }
+
+  const handleGrantRetake = async () => {
+    if (!grantRetakeId) return
+    try {
+      await grantRetake.mutateAsync({ submissionId: grantRetakeId })
+      setGrantRetakeId(null)
+      setErrorDialog({
+        open: true,
+        title: 'Успех',
+        message: 'Разрешение на пересдачу успешно выдано',
+        severity: 'success'
+      })
+    } catch (err: any) {
+      console.error('Failed to grant retake:', err)
+      setGrantRetakeId(null)
+      setErrorDialog({
+        open: true,
+        title: 'Ошибка',
+        message: err.response?.data?.detail || 'Ошибка при выдаче разрешения на пересдачу',
+        severity: 'error'
       })
     }
   }
@@ -344,7 +378,14 @@ export default function AdminSubmissionsPage() {
                   )}
                   <TableCell sx={{ fontWeight: '500' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {sub.test_title || t('submissions.loading')}
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            {sub.test_title || t('submissions.loading')}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Попытка №{sub.attempt_number || 1}
+                          </Typography>
+                        </Box>
                       {sub.is_hidden && (
                         <Chip 
                           label={t('submissions.hidden')} 
@@ -369,6 +410,18 @@ export default function AdminSubmissionsPage() {
                   </TableCell>
                   <TableCell align="right">
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                      {(user?.role === 'teacher' || user?.role === 'admin') && (sub.status === 'completed' || sub.status === 'evaluating' || sub.status === 'submitted') && (
+                        <Tooltip title="Разрешить пересдачу">
+                          <IconButton
+                            size="small"
+                            color="warning"
+                            onClick={() => setGrantRetakeId(sub.id)}
+                            disabled={grantRetake.isPending}
+                          >
+                            <ReplayIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       {user?.role === 'teacher' && (
                         <>
                           {sub.is_hidden ? (
@@ -452,12 +505,24 @@ export default function AdminSubmissionsPage() {
         isLoading={bulkDeleteSubmissions.isPending}
       />
 
+      <ConfirmDialog
+        open={!!grantRetakeId}
+        title="Разрешить пересдачу"
+        content="Вы уверены, что хотите разрешить студенту пересдать этот тест? Текущий результат будет сохранен в истории, а студент сможет пройти тест заново."
+        confirmText="Разрешить"
+        cancelText={t('common.cancel')}
+        color="warning"
+        onConfirm={handleGrantRetake}
+        onCancel={() => setGrantRetakeId(null)}
+        isLoading={grantRetake.isPending}
+      />
+
       <MessageDialog
         open={errorDialog.open}
-        title={t('common.error')}
+        title={errorDialog.title || t('common.error')}
         content={errorDialog.message}
         onClose={() => setErrorDialog({ ...errorDialog, open: false })}
-        severity="error"
+        severity={errorDialog.severity || 'error'}
       />
     </Box>
   )

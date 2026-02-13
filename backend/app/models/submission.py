@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Text, Integer
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -30,8 +30,8 @@ class Submission(Base):
     __tablename__ = "submissions"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    variant_id = Column(UUID(as_uuid=True), ForeignKey("test_variants.id"), nullable=False)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    variant_id = Column(UUID(as_uuid=True), ForeignKey("test_variants.id", ondelete="CASCADE"), nullable=False)
     
     status = Column(
         Enum(SubmissionStatus),
@@ -44,6 +44,9 @@ class Submission(Base):
     submitted_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     is_hidden = Column(Boolean, default=False, nullable=False)
+    
+    # Номер попытки для студента по этому тесту (варианту)
+    attempt_number = Column(Integer, default=1, nullable=False)
     
     # Результаты
     result = Column(JSONB, nullable=True)
@@ -95,8 +98,8 @@ class Answer(Base):
     __tablename__ = "answers"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id"), nullable=False)
-    question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id"), nullable=False)
+    submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
+    question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
     
     # Ответ студента
     student_answer = Column(Text, nullable=True)  # Текстовый ответ
@@ -122,4 +125,33 @@ class Answer(Base):
     
     def __repr__(self):
         return f"<Answer {self.id} score={self.score}>"
+
+
+class RetakePermission(Base):
+    """
+    Разрешение на пересдачу теста студенту
+    """
+    __tablename__ = "retake_permissions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False)
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    teacher_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Ссылка на созданный submission (когда студент начнет пересдачу)
+    # При удалении самого результата удаляем и запись о разрешении (CASCADE),
+    # чтобы не оставлять "висячих" записей о пересдаче без самой работы.
+    submission_id = Column(UUID(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=True)
+
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    test = relationship("Test")
+    student = relationship("User", foreign_keys=[student_id])
+    teacher = relationship("User", foreign_keys=[teacher_id])
+    submission = relationship("Submission", foreign_keys=[submission_id])
+
+    def __repr__(self):
+        return f"<RetakePermission student={self.student_id} test={self.test_id}>"
 

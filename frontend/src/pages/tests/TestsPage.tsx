@@ -12,8 +12,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useTests, useDeleteTest } from '../../lib/api/hooks'
-import { useStartTest, usePublishTest, useUnpublishTest } from '../../lib/api/hooks/useTests'
-import { useSubmissions } from '../../lib/api/hooks/useSubmissions'
+import { useStartTest, usePublishTest, useUnpublishTest, useDuplicateTest } from '../../lib/api/hooks/useTests'
+import { useSubmissions, useMyRetakePermissions } from '../../lib/api/hooks/useSubmissions'
 import type { Test, TestStatus, Submission } from '../../types'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
@@ -21,6 +21,7 @@ import { useState, useEffect } from 'react'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import PublishIcon from '@mui/icons-material/Publish'
@@ -35,6 +36,7 @@ export default function TestsPage() {
 
   const { data: tests = [], isLoading, error } = useTests()
   const { data: submissions = [] } = useSubmissions({ student_id: user?.id })
+  const { data: retakePermissions = [] } = useMyRetakePermissions()
 
   useEffect(() => {
     if (error) {
@@ -48,6 +50,7 @@ export default function TestsPage() {
   const startTest = useStartTest()
   const publishTest = usePublishTest()
   const unpublishTest = useUnpublishTest()
+  const duplicateTest = useDuplicateTest()
 
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -70,6 +73,28 @@ export default function TestsPage() {
   })
 
   const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }))
+
+  const handleDuplicate = (testId: string) => {
+    setConfirmDialog({
+      open: true,
+      title: t('tests.action.duplicate'),
+      content: t('tests.confirm.duplicate'),
+      color: 'primary',
+      isLoading: false,
+      onConfirm: async () => {
+        try {
+          const newTest = await duplicateTest.mutateAsync(testId)
+          closeConfirm()
+          // Optionally navigate to the new test's edit page
+          navigate(`/tests/${newTest.id}/edit`)
+        } catch (error: any) {
+          console.error('Failed to duplicate test:', error)
+          const message = error.response?.data?.detail || t('tests.error.unknown')
+          setErrorDialog({ open: true, message })
+        }
+      }
+    })
+  }
 
   const handlePublish = (testId: string) => {
     setConfirmDialog({
@@ -132,7 +157,14 @@ export default function TestsPage() {
     // на бэкенде в list_submissions мы можем фильтровать по test_id.
     // Пока просто найдем в загруженных сабмишнах.
     // Примечание: на бэкенде сабмишн через джойн TestVariant связан с Test.
-    return submissions.find((s: any) => s.test_id === testId || s.variant?.test_id === testId)
+    const subs = submissions.filter((s: any) => s.test_id === testId || s.variant?.test_id === testId)
+    if (subs.length === 0) return null
+    // Возвращаем самую новую попытку
+    return subs.sort((a: any, b: any) => (b.attempt_number || 1) - (a.attempt_number || 1))[0]
+  }
+
+  const hasRetakePermission = (testId: string) => {
+    return retakePermissions.some((p: any) => p.test_id === testId)
   }
 
   const handleStartTest = async (testId: string) => {
@@ -142,10 +174,13 @@ export default function TestsPage() {
       return
     }
 
+    const isRetake = existingSubmission && (existingSubmission.status === 'completed' || existingSubmission.status === 'evaluating') && hasRetakePermission(testId)
+    const nextAttempt = existingSubmission ? (existingSubmission.attempt_number || 1) + 1 : 1
+
     setConfirmDialog({
       open: true,
-      title: t('tests.confirm.start.title'),
-      content: t('tests.confirm.start.content'),
+      title: isRetake ? `Пересдача теста (попытка №${nextAttempt})` : t('tests.confirm.start.title'),
+      content: isRetake ? 'Вы получили разрешение на пересдачу этого теста. Ваши предыдущие результаты будут сохранены в истории.' : t('tests.confirm.start.content'),
       color: 'primary',
       isLoading: false,
       onConfirm: async () => {
@@ -183,11 +218,13 @@ export default function TestsPage() {
 
   const getSubmissionStatusChip = (testId: string) => {
     const submission = getSubmissionForTest(testId)
+    const hasPermission = hasRetakePermission(testId)
+    
     if (!submission) return null
 
-    switch (submission.status) {
-      case 'in_progress':
-        return (
+    return (
+      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        {submission.status === 'in_progress' ? (
           <Chip
             icon={<AccessTimeIcon />}
             label={t('tests.submission.inProgress')}
@@ -195,10 +232,7 @@ export default function TestsPage() {
             variant="outlined"
             size="small"
           />
-        )
-      case 'completed':
-      case 'evaluating':
-        return (
+        ) : (
           <Chip
             icon={<CheckCircleOutlineIcon />}
             label={submission.status === 'completed' 
@@ -208,10 +242,18 @@ export default function TestsPage() {
             variant="outlined"
             size="small"
           />
-        )
-      default:
-        return null
-    }
+        )}
+        {hasPermission && (
+          <Chip
+            label="Разрешена пересдача"
+            color="info"
+            variant="filled"
+            size="small"
+            sx={{ fontWeight: 'bold' }}
+          />
+        )}
+      </Box>
+    )
   }
 
   return (
@@ -259,6 +301,7 @@ export default function TestsPage() {
             const submission = getSubmissionForTest(test.id)
             const isCompleted = submission?.status === 'completed' || submission?.status === 'evaluating'
             const isInProgress = submission?.status === 'in_progress'
+            const canRetake = isCompleted && hasRetakePermission(test.id)
 
             return (
               <Card key={test.id} sx={{ borderRadius: 1, transition: '0.3s', '&:hover': { boxShadow: 6 } }}>
@@ -273,6 +316,12 @@ export default function TestsPage() {
                       </Typography>
                       
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Chip
+                          label={`Попытка №${submission?.attempt_number || 1}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ color: 'text.secondary', borderColor: 'divider' }}
+                        />
                         {!isStudent && (
                           <Chip
                             label={getStatusLabel(test.status)}
@@ -303,10 +352,10 @@ export default function TestsPage() {
                     {isStudent && (
                       <Box sx={{ ml: 3, display: 'flex', flexDirection: 'column', gap: 1 }}>
                         <Button
-                          variant="outlined"
+                          variant={canRetake ? "contained" : "outlined"}
                           size="large"
                           onClick={() => handleStartTest(test.id)}
-                          disabled={startTest.isPending || (isCompleted && !isInProgress)}
+                          disabled={startTest.isPending || (isCompleted && !isInProgress && !canRetake)}
                           sx={{ 
                             px: 4, 
                             py: 1.5, 
@@ -314,10 +363,14 @@ export default function TestsPage() {
                             textTransform: 'none',
                             fontSize: '1.1rem',
                             fontWeight: '600',
-                            boxShadow: 2
+                            boxShadow: canRetake ? 4 : 2,
+                            ...(canRetake && {
+                              bgcolor: 'primary.main',
+                              '&:hover': { bgcolor: 'primary.dark' }
+                            })
                           }}
                         >
-                          {isInProgress ? t('tests.action.continue') : isCompleted ? t('tests.action.completed') : t('tests.action.start')}
+                          {isInProgress ? t('tests.action.continue') : canRetake ? "Пересдать" : isCompleted ? t('tests.action.completed') : t('tests.action.start')}
                         </Button>
                       </Box>
                     )}
@@ -334,47 +387,83 @@ export default function TestsPage() {
                     >
                       {t('tests.action.view')}
                     </Button>
-                    {test.status === 'draft' ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="success"
-                        startIcon={<PublishIcon />}
-                        onClick={() => handlePublish(test.id)}
-                        disabled={publishTest.isPending}
-                      >
-                        {t('tests.action.publish')}
-                      </Button>
-                    ) : test.status === 'published' ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="warning"
-                        startIcon={<UnpublishedIcon />}
-                        onClick={() => handleUnpublish(test.id)}
-                        disabled={unpublishTest.isPending}
-                      >
-                        {t('tests.action.unpublish')}
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<EditIcon />}
-                      onClick={() => navigate(`/tests/${test.id}/edit`)}
-                    >
-                      {t('common.edit')}
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      startIcon={<DeleteIcon />}
-                      onClick={() => handleDelete(test.id)}
-                      disabled={deleteTest.isPending}
-                    >
-                      {t('common.delete')}
-                    </Button>
+
+                    {/* Teacher can only edit/delete/publish their own tests or if they are admin */}
+                    {(user?.role === 'admin' || test.author_id === user?.id) ? (
+                      <>
+                        {test.status === 'draft' ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                            startIcon={<PublishIcon />}
+                            onClick={() => handlePublish(test.id)}
+                            disabled={publishTest.isPending}
+                          >
+                            {t('tests.action.publish')}
+                          </Button>
+                        ) : test.status === 'published' ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            startIcon={<UnpublishedIcon />}
+                            onClick={() => handleUnpublish(test.id)}
+                            disabled={unpublishTest.isPending}
+                          >
+                            {t('tests.action.unpublish')}
+                          </Button>
+                        ) : null}
+                        
+                        {!isStudent && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon />}
+                            onClick={() => handleDuplicate(test.id)}
+                            disabled={duplicateTest.isPending}
+                          >
+                            {t('tests.action.duplicate')}
+                          </Button>
+                        )}
+
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<EditIcon />}
+                          onClick={() => navigate(`/tests/${test.id}/edit`)}
+                        >
+                          {t('common.edit')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          startIcon={<DeleteIcon />}
+                          onClick={() => handleDelete(test.id)}
+                          disabled={deleteTest.isPending}
+                        >
+                          {t('common.delete')}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        {!isStudent && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ContentCopyIcon />}
+                            onClick={() => handleDuplicate(test.id)}
+                            disabled={duplicateTest.isPending}
+                          >
+                            {t('tests.action.duplicate')}
+                          </Button>
+                        )}
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', ml: 1 }}>
+                          {t('tests.adminReadOnly')}
+                        </Typography>
+                      </>
+                    )}
                   </CardActions>
                 )}
               </Card>

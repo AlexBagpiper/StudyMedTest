@@ -25,6 +25,7 @@ import {
 } from '@mui/material'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
+import { useAuth } from '../../contexts/AuthContext'
 import { useTest, useCreateTest, useUpdateTest, usePublishTest } from '../../lib/api/hooks/useTests'
 import { useQuestions } from '../../lib/api/hooks/useQuestions'
 import { useTopics } from '../../lib/api/hooks/useTopics'
@@ -62,11 +63,19 @@ export default function TestFormPage() {
   const isEdit = !!testId
 
   const { data: test, isLoading: testLoading } = useTest(testId)
+  const { user } = useAuth()
   const { data: topics = [] } = useTopics()
   const { data: questions = [], isLoading: questionsLoading } = useQuestions()
   const createTest = useCreateTest()
   const updateTest = useUpdateTest()
   const publishTest = usePublishTest()
+
+  useEffect(() => {
+    // Redirect teacher if they try to edit an admin test
+    if (test && user && user.role === 'teacher' && test.author_id !== user.id) {
+      navigate('/tests')
+    }
+  }, [test, user, navigate])
 
   const [selectedQuestions, setSelectedQuestions] = useState<SelectedQuestion[]>([])
   const [structure, setStructure] = useState<TestStructureItem[]>([])

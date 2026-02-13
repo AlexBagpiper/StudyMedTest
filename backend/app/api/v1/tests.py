@@ -62,27 +62,59 @@ async def start_test(
         )
     
     # 2. Проверка, нет ли уже начатого теста (in_progress) для этого пользователя
+    # Нам нужно найти все submissions студента для любого варианта этого же теста
     result = await db.execute(
         select(Submission)
         .join(TestVariant)
         .where(
             Submission.student_id == current_user.id,
-            Submission.status == SubmissionStatus.IN_PROGRESS,
             TestVariant.test_id == test_id
         )
+        .order_by(Submission.attempt_number.desc())
     )
-    existing_submission = result.scalar_one_or_none()
-    if existing_submission:
-        # Если есть уже начатая попытка, возвращаем её вместо создания новой
-        result = await db.execute(
-            select(Submission)
-            .options(
-                selectinload(Submission.answers),
-                selectinload(Submission.variant)
+    existing_submissions = result.scalars().all()
+    
+    attempt_number = 1
+    if existing_submissions:
+        # Если есть незавершенная попытка, возвращаем её
+        in_progress = next((s for s in existing_submissions if s.status == SubmissionStatus.IN_PROGRESS), None)
+        if in_progress:
+            # Возвращаем существующую попытку со всеми связями
+            result = await db.execute(
+                select(Submission)
+                .options(
+                    selectinload(Submission.answers),
+                    joinedload(Submission.variant).joinedload(TestVariant.test).joinedload(Test.author)
+                )
+                .where(Submission.id == in_progress.id)
             )
-            .where(Submission.id == existing_submission.id)
+            sub = result.unique().scalar_one()
+            sub.time_limit = sub.variant.test.settings.get("time_limit")
+            return sub
+
+        # Если все попытки завершены, проверяем разрешение на пересдачу
+        from app.models.submission import RetakePermission
+        result = await db.execute(
+            select(RetakePermission)
+            .where(
+                RetakePermission.student_id == current_user.id,
+                RetakePermission.test_id == test_id,
+                RetakePermission.submission_id == None  # Разрешение еще не использовано
+            )
+            .order_by(RetakePermission.created_at.desc())
         )
-        return result.scalar_one()
+        permission = result.scalar_one_or_none()
+        
+        if not permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Test already submitted. Request a retake from your teacher."
+            )
+        
+        attempt_number = existing_submissions[0].attempt_number + 1
+    else:
+        # Первая попытка
+        attempt_number = 1
 
     # 3. Получение фиксированных вопросов и генерация варианта
     result = await db.execute(
@@ -119,8 +151,27 @@ async def start_test(
         student_id=current_user.id,
         variant_id=variant.id,
         status=SubmissionStatus.IN_PROGRESS,
+        attempt_number=attempt_number
     )
     db.add(submission)
+    await db.flush() # Получаем ID
+
+    # Если это пересдача по разрешению, привязываем его
+    if attempt_number > 1:
+        from app.models.submission import RetakePermission
+        result = await db.execute(
+            select(RetakePermission)
+            .where(
+                RetakePermission.student_id == current_user.id,
+                RetakePermission.test_id == test_id,
+                RetakePermission.submission_id == None
+            )
+            .order_by(RetakePermission.created_at.desc())
+        )
+        permission = result.scalar_one_or_none()
+        if permission:
+            permission.submission_id = submission.id
+
     await db.commit()
     
     # Релоад со всеми связями для ответа (нужно для SubmissionResponse)
@@ -152,14 +203,18 @@ async def list_tests(
     """
     Список тестов
     """
-    query = select(Test)
+    query = select(Test).join(User, Test.author_id == User.id).options(
+        selectinload(Test.author)
+    )
     
     # Students видят только опубликованные тесты
     if current_user.role == Role.STUDENT:
         query = query.where(Test.status == TestStatus.PUBLISHED)
-    # Teacher видит только свои тесты
+    # Teacher видит свои тесты + тесты администраторов
     elif current_user.role == Role.TEACHER:
-        query = query.where(Test.author_id == current_user.id)
+        query = query.where(
+            (Test.author_id == current_user.id) | (User.role == Role.ADMIN)
+        )
     
     if status:
         if isinstance(status, str):
@@ -274,6 +329,7 @@ async def create_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -297,6 +353,7 @@ async def get_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -317,11 +374,17 @@ async def get_test(
             detail="Test not published"
         )
     
-    if current_user.role == Role.TEACHER and test.author_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    # Проверка прав доступа: Teacher может видеть свои или админские тесты
+    if current_user.role == Role.TEACHER:
+        # Нам нужно проверить роль автора теста
+        author_result = await db.execute(select(User.role).where(User.id == test.author_id))
+        author_role = author_result.scalar_one_or_none()
+        
+        if test.author_id != current_user.id and author_role != Role.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
     
     populate_test_question_urls(test)
     
@@ -341,6 +404,7 @@ async def update_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -409,6 +473,7 @@ async def update_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -432,6 +497,7 @@ async def publish_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -496,6 +562,7 @@ async def publish_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -519,6 +586,7 @@ async def unpublish_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -553,6 +621,7 @@ async def unpublish_test(
     result = await db.execute(
         select(Test)
         .options(
+            selectinload(Test.author),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
             selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
         )
@@ -562,6 +631,87 @@ async def unpublish_test(
     populate_test_question_urls(test)
     
     return test
+
+
+@router.post("/{test_id}/duplicate", response_model=TestResponse)
+async def duplicate_test(
+    test_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Создание дубликата теста (текущий пользователь становится автором)
+    """
+    if current_user.role not in [Role.TEACHER, Role.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # 1. Получаем исходный тест со всеми связями
+    result = await db.execute(
+        select(Test)
+        .options(
+            selectinload(Test.author),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+        )
+        .where(Test.id == test_id)
+    )
+    original_test = result.scalar_one_or_none()
+
+    if not original_test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Test not found"
+        )
+
+    # 2. Проверка прав: Teacher может дублировать свои или админские тесты
+    if current_user.role == Role.TEACHER:
+        if original_test.author_id != current_user.id and original_test.author.role != Role.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions to duplicate this test"
+            )
+
+    # 3. Создаем новый тест
+    new_test = Test(
+        author_id=current_user.id,
+        title=f"{original_test.title} (копия)",
+        description=original_test.description,
+        settings=original_test.settings.copy() if original_test.settings else {},
+        structure=original_test.structure.copy() if original_test.structure else None,
+        status=TestStatus.DRAFT,
+    )
+    
+    db.add(new_test)
+    await db.flush() # Получаем ID нового теста
+
+    # 4. Копируем вопросы
+    for tq in original_test.test_questions:
+        new_tq = TestQuestion(
+            test_id=new_test.id,
+            question_id=tq.question_id,
+            order=tq.order,
+        )
+        db.add(new_tq)
+
+    await db.commit()
+
+    # 5. Возвращаем новый тест со всеми связями
+    result = await db.execute(
+        select(Test)
+        .options(
+            selectinload(Test.author),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.topic),
+            selectinload(Test.test_questions).selectinload(TestQuestion.question).selectinload(Question.image)
+        )
+        .where(Test.id == new_test.id)
+    )
+    new_test = result.scalar_one()
+    populate_test_question_urls(new_test)
+
+    return new_test
 
 
 async def generate_test_variant_questions(

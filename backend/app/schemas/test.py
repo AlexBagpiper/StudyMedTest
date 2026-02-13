@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.test import TestStatus
+from app.models.user import Role
 
 
 from app.schemas.question import QuestionResponse
@@ -74,12 +75,20 @@ class TestUpdate(BaseModel):
     status: Optional[TestStatus] = None
 
 
+class TestAuthor(BaseModel):
+    id: UUID
+    role: Role
+
+    model_config = {"from_attributes": True}
+
+
 class TestResponse(TestBase):
     """
     Схема ответа с тестом
     """
     id: UUID
     author_id: UUID
+    author: Optional[TestAuthor] = None
     status: TestStatus
     published_at: Optional[datetime] = None
     created_at: datetime
@@ -96,6 +105,7 @@ class TestListResponse(TestBase):
     """
     id: UUID
     author_id: UUID
+    author: Optional[TestAuthor] = None
     status: TestStatus
     published_at: Optional[datetime] = None
     created_at: datetime

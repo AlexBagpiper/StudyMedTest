@@ -25,11 +25,13 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useTest } from '../../lib/api/hooks'
-import { usePublishTest, useUnpublishTest, useStartTest } from '../../lib/api/hooks/useTests'
+import { usePublishTest, useUnpublishTest, useStartTest, useDuplicateTest } from '../../lib/api/hooks/useTests'
 import { useTopics } from '../../lib/api/hooks/useTopics'
+import { useSubmissions, useMyRetakePermissions } from '../../lib/api/hooks/useSubmissions'
 import type { TestStatus, Question } from '../../types'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import EditIcon from '@mui/icons-material/Edit'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import PublishIcon from '@mui/icons-material/Publish'
 import UnpublishedIcon from '@mui/icons-material/Unpublished'
@@ -48,9 +50,13 @@ export default function TestDetailPage() {
 
   const { data: test, isLoading, error } = useTest(id)
   const { data: topics } = useTopics()
+  const { data: submissions = [] } = useSubmissions({ student_id: user?.id }, { enabled: !!user?.id })
+  const { data: retakePermissions = [] } = useMyRetakePermissions()
+  
   const publishTest = usePublishTest()
   const unpublishTest = useUnpublishTest()
   const startTest = useStartTest()
+  const duplicateTest = useDuplicateTest()
 
   const [viewingQuestion, setViewingQuestion] = useState<Question | undefined>()
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
@@ -76,8 +82,21 @@ export default function TestDetailPage() {
 
   const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
+  const getSubmissionForTest = () => {
+    if (!id) return null
+    const subs = submissions.filter((s: any) => s.test_id === id || s.variant?.test_id === id)
+    if (subs.length === 0) return null
+    return subs.sort((a: any, b: any) => (b.attempt_number || 1) - (a.attempt_number || 1))[0]
+  }
+
+  const hasRetakePermission = () => {
+    return retakePermissions.some((p: any) => p.test_id === id)
+  }
+
   const isStudent = user?.role === 'student'
+  const isAdmin = user?.role === 'admin'
   const isAuthor = test?.author_id === user?.id
+  const canEdit = isAuthor || isAdmin
 
   useEffect(() => {
     if (isStudent) {
@@ -142,6 +161,28 @@ export default function TestDetailPage() {
           const message = error.response?.data?.detail || t('tests.error.unknown')
           setErrorDialog({ open: true, message })
           closeConfirm()
+        }
+      }
+    })
+  }
+
+  const handleDuplicate = () => {
+    if (!id) return
+    setConfirmDialog({
+      open: true,
+      title: t('tests.action.duplicate'),
+      content: t('tests.confirm.duplicate'),
+      color: 'primary',
+      isLoading: false,
+      onConfirm: async () => {
+        try {
+          const newTest = await duplicateTest.mutateAsync(id)
+          closeConfirm()
+          navigate(`/tests/${newTest.id}/edit`)
+        } catch (error: any) {
+          console.error('Failed to duplicate test:', error)
+          const message = error.response?.data?.detail || t('tests.error.unknown')
+          setErrorDialog({ open: true, message })
         }
       }
     })
@@ -213,16 +254,32 @@ export default function TestDetailPage() {
           <Box sx={{ display: 'flex', gap: 1 }}>
             {isStudent && test.status === 'published' && (
               <Button
-                variant="outlined"
+                variant={getSubmissionForTest()?.status === 'completed' && hasRetakePermission() ? "contained" : "outlined"}
                 startIcon={<PlayArrowIcon />}
                 onClick={handleStartTest}
                 size="large"
+                disabled={startTest.isPending || (getSubmissionForTest()?.status === 'completed' && !hasRetakePermission())}
               >
-                {t('tests.action.start')}
+                {getSubmissionForTest()?.status === 'in_progress' 
+                  ? t('tests.action.continue') 
+                  : (getSubmissionForTest()?.status === 'completed' && hasRetakePermission() 
+                    ? "Пересдать" 
+                    : (getSubmissionForTest()?.status === 'completed' ? t('tests.action.completed') : t('tests.action.start')))}
               </Button>
             )}
 
-            {!isStudent && isAuthor && (
+            {!isStudent && (
+              <Button
+                variant="outlined"
+                startIcon={<ContentCopyIcon />}
+                onClick={handleDuplicate}
+                disabled={duplicateTest.isPending}
+              >
+                {t('tests.action.duplicate')}
+              </Button>
+            )}
+
+            {!isStudent && canEdit && (
               <>
                 {test.status === 'draft' && (
                   <>
@@ -256,6 +313,11 @@ export default function TestDetailPage() {
                   </Button>
                 )}
               </>
+            )}
+            {!isStudent && !canEdit && (
+              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', alignSelf: 'center' }}>
+                {t('tests.adminReadOnly')}
+              </Typography>
             )}
           </Box>
         </Box>

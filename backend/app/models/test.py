@@ -81,8 +81,8 @@ class TestQuestion(Base):
     __tablename__ = "test_questions"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False)
-    question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id"), nullable=False)
+    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id", ondelete="CASCADE"), nullable=False)
+    question_id = Column(UUID(as_uuid=True), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
     
     order = Column(Integer, nullable=False)  # Порядок вопроса в тесте
     
@@ -101,7 +101,7 @@ class TestVariant(Base):
     __tablename__ = "test_variants"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id"), nullable=False)
+    test_id = Column(UUID(as_uuid=True), ForeignKey("tests.id", ondelete="CASCADE"), nullable=False)
     
     variant_code = Column(String(50), nullable=False, unique=True, index=True)
     

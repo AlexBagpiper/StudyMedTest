@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.models.user import Role
 from app.models.question import QuestionType
 from app.schemas.topic import TopicResponse
 from app.schemas.annotation import AnnotationData
@@ -66,12 +67,20 @@ class QuestionUpdate(BaseModel):
     image_id: Optional[UUID] = None
 
 
+class QuestionAuthor(BaseModel):
+    id: UUID
+    role: Role
+
+    model_config = {"from_attributes": True}
+
+
 class QuestionResponse(QuestionBase):
     """
     Схема ответа с вопросом
     """
     id: UUID
     author_id: UUID
+    author: Optional[QuestionAuthor] = None
     topic: Optional[TopicResponse] = None
     image_id: Optional[UUID] = None
     image: Optional[ImageAssetResponse] = None

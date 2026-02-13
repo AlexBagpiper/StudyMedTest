@@ -75,7 +75,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       SECRET_KEY: ${SECRET_KEY}
-      APP_VERSION: ${APP_VERSION:-0.7.0}
+      APP_VERSION: ${APP_VERSION:-0.8.0}
       APP_REVISION: ${APP_REVISION:-dev}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
@@ -122,7 +122,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
-      APP_VERSION: ${APP_VERSION:-0.7.0}
+      APP_VERSION: ${APP_VERSION:-0.8.0}
       APP_REVISION: ${APP_REVISION:-dev}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
@@ -155,7 +155,7 @@ services:
       target: production
       args:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
-        VITE_APP_VERSION: ${APP_VERSION:-0.1.0}
+        VITE_APP_VERSION: ${APP_VERSION:-0.8.0}
     container_name: medtest-frontend
     restart: always
     networks:

@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User, Role
-from app.models.submission import Submission, SubmissionStatus, Answer
+from app.models.submission import Submission, SubmissionStatus, Answer, RetakePermission
 from app.models.test import TestVariant, Test
 from app.models.question import Question
 from app.schemas.submission import (
@@ -25,6 +25,8 @@ from app.schemas.submission import (
     AnswerResponse,
     BulkDeleteRequest,
     SubmissionEventCreate,
+    RetakePermissionCreate,
+    RetakePermissionResponse,
 )
 
 import logging
@@ -64,14 +66,70 @@ async def start_submission(
             detail="Test is not published"
         )
     
-    # Создание submission
-    submission = Submission(
-        student_id=current_user.id,
-        variant_id=submission_in.variant_id,
-        status=SubmissionStatus.IN_PROGRESS,
+    # 1. Проверяем наличие существующих попыток этого студента для этого теста
+    # Нам нужно найти все submissions студента для любого варианта этого же теста
+    result = await db.execute(
+        select(Submission)
+        .join(TestVariant)
+        .where(
+            Submission.student_id == current_user.id,
+            TestVariant.test_id == variant.test_id
+        )
+        .order_by(Submission.attempt_number.desc())
     )
+    existing_submissions = result.scalars().all()
     
-    db.add(submission)
+    attempt_number = 1
+    if existing_submissions:
+        # Если есть незавершенная попытка, возвращаем её
+        in_progress = next((s for s in existing_submissions if s.status == SubmissionStatus.IN_PROGRESS), None)
+        if in_progress:
+            # Если это тот же вариант или мы разрешаем продолжать другой вариант (обычно тот же)
+            # В текущей реализации просто возвращаем её
+            return await get_submission(in_progress.id, current_user, db)
+
+        # Если все попытки завершены, проверяем разрешение на пересдачу
+        result = await db.execute(
+            select(RetakePermission)
+            .where(
+                RetakePermission.student_id == current_user.id,
+                RetakePermission.test_id == variant.test_id,
+                RetakePermission.submission_id == None  # Разрешение еще не использовано
+            )
+            .order_by(RetakePermission.created_at.desc())
+        )
+        permission = result.scalar_one_or_none()
+        
+        if not permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Test already submitted. Request a retake from your teacher."
+            )
+        
+        attempt_number = existing_submissions[0].attempt_number + 1
+        
+        # Создание submission
+        submission = Submission(
+            student_id=current_user.id,
+            variant_id=submission_in.variant_id,
+            status=SubmissionStatus.IN_PROGRESS,
+            attempt_number=attempt_number
+        )
+        db.add(submission)
+        await db.flush() # Получаем ID
+        
+        # Привязываем разрешение к новому submission
+        permission.submission_id = submission.id
+    else:
+        # Первая попытка
+        submission = Submission(
+            student_id=current_user.id,
+            variant_id=submission_in.variant_id,
+            status=SubmissionStatus.IN_PROGRESS,
+            attempt_number=1
+        )
+        db.add(submission)
+
     await db.commit()
     
     # Релоад со всеми связями для ответа
@@ -610,6 +668,95 @@ async def delete_submission(
     await db.delete(submission)
     await db.commit()
     return None
+
+
+@router.post("/{submission_id}/grant-retake", response_model=RetakePermissionResponse)
+async def grant_retake(
+    submission_id: UUID,
+    comment: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Разрешить студенту пересдать тест
+    """
+    # 1. Получаем submission, чтобы узнать студента и тест
+    result = await db.execute(
+        select(Submission)
+        .options(joinedload(Submission.variant))
+        .where(Submission.id == submission_id)
+    )
+    submission = result.scalar_one_or_none()
+    
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    # 2. Проверяем права (преподаватель - автор теста или админ)
+    result = await db.execute(select(Test).where(Test.id == submission.variant.test_id))
+    test = result.scalar_one()
+    
+    if current_user.role != Role.ADMIN and test.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    # 3. Проверяем, нет ли уже активного разрешения (неиспользованного)
+    result = await db.execute(
+        select(RetakePermission).where(
+            RetakePermission.student_id == submission.student_id,
+            RetakePermission.test_id == test.id,
+            RetakePermission.submission_id == None
+        )
+    )
+    existing_permission = result.scalar_one_or_none()
+    
+    if existing_permission:
+        # Если разрешение уже есть, просто обновляем его и возвращаем
+        existing_permission.teacher_id = current_user.id
+        existing_permission.comment = comment
+        existing_permission.created_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(existing_permission)
+        return existing_permission
+    
+    # 4. Создаем новое разрешение
+    permission = RetakePermission(
+        test_id=test.id,
+        student_id=submission.student_id,
+        teacher_id=current_user.id,
+        comment=comment
+    )
+    db.add(permission)
+    
+    # Аудит
+    await log_audit_action(
+        db,
+        current_user.id,
+        "submission.grant_retake",
+        "submission",
+        resource_id=submission_id,
+        details={"student_id": str(submission.student_id), "test_id": str(test.id)}
+    )
+    
+    await db.commit()
+    await db.refresh(permission)
+    return permission
+
+
+@router.get("/retake-permissions/my", response_model=List[RetakePermissionResponse])
+async def list_my_retake_permissions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Список разрешений на пересдачу для текущего студента
+    """
+    result = await db.execute(
+        select(RetakePermission)
+        .where(
+            RetakePermission.student_id == current_user.id,
+            RetakePermission.submission_id == None
+        )
+    )
+    return result.scalars().all()
 
 
 async def log_audit_action(

@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     YANDEX_FOLDER_ID: Optional[str] = None
     
     # Versioning
-    APP_VERSION: str = "0.7.0"
+    APP_VERSION: str = "0.8.0"
     APP_REVISION: str = "dev"
     
     # Yandex Search API (for plagiarism check)

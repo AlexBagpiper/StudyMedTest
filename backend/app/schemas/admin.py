@@ -223,6 +223,7 @@ class AdminSubmissionResponse(BaseModel):
     submitted_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     is_hidden: bool = False
+    attempt_number: int = 1
     result: Optional[Dict[str, Any]] = None
     answers: Optional[List[AdminAnswerResponse]] = None
 

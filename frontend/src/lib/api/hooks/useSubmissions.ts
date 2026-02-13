@@ -142,3 +142,31 @@ export function useLogSubmissionEvent() {
     },
   })
 }
+
+export function useGrantRetake() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ submissionId, comment }: { submissionId: string, comment?: string }) => {
+      const response = await api.post(`/submissions/${submissionId}/grant-retake`, null, {
+        params: comment ? { comment } : {}
+      })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SUBMISSIONS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['tests'] })
+      queryClient.invalidateQueries({ queryKey: ['retake-permissions'] })
+    },
+  })
+}
+
+export function useMyRetakePermissions() {
+  return useQuery<any[]>({
+    queryKey: ['retake-permissions', 'my'],
+    queryFn: async () => {
+      const response = await api.get('/submissions/retake-permissions/my')
+      return response.data
+    },
+  })
+}

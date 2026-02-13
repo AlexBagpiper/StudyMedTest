@@ -23,6 +23,7 @@ export interface Submission {
   submitted_at?: string
   completed_at?: string
   is_hidden: boolean
+  attempt_number: number
   result?: {
     total_score: number
     max_score: number
@@ -31,4 +32,14 @@ export interface Submission {
     feedback?: string
   }
   answers?: Answer[]
+}
+
+export interface RetakePermission {
+  id: string
+  test_id: string
+  student_id: string
+  teacher_id: string
+  submission_id?: string
+  comment?: string
+  created_at: string
 }

@@ -67,3 +67,17 @@ export function useDeleteQuestion() {
     },
   })
 }
+
+export function useDuplicateQuestion() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (questionId: string) => {
+      const response = await api.post<Question>(`/questions/${questionId}/duplicate`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUESTIONS_KEY })
+    },
+  })
+}

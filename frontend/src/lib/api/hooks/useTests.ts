@@ -111,3 +111,17 @@ export function useUnpublishTest() {
     },
   })
 }
+
+export function useDuplicateTest() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (testId: string) => {
+      const response = await api.post<Test>(`/tests/${testId}/duplicate`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TESTS_KEY })
+    },
+  })
+}

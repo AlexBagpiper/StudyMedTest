@@ -85,6 +85,7 @@ class SubmissionResponse(BaseModel):
     submitted_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     is_hidden: bool = False
+    attempt_number: int = 1
     result: Optional[Dict[str, Any]] = None
     answers: List[AnswerResponse] = []
     
@@ -92,6 +93,30 @@ class SubmissionResponse(BaseModel):
     time_limit: Optional[int] = None # в минутах
     # Оставшееся время в секундах (вычисляется на сервере для точности)
     remaining_seconds: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class RetakePermissionCreate(BaseModel):
+    """
+    Схема для выдачи разрешения на пересдачу
+    """
+    student_id: UUID
+    test_id: UUID
+    comment: Optional[str] = None
+
+
+class RetakePermissionResponse(BaseModel):
+    """
+    Схема ответа для разрешения на пересдачу
+    """
+    id: UUID
+    test_id: UUID
+    student_id: UUID
+    teacher_id: UUID
+    submission_id: Optional[UUID] = None
+    comment: Optional[str] = None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

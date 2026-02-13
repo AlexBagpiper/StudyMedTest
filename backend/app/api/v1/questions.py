@@ -43,14 +43,17 @@ async def list_questions(
             detail="Students cannot view questions"
         )
     
-    query = select(Question).options(
+    query = select(Question).join(User, Question.author_id == User.id).options(
         selectinload(Question.topic),
-        selectinload(Question.image)
+        selectinload(Question.image),
+        selectinload(Question.author)
     )
     
-    # Teacher видит только свои вопросы
+    # Teacher видит свои вопросы + вопросы администраторов
     if current_user.role == Role.TEACHER:
-        query = query.where(Question.author_id == current_user.id)
+        query = query.where(
+            (Question.author_id == current_user.id) | (User.role == Role.ADMIN)
+        )
     
     if type:
         query = query.where(Question.type == type)
@@ -137,7 +140,7 @@ async def create_question(
     # Получаем созданный вопрос со всеми связями для ответа
     result = await db.execute(
         select(Question)
-        .options(selectinload(Question.topic), selectinload(Question.image))
+        .options(selectinload(Question.topic), selectinload(Question.image), selectinload(Question.author))
         .where(Question.id == question.id)
     )
     question = result.scalar_one()
@@ -162,7 +165,7 @@ async def get_question(
     """
     result = await db.execute(
         select(Question)
-        .options(selectinload(Question.topic), selectinload(Question.image))
+        .options(selectinload(Question.topic), selectinload(Question.image), selectinload(Question.author))
         .where(Question.id == question_id)
     )
     question = result.scalar_one_or_none()
@@ -173,12 +176,17 @@ async def get_question(
             detail="Question not found"
         )
     
-    # Проверка прав доступа
-    if current_user.role == Role.TEACHER and question.author_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    # Проверка прав доступа: Teacher может видеть свои или админские вопросы
+    if current_user.role == Role.TEACHER:
+        # Нам нужно проверить роль автора вопроса
+        author_result = await db.execute(select(User.role).where(User.id == question.author_id))
+        author_role = author_result.scalar_one_or_none()
+        
+        if question.author_id != current_user.id and author_role != Role.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions"
+            )
     
     if question.image:
         question.image.presigned_url = storage_service.get_presigned_url(
@@ -260,7 +268,7 @@ async def update_question(
     # Получаем обновленный вопрос со всеми связями
     result = await db.execute(
         select(Question)
-        .options(selectinload(Question.topic), selectinload(Question.image))
+        .options(selectinload(Question.topic), selectinload(Question.image), selectinload(Question.author))
         .where(Question.id == question_id)
     )
     question = result.scalar_one()
@@ -325,6 +333,78 @@ async def delete_question(
     return None
 
 
+@router.post("/{question_id}/duplicate", response_model=QuestionResponse)
+async def duplicate_question(
+    question_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Создание дубликата вопроса (текущий пользователь становится автором)
+    """
+    if current_user.role not in [Role.TEACHER, Role.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+
+    # 1. Получаем исходный вопрос со всеми связями
+    result = await db.execute(
+        select(Question)
+        .options(selectinload(Question.topic), selectinload(Question.image), selectinload(Question.author))
+        .where(Question.id == question_id)
+    )
+    original_question = result.scalar_one_or_none()
+
+    if not original_question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+
+    # 2. Проверка прав: Teacher может дублировать свои или админские вопросы
+    if current_user.role == Role.TEACHER:
+        if original_question.author_id != current_user.id and original_question.author.role != Role.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions to duplicate this question"
+            )
+
+    # 3. Создаем новый вопрос
+    new_question = Question(
+        author_id=current_user.id,
+        type=original_question.type,
+        content=f"{original_question.content} (копия)",
+        topic_id=original_question.topic_id,
+        difficulty=original_question.difficulty,
+        reference_data=original_question.reference_data.copy() if isinstance(original_question.reference_data, dict) else original_question.reference_data,
+        scoring_criteria=original_question.scoring_criteria.copy() if isinstance(original_question.scoring_criteria, dict) else original_question.scoring_criteria,
+        ai_check_enabled=original_question.ai_check_enabled,
+        plagiarism_check_enabled=original_question.plagiarism_check_enabled,
+        event_log_check_enabled=original_question.event_log_check_enabled,
+        image_id=original_question.image_id,
+    )
+    
+    db.add(new_question)
+    await db.commit()
+
+    # 4. Возвращаем новый вопрос со всеми связями
+    result = await db.execute(
+        select(Question)
+        .options(selectinload(Question.topic), selectinload(Question.image), selectinload(Question.author))
+        .where(Question.id == new_question.id)
+    )
+    new_question = result.scalar_one()
+    
+    if new_question.image:
+        new_question.image.presigned_url = storage_service.get_presigned_url(
+            new_question.image.storage_path.split("/", 1)[1],
+            expires_seconds=3600
+        )
+
+    return new_question
+
+
 @router.put("/{question_id}/annotations", response_model=QuestionResponse)
 async def update_question_annotations(
     question_id: UUID,
@@ -359,7 +439,7 @@ async def update_question_annotations(
     # Релоад со всеми связями для ответа
     result = await db.execute(
         select(Question)
-        .options(selectinload(Question.topic), selectinload(Question.image))
+        .options(selectinload(Question.topic), selectinload(Question.image), selectinload(Question.author))
         .where(Question.id == question_id)
     )
     question = result.scalar_one()

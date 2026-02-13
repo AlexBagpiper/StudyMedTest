@@ -29,6 +29,7 @@ import SearchIcon from '@mui/icons-material/Search'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import TextFieldsIcon from '@mui/icons-material/TextFields'
 import ImageIcon from '@mui/icons-material/Image'
 import { useAuth } from '../../contexts/AuthContext'
@@ -38,6 +39,7 @@ import {
   useCreateQuestion,
   useUpdateQuestion,
   useDeleteQuestion,
+  useDuplicateQuestion,
 } from '../../lib/api/hooks/useQuestions'
 import { useTopics } from '../../lib/api/hooks/useTopics'
 import QuestionFormDialog from '../../components/questions/QuestionFormDialog'
@@ -74,6 +76,7 @@ export default function QuestionsPage() {
   const createQuestion = useCreateQuestion()
   const updateQuestion = useUpdateQuestion()
   const deleteQuestion = useDeleteQuestion()
+  const duplicateQuestion = useDuplicateQuestion()
 
   // Только для teacher и admin
   if (user?.role === 'student') {
@@ -103,6 +106,18 @@ export default function QuestionsPage() {
     setEditingQuestion(question)
     setIsViewOnly(false)
     setDialogOpen(true)
+  }
+
+  const handleDuplicateClick = async (questionId: string) => {
+    try {
+      await duplicateQuestion.mutateAsync(questionId)
+    } catch (error: any) {
+      console.error('Failed to duplicate question:', error)
+      setErrorDialog({
+        open: true,
+        message: translateError(error.response?.data?.detail)
+      })
+    }
   }
 
   const handleDeleteClick = (questionId: string) => {
@@ -293,16 +308,37 @@ export default function QuestionsPage() {
                           <VisibilityIcon fontSize="small" />
                         </MuiIconButton>
                       </Tooltip>
-                      <Tooltip title={t('questions.editTitle')}>
-                        <MuiIconButton size="small" onClick={() => handleEditClick(question)}>
-                          <EditIcon fontSize="small" />
+                      <Tooltip title={t('questions.duplicateTitle') || 'Duplicate'}>
+                        <MuiIconButton 
+                          size="small" 
+                          onClick={() => handleDuplicateClick(question.id)}
+                        >
+                          <ContentCopyIcon fontSize="small" />
                         </MuiIconButton>
                       </Tooltip>
-                      <Tooltip title={t('questions.deleteTitle')}>
-                        <MuiIconButton size="small" color="error" onClick={() => handleDeleteClick(question.id)}>
-                          <DeleteIcon fontSize="small" />
-                        </MuiIconButton>
-                      </Tooltip>
+                      {/* Teacher can only edit/delete their own questions or if they are admin */}
+                      {(user?.role === 'admin' || question.author_id === user?.id) ? (
+                        <>
+                          <Tooltip title={t('questions.editTitle')}>
+                            <MuiIconButton size="small" onClick={() => handleEditClick(question)}>
+                              <EditIcon fontSize="small" />
+                            </MuiIconButton>
+                          </Tooltip>
+                          <Tooltip title={t('questions.deleteTitle')}>
+                            <MuiIconButton size="small" color="error" onClick={() => handleDeleteClick(question.id)}>
+                              <DeleteIcon fontSize="small" />
+                            </MuiIconButton>
+                          </Tooltip>
+                        </>
+                      ) : (
+                        <Tooltip title={t('questions.adminReadOnly')}>
+                          <span>
+                            <MuiIconButton size="small" disabled>
+                              <EditIcon fontSize="small" />
+                            </MuiIconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>

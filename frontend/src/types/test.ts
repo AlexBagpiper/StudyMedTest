@@ -23,6 +23,10 @@ export interface TestStructureItem {
 export interface Test {
   id: string
   author_id: string
+  author?: {
+    id: string
+    role: string
+  }
   title: string
   description?: string
   settings: TestSettings
@@ -91,6 +95,10 @@ export interface TopicCreate {
 export interface Question {
   id: string
   author_id: string
+  author?: {
+    id: string
+    role: string
+  }
   type: QuestionType
   content: string
   topic_id?: string

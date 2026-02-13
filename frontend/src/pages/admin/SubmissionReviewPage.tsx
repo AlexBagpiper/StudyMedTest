@@ -19,7 +19,10 @@ import { AnnotationData } from '../../types/annotation'
 import { MessageDialog } from '../../components/common/MessageDialog'
 import { adminApi } from '../../lib/api'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import ReplayIcon from '@mui/icons-material/Replay'
 import { FormControlLabel, Switch } from '@mui/material'
+import { useGrantRetake, useSubmissions } from '../../lib/api/hooks/useSubmissions'
+import { Submission } from '../../types/submission'
 
 export default function SubmissionReviewPage() {
   const { id } = useParams()
@@ -27,16 +30,32 @@ export default function SubmissionReviewPage() {
   const { t, formatName } = useLocale()
   const { user } = useAuth()
   
+  const grantRetake = useGrantRetake()
   const [submission, setSubmission] = useState<any>(null)
+  
+  const { data: allSubmissions = [] } = useSubmissions(
+    submission?.test_id ? { 
+      student_id: submission.student_id, 
+      test_id: submission.test_id 
+    } : undefined,
+    { enabled: !!submission?.test_id }
+  )
   const [questions, setQuestions] = useState<any[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isRevaluating, setIsRevaluating] = useState(false)
   const [cvConfig, setCvConfig] = useState<any>(null)
-  const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
+  const [errorDialog, setErrorDialog] = useState<{ 
+    open: boolean; 
+    message: string;
+    title?: string;
+    severity?: 'error' | 'success' | 'info' | 'warning';
+  }>({
     open: false,
-    message: ''
+    message: '',
+    title: '',
+    severity: 'error'
   })
   const [currentLabels, setCurrentLabels] = useState<any[]>([])
   const [showReferenceOverlay, setShowReferenceOverlay] = useState(false)
@@ -135,6 +154,25 @@ export default function SubmissionReviewPage() {
       })
     } finally {
       setIsRevaluating(false)
+    }
+  }
+
+  const handleGrantRetake = async () => {
+    if (!id) return
+    try {
+      await grantRetake.mutateAsync({ submissionId: id })
+      // Можно добавить уведомление об успехе
+      setErrorDialog({
+        open: true,
+        title: 'Успех',
+        message: 'Разрешение на пересдачу успешно выдано',
+        severity: 'success'
+      })
+    } catch (err: any) {
+      setErrorDialog({
+        open: true,
+        message: err.response?.data?.detail || 'Ошибка при выдаче разрешения на пересдачу'
+      })
     }
   }
 
@@ -561,10 +599,10 @@ export default function SubmissionReviewPage() {
 
       <MessageDialog
         open={errorDialog.open}
-        title={t('common.error')}
+        title={errorDialog.title || t('common.error')}
         content={errorDialog.message}
         onClose={() => setErrorDialog({ ...errorDialog, open: false })}
-        severity="error"
+        severity={errorDialog.severity || 'error'}
       />
     </Box>
   )

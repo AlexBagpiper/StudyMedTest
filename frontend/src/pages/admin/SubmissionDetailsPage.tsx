@@ -22,6 +22,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import EventIcon from '@mui/icons-material/Event'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import { MessageDialog } from '../../components/common/MessageDialog'
+import { useSubmissions } from '../../lib/api/hooks/useSubmissions'
 
 export default function SubmissionDetailsPage() {
   const { id } = useParams()
@@ -30,6 +31,16 @@ export default function SubmissionDetailsPage() {
   
   const [submission, setSubmission] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  
+  // Получаем историю всех попыток студента по этому тесту
+  const { data: allSubmissions = [] } = useSubmissions(
+    submission?.test_id ? { 
+      student_id: submission.student_id, 
+      test_id: submission.test_id 
+    } : undefined,
+    { enabled: !!submission?.test_id }
+  )
+
   const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
     open: false,
     message: ''
@@ -123,6 +134,44 @@ export default function SubmissionDetailsPage() {
           {t('common.back')}
         </Button>
       </Box>
+
+      {allSubmissions.length > 1 && (
+        <Paper 
+          elevation={0}
+          sx={{ 
+            p: 2, 
+            mb: 3, 
+            borderRadius: 2, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 2,
+            bgcolor: 'action.hover',
+            border: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+            История попыток этого студента:
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {allSubmissions
+              .sort((a: any, b: any) => (a.attempt_number || 1) - (b.attempt_number || 1))
+              .map((sub: any) => (
+                <Chip
+                  key={sub.id}
+                  label={`Попытка №${sub.attempt_number || 1} (${sub.result?.total_score || 0} б.)`}
+                  onClick={() => sub.id !== id && navigate(`/admin/submissions/${sub.id}`)}
+                  color={sub.id === id ? "primary" : "default"}
+                  variant={sub.id === id ? "filled" : "outlined"}
+                  sx={{ 
+                    cursor: sub.id === id ? 'default' : 'pointer',
+                    '&:hover': sub.id === id ? {} : { bgcolor: 'primary.light', color: 'white' }
+                  }}
+                />
+              ))}
+          </Box>
+        </Paper>
+      )}
 
       {submission && (
         <Grid container spacing={3}>
