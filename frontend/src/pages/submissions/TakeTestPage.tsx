@@ -13,7 +13,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import api from '../../lib/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
-import { useSubmitTest } from '../../lib/api/hooks/useSubmissions'
+import { useSubmitTest, useLogSubmissionEvent } from '../../lib/api/hooks/useSubmissions'
 import { AnnotationEditor } from '../../components/annotation/AnnotationEditor'
 import { AnnotationData } from '../../types/annotation'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
@@ -27,6 +27,7 @@ export default function TakeTestPage() {
   const { user } = useAuth()
   const { t } = useLocale()
   const submitTest = useSubmitTest()
+  const logEvent = useLogSubmissionEvent()
   const { reset: resetAnnotationStore } = useAnnotationStore()
   
   const [submission, setSubmission] = useState<any>(null)
@@ -301,6 +302,68 @@ export default function TakeTestPage() {
 
     return () => clearInterval(timer)
   }, [submission])
+
+  useEffect(() => {
+    if (!submission?.id || submission.status !== 'in_progress') return
+
+    const handleVisibilityChange = () => {
+      const eventType = document.hidden ? 'tab_hidden' : 'tab_visible'
+      logEvent.mutate({
+        submissionId: submission.id,
+        eventType,
+        details: { 
+          question_id: questions[currentQuestionIndexRef.current]?.id,
+          timestamp: new Date().toISOString()
+        }
+      })
+    }
+
+    const handleBlur = () => {
+      logEvent.mutate({
+        submissionId: submission.id,
+        eventType: 'window_blur',
+        details: { 
+          question_id: questions[currentQuestionIndexRef.current]?.id,
+          timestamp: new Date().toISOString()
+        }
+      })
+    }
+
+    const handleFocus = () => {
+      logEvent.mutate({
+        submissionId: submission.id,
+        eventType: 'window_focus',
+        details: { 
+          question_id: questions[currentQuestionIndexRef.current]?.id,
+          timestamp: new Date().toISOString()
+        }
+      })
+    }
+
+    const handlePaste = (e: ClipboardEvent) => {
+      logEvent.mutate({
+        submissionId: submission.id,
+        eventType: 'paste_attempted',
+        details: { 
+          question_id: questions[currentQuestionIndexRef.current]?.id,
+          timestamp: new Date().toISOString(),
+          content_length: e.clipboardData?.getData('text').length
+        }
+      })
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('blur', handleBlur)
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('paste', handlePaste)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('blur', handleBlur)
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('paste', handlePaste)
+    }
+  }, [submission?.id, submission?.status, logEvent])
 
   useEffect(() => {
     if (error) {

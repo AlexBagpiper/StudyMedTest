@@ -39,6 +39,9 @@ class QuestionBase(BaseModel):
     difficulty: int = Field(default=1, ge=1, le=5)
     reference_data: Optional[Any] = None
     scoring_criteria: Optional[Any] = None
+    ai_check_enabled: bool = False
+    plagiarism_check_enabled: bool = False
+    event_log_check_enabled: bool = False
 
 
 class QuestionCreate(QuestionBase):
@@ -57,6 +60,9 @@ class QuestionUpdate(BaseModel):
     difficulty: Optional[int] = Field(None, ge=1, le=5)
     reference_data: Optional[Any] = None
     scoring_criteria: Optional[Any] = None
+    ai_check_enabled: Optional[bool] = None
+    plagiarism_check_enabled: Optional[bool] = None
+    event_log_check_enabled: Optional[bool] = None
     image_id: Optional[UUID] = None
 
 

@@ -123,3 +123,22 @@ export function useRestoreSubmission() {
     },
   })
 }
+
+export function useLogSubmissionEvent() {
+  return useMutation({
+    mutationFn: async ({
+      submissionId,
+      eventType,
+      details,
+    }: {
+      submissionId: string
+      eventType: string
+      details?: any
+    }) => {
+      await api.post(`/submissions/${submissionId}/events`, {
+        event_type: eventType,
+        details,
+      })
+    },
+  })
+}

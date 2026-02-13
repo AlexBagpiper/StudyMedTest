@@ -241,6 +241,7 @@ const translations = {
     'questions.openEditor': 'Открыть редактор разметки',
     'questions.viewAnnotation': 'Просмотреть разметку',
     'questions.atLeastOneAnnotation': 'Необходимо разметить хотя бы одну область',
+    'questions.allowPartial': 'Разрешить частичное выделение (для сложных контуров)',
     
     // Тесты
     'tests.title.student': 'Доступные тесты',
@@ -559,6 +560,7 @@ const translations = {
     'questions.openEditor': 'Open annotation editor',
     'questions.viewAnnotation': 'View annotation',
     'questions.atLeastOneAnnotation': 'At least one annotation is required',
+    'questions.allowPartial': 'Allow partial annotation (for complex shapes)',
 
     // Tests
     'tests.title.student': 'Available Tests',

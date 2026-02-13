@@ -24,6 +24,7 @@ from app.schemas.submission import (
     AnswerUpdate,
     AnswerResponse,
     BulkDeleteRequest,
+    SubmissionEventCreate,
 )
 
 import logging
@@ -271,12 +272,12 @@ async def submit_test(
             select(Submission)
             .options(
                 selectinload(Submission.answers),
-                joinedload(Submission.student),
-                joinedload(Submission.variant).joinedload(TestVariant.test).joinedload(Test.author)
+                selectinload(Submission.student),
+                selectinload(Submission.variant).selectinload(TestVariant.test).selectinload(Test.author)
             )
             .where(Submission.id == submission_id)
         )
-        submission = result.unique().scalar_one_or_none()
+        submission = result.scalar_one_or_none()
         
         if not submission:
             raise HTTPException(
@@ -331,12 +332,12 @@ async def submit_test(
             select(Submission)
             .options(
                 selectinload(Submission.answers),
-                joinedload(Submission.student),
-                joinedload(Submission.variant).joinedload(TestVariant.test).joinedload(Test.author)
+                selectinload(Submission.student),
+                selectinload(Submission.variant).selectinload(TestVariant.test).selectinload(Test.author)
             )
             .where(Submission.id == submission_id)
         )
-        submission = result.unique().scalar_one()
+        submission = result.scalar_one()
         
         # Добавляем time_limit в объект для схемы
         try:
@@ -345,14 +346,51 @@ async def submit_test(
         except Exception:
             submission.time_limit = None
         
-        # Явно конвертируем в схему ВНУТРИ сессии
-        from app.schemas.submission import SubmissionResponse
-        return SubmissionResponse.model_validate(submission)
+        return submission
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("Error submitting test")
         raise HTTPException(status_code=500, detail="Internal server error") from None
+
+
+@router.post("/{submission_id}/events", status_code=status.HTTP_204_NO_CONTENT)
+async def log_submission_event(
+    submission_id: UUID,
+    event_in: SubmissionEventCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Логирование событий прохождения теста (paste, tab switching и т.д.)
+    """
+    # Проверка submission
+    result = await db.execute(select(Submission).where(Submission.id == submission_id))
+    submission = result.scalar_one_or_none()
+    
+    if not submission:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission not found"
+        )
+    
+    # Проверка прав доступа
+    if submission.student_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    await log_audit_action(
+        db,
+        current_user.id,
+        f"submission.{event_in.event_type}",
+        "submission",
+        resource_id=submission_id,
+        details=event_in.details
+    )
+    await db.commit()
+    return None
 
 
 @router.get("", response_model=List[SubmissionResponse])

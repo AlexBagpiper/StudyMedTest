@@ -20,6 +20,8 @@ from app.core.database import AsyncSessionLocal
 from app.models.submission import Submission, SubmissionStatus, Answer
 from app.models.question import Question, QuestionType
 from app.models.system_config import SystemConfig
+from app.models.audit import AuditLog
+from app.services.search_service import search_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,25 +47,108 @@ async def run_evaluate_text_answer(session: AsyncSession, answer_id: str) -> Dic
         )
         question = result.scalar_one_or_none()
         
+        # --- Анти-чит сбор данных ---
+        anticheat_config = {}
+        
+        # 1. Сбор логов событий (если включено в вопросе)
+        if question.event_log_check_enabled:
+            events_res = await session.execute(
+                select(AuditLog).where(
+                    AuditLog.resource_id == answer.submission_id,
+                    AuditLog.action.like("submission.%")
+                )
+            )
+            events = events_res.scalars().all()
+            # Фильтруем события, относящиеся к этому вопросу, если в деталях есть question_id
+            enhanced_log = []
+            away_time_total = 0
+            last_away_start = None
+            
+            # Сортируем события по времени для корректного расчета
+            sorted_events = sorted(events, key=lambda x: x.timestamp)
+            
+            # Определяем начало и конец работы над вопросом
+            q_start_time = sorted_events[0].timestamp if sorted_events else datetime.utcnow()
+            q_end_time = sorted_events[-1].timestamp if sorted_events else datetime.utcnow()
+            total_q_time = (q_end_time - q_start_time).total_seconds()
+            
+            for ev in sorted_events:
+                ev_q_id = (ev.details or {}).get("question_id")
+                if not ev_q_id or ev_q_id == str(question.id):
+                    action_type = ev.action.split('.')[-1]
+                    ev_time_str = ev.timestamp.strftime("%H:%M:%S")
+                    
+                    if action_type in ['tab_hidden', 'window_blur']:
+                        last_away_start = ev.timestamp
+                    elif action_type in ['tab_visible', 'window_focus'] and last_away_start:
+                        duration = (ev.timestamp - last_away_start).total_seconds()
+                        away_time_total += duration
+                        enhanced_log.append({
+                            "event": "away_from_tab",
+                            "duration": f"{round(duration, 1)}s",
+                            "at": ev_time_str
+                        })
+                        last_away_start = None
+                    elif action_type == 'paste_attempted':
+                        enhanced_log.append({
+                            "event": "paste_attempted",
+                            "at": ev_time_str
+                        })
+
+            anticheat_config["event_log"] = enhanced_log
+            anticheat_config["away_time_seconds"] = round(away_time_total, 1)
+            anticheat_config["total_time_seconds"] = round(max(1, total_q_time), 1)
+            anticheat_config["focus_time_seconds"] = round(max(0, total_q_time - away_time_total), 1)
+
+        # 2. Проверка на плагиат (если включено в вопросе)
+        if question.plagiarism_check_enabled:
+            # Получаем системные настройки для Search API
+            result_cfg = await session.execute(
+                select(SystemConfig).where(SystemConfig.key == "llm_evaluation_params")
+            )
+            config_obj = result_cfg.scalar_one_or_none()
+            search_config = config_obj.value if config_obj else {}
+            
+            plagiarism_score = await search_service.check_plagiarism(answer.student_answer, config=search_config)
+            anticheat_config["plagiarism_score"] = plagiarism_score
+            
+        # 3. Флаг проверки на ИИ (для передачи в LLM)
+        if question.ai_check_enabled:
+            anticheat_config["ai_check_enabled"] = True
+
         from app.services.llm_service import llm_service
         # Если критерии не заданы или пустые, передаем None, чтобы сервис использовал дефолты
         scoring_criteria = question.scoring_criteria if question.scoring_criteria else None
         
+        # Объединяем системные настройки и настройки анти-чита
+        result_cfg = await session.execute(
+            select(SystemConfig).where(SystemConfig.key == "llm_evaluation_params")
+        )
+        config_obj = result_cfg.scalar_one_or_none()
+        llm_config = (config_obj.value if config_obj else {}).copy()
+        llm_config.update(anticheat_config)
+
         evaluation_result = await llm_service.evaluate_text_answer(
             question=question.content,
             reference_answer=question.reference_data.get("reference_answer", "") if question.reference_data else "",
             student_answer=answer.student_answer,
             criteria=scoring_criteria,
-            db=session
+            db=session,
+            config=llm_config
         )
         
         answer.evaluation = {
-            "criteria_scores": evaluation_result["criteria_scores"],
-            "feedback": evaluation_result["feedback"],
-            "llm_provider": evaluation_result["provider"],
+            "criteria_scores": evaluation_result.get("criteria_scores"),
+            "feedback": evaluation_result.get("feedback"),
+            "llm_provider": evaluation_result.get("provider"),
+            "integrity_score": evaluation_result.get("integrity_score"),
+            "integrity_feedback": evaluation_result.get("integrity_feedback"),
+            "ai_probability": evaluation_result.get("ai_probability"),
+            "plagiarism_found": evaluation_result.get("plagiarism_found"),
+            "penalty_note": evaluation_result.get("penalty_note"),
             "evaluated_at": datetime.utcnow().isoformat(),
         }
-        answer.score = round(evaluation_result["total_score"])
+        answer.score = round(evaluation_result.get("total_score", 0))
         return {"answer_id": answer_id, "score": answer.score}
     except Exception as e:
         logger.exception(f"Error in run_evaluate_text_answer for {answer_id}")
@@ -89,7 +174,9 @@ async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) 
     if not answer: return {"error": "Answer not found"}
     
     result = await session.execute(
-        select(Question).where(Question.id == answer.question_id)
+        select(Question)
+        .options(selectinload(Question.image))
+        .where(Question.id == answer.question_id)
     )
     question = result.scalar_one_or_none()
     
@@ -134,6 +221,7 @@ async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) 
         "evaluated_at": datetime.utcnow().isoformat(),
     }
     answer.score = round(evaluation_result["total_score"])
+
     return {"answer_id": answer_id, "score": answer.score}
 
 async def run_evaluate_choice_answer(session: AsyncSession, answer_id: str) -> Dict[str, Any]:
@@ -276,14 +364,22 @@ def evaluate_submission(self, submission_id: str):
                         elif question.type == QuestionType.IMAGE_ANNOTATION:
                             await run_evaluate_annotation_answer(session, str(answer.id))
                         elif question.type == QuestionType.CHOICE:
-                            answer.evaluation = {"type": "choice", "evaluated_at": datetime.utcnow().isoformat()}
-                            answer.score = 100.0
+                            await run_evaluate_choice_answer(session, str(answer.id))
                         
                     except Exception as e:
                         logger.error(f"Failed to evaluate answer {answer.id}: {e}")
                         answer.score = 0
                 
                 # Подсчёт итогового балла с учетом сложности
+                # ВАЖНО: Делаем flush, чтобы все изменения в ответах были отправлены в БД
+                # и перечитываем ответы, чтобы получить обновленные баллы
+                await session.flush()
+                
+                result = await session.execute(
+                    select(Answer).where(Answer.submission_id == submission.id)
+                )
+                answers = result.scalars().all()
+                
                 total_weighted_score = 0.0
                 max_weighted_possible = 0.0
                 

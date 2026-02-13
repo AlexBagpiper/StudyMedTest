@@ -73,11 +73,118 @@ class YandexGPTProvider(BaseLLMProvider):
             if full in criteria:
                 vars[f"max_{short}"] = criteria[full]
         
+        # Добавляем критерии текстом
+        vars["criteria_text"] = self._format_criteria(criteria)
+        
         return vars
 
     def _format_criteria(self, criteria: Dict[str, int]) -> str:
         return "\n".join([f"- {k.replace('_', ' ').title()}: 0-{v} баллов" 
                          for i, (k, v) in enumerate(criteria.items())])
+
+    def _prepare_full_prompt(self, question: str, reference_answer: str, student_answer: str, criteria: Dict[str, int], config: Dict[str, Any]) -> str:
+        """Сборка полного промпта с учетом анти-чита"""
+        
+        # 1. Базовый системный промпт (из БД или дефолтный)
+        custom_prompt = config.get("evaluation_prompt")
+        
+        # Динамический шаблон JSON для критериев
+        criteria_template = ",\n    ".join([f'"{k}": <баллы>' for k in criteria.keys()])
+        
+        if not custom_prompt:
+            custom_prompt = f"""Ты — эксперт-преподаватель медицины. Оцени ответ студента по критериям.
+            
+ВОПРОС: {{question}}
+ЭТАЛОН: {{reference_answer}}
+ОТВЕТ СТУДЕНТА: {{student_answer}}
+
+КРИТЕРИИ:
+{{criteria_text}}
+
+Верни ответ ТОЛЬКО в формате JSON:
+{{
+  "criteria_scores": {{
+    {criteria_template}
+  }},
+  "total_score": <сумма>,
+  "feedback": "<текст>"
+}}"""
+
+        # 2. Доп. промпты анти-чита
+        extra_prompts = ""
+        json_extras = ""
+        
+        # Детекция ИИ
+        if config.get("ai_check_enabled") and config.get("ai_check_prompt"):
+            extra_prompts += config.get("ai_check_prompt")
+            json_extras += ',\n  "ai_probability": <вероятность ИИ от 0.0 до 1.0>'
+            
+        # Анализ поведения
+        if config.get("event_log") and config.get("integrity_check_prompt"):
+            extra_prompts += config.get("integrity_check_prompt")
+            json_extras += ',\n  "integrity_score": <коэффициент честности от 0.0 до 1.0>,\n  "integrity_feedback": "<краткий комментарий по поведению>"'
+
+        # 3. Форматирование базового промпта
+        prompt_vars = self._get_prompt_variables(question, reference_answer, student_answer, criteria)
+        
+        # Вставляем event_log если он есть
+        if config.get("event_log"):
+            # Форматируем лог событий для читаемости человеком/моделью
+            events = config.get("event_log")
+            event_log_str = json.dumps(events, indent=2, ensure_ascii=False)
+            prompt_vars["event_log"] = event_log_str
+            prompt_vars["away_time_seconds"] = config.get("away_time_seconds", 0)
+            prompt_vars["total_time_seconds"] = config.get("total_time_seconds", 0)
+            prompt_vars["focus_time_seconds"] = config.get("focus_time_seconds", 0)
+        else:
+            prompt_vars["event_log"] = "события не зафиксированы"
+            prompt_vars["away_time_seconds"] = 0
+            prompt_vars["total_time_seconds"] = 0
+            prompt_vars["focus_time_seconds"] = 0
+
+        try:
+            full_prompt = custom_prompt.format(**prompt_vars)
+            # Также форматируем дополнительные промпты, так как они могут содержать {event_log} и др.
+            if extra_prompts:
+                try:
+                    extra_prompts = extra_prompts.format(**prompt_vars)
+                except Exception:
+                    # Если не удалось отформатировать доп. промпт, оставляем как есть
+                    pass
+        except KeyError as e:
+            # Если в промпте есть лишние скобки или переменные, которых нет в vars, 
+            # пробуем хотя бы базовые заменить
+            full_prompt = custom_prompt.replace("{question}", question).replace("{reference_answer}", reference_answer).replace("{student_answer}", student_answer)
+
+        # 4. Внедрение доп. промптов и обновление JSON-формата
+        # Ищем блок JSON в промпте, чтобы вставить поля туда
+        if json_extras:
+            # Пытаемся вставить инструкции анти-чита перед блоком JSON или в конец
+            # Проверяем несколько вариантов маркеров начала формата ответа
+            markers = ["Верни ответ ТОЛЬКО в формате JSON", "ФОРМАТ ОТВЕТА", "JSON:", "```json"]
+            marker_found = False
+            for marker in markers:
+                if marker in full_prompt:
+                    # Вставляем доп. инструкции ПЕРЕД маркером формата
+                    idx = full_prompt.find(marker)
+                    full_prompt = full_prompt[:idx] + "\n## АНТИ-ЧИТ ПРОВЕРКА\n" + extra_prompts + "\n\n" + full_prompt[idx:]
+                    marker_found = True
+                    break
+            
+            if not marker_found:
+                full_prompt += "\n## АНТИ-ЧИТ ПРОВЕРКА\n" + extra_prompts
+            
+            # Обновляем сам JSON шаблон (вставляем поля перед последней закрывающей скобкой)
+            # Мы ищем последнюю скобку ПРЕЖДЕ чем мы могли добавить что-то еще в конец (хотя мы теперь вставляем перед маркером)
+            if '"feedback":' in full_prompt:
+                # Ищем последнюю закрывающую скобку
+                last_brace_idx = full_prompt.rfind('}')
+                if last_brace_idx != -1:
+                    full_prompt = full_prompt[:last_brace_idx].strip()
+                    if full_prompt.endswith(','): full_prompt = full_prompt[:-1]
+                    full_prompt += json_extras + "\n}"
+        
+        return full_prompt
 
     def _parse_json_response(self, text: str) -> Dict[str, Any]:
         """Устойчивый парсинг JSON из ответа модели"""
@@ -146,38 +253,7 @@ class YandexGPTProvider(BaseLLMProvider):
 
         model_uri = f"gpt://{folder_id}/{model_name}"
         
-        # Динамический шаблон JSON для критериев
-        criteria_template = ",\n    ".join([f'"{k}": <баллы>' for k in criteria.keys()])
-        
-        custom_prompt = config.get("evaluation_prompt")
-        if custom_prompt:
-            try:
-                prompt_vars = self._get_prompt_variables(question, reference_answer, student_answer, criteria)
-                prompt = custom_prompt.format(**prompt_vars)
-            except KeyError as e:
-                return {
-                    "criteria_scores": {k: 0 for k in criteria.keys()},
-                    "total_score": 0,
-                    "feedback": f"Ошибка в шаблоне промпта: отсутствует переменная {e}"
-                }
-        else:
-            prompt = f"""Ты — эксперт-преподаватель медицины. Оцени ответ студента по критериям.
-            
-ВОПРОС: {question}
-ЭТАЛОН: {reference_answer}
-ОТВЕТ СТУДЕНТА: {student_answer}
-
-КРИТЕРИИ:
-{self._format_criteria(criteria)}
-
-Верни ответ ТОЛЬКО в формате JSON без пояснений:
-{{
-  "criteria_scores": {{
-    {criteria_template}
-  }},
-  "total_score": <сумма>,
-  "feedback": "<текст>"
-}}"""
+        prompt = self._prepare_full_prompt(question, reference_answer, student_answer, criteria, config)
 
         try:
             # Определение типа авторизации (API Key или IAM Token)
@@ -568,7 +644,7 @@ class LLMService:
         config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Оценка текстового ответа с поддержкой fallback
+        Оценка текстового ответа с поддержкой fallback и анти-чита
         """
         if criteria is None:
             criteria = {
@@ -583,8 +659,17 @@ class LLMService:
         if db_config is None and db:
             db_config = await self._get_db_config(db)
         
-        db_config = db_config or {}
+        db_config = (db_config or {}).copy()
         
+        # --- Анти-чит логика ---
+        manual_integrity_score = 1.0
+        plagiarism_score = db_config.get("plagiarism_score", 0.0)
+        
+        # Предварительная проверка на плагиат (если найден через Search API)
+        if plagiarism_score > 0.5:
+            # Если найден плагиат, сильно снижаем целостность сразу
+            manual_integrity_score = min(manual_integrity_score, 0.2)
+
         strategy = db_config.get("strategy") or settings.LLM_STRATEGY
         
         # 1. Первая попытка
@@ -602,6 +687,58 @@ class LLMService:
             if result.get("total_score") == 0 and "Error" in result.get("feedback", ""):
                 raise Exception(result["feedback"])
                 
+            # Применяем integrity_score из ответа LLM или наш manual
+            # Если в конфиге были промпты анти-чита, LLM должна была вернуть integrity_score
+            llm_integrity = result.get("integrity_score")
+            final_integrity = llm_integrity if llm_integrity is not None else manual_integrity_score
+            
+            # --- Расширенная логика штрафов на основе порогов ---
+            ai_threshold_error = db_config.get("ai_threshold_error", 0.8)
+            plagiarism_threshold = db_config.get("plagiarism_threshold", 0.5)
+            integrity_threshold_error = db_config.get("integrity_threshold_error", 0.6)
+            
+            ai_prob = result.get("ai_probability") or result.get("ai_score") or 0.0
+            is_plagiarism = plagiarism_score > plagiarism_threshold
+            
+            # Проктор теперь оценивается самой LLM (final_integrity)
+            # Мы считаем критическим нарушением если:
+            # 1. Плагиат обнаружен (is_plagiarism)
+            # 2. Вероятность ИИ критическая (ai_prob >= ai_threshold_error)
+            # 3. Сама LLM поставила низкий балл честности (например, < integrity_threshold_error)
+            
+            is_critical = is_plagiarism or ai_prob >= ai_threshold_error or final_integrity <= integrity_threshold_error
+            
+            if final_integrity < 1.0 or is_critical:
+                # Определяем итоговый коэффициент штрафа
+                # Если критично — балл обнуляется (0)
+                # Если просто подозрительно — используем integrity_score
+                penalty_factor = final_integrity
+                if is_critical:
+                    penalty_factor = 0.0
+                
+                reduction_percent = round((1.0 - penalty_factor) * 100)
+                
+                if reduction_percent > 0:
+                    result["total_score"] = result["total_score"] * penalty_factor
+                    
+                    reasons = []
+                    if is_plagiarism: reasons.append("Плагиат")
+                    if ai_prob >= ai_threshold_error: reasons.append(f"Использование ИИ: {ai_prob:.2f}")
+                    if final_integrity <= integrity_threshold_error: reasons.append(f"Списывание: {final_integrity:.2f}")
+                    elif final_integrity < 1.0: reasons.append(f"Подозрительное поведение: {final_integrity:.2f}")
+                    
+                    percent_text = "100%" if is_critical else f"{reduction_percent}%"
+                    header = f"Нарушение: Оценка снижена на {percent_text}"
+                    penalty_note = f"{header}\nПричины:\n" + "\n".join(reasons)
+                else:
+                    penalty_note = ""
+            else:
+                penalty_note = ""
+            
+            result["integrity_score"] = final_integrity
+            result["ai_probability"] = ai_prob
+            result["plagiarism_found"] = is_plagiarism
+            result["penalty_note"] = penalty_note
             result["provider"] = provider.__class__.__name__
             return result
 
@@ -623,6 +760,49 @@ class LLMService:
                     criteria=criteria,
                     config=db_config
                 )
+                
+                # Применяем integrity_score к итоговому баллу в fallback
+                llm_integrity = result.get("integrity_score")
+                final_integrity = llm_integrity if llm_integrity is not None else manual_integrity_score
+
+                # --- Расширенная логика штрафов на основе порогов (Fallback) ---
+                ai_threshold_error = db_config.get("ai_threshold_error", 0.8)
+                plagiarism_threshold = db_config.get("plagiarism_threshold", 0.5)
+                integrity_threshold_error = db_config.get("integrity_threshold_error", 0.6)
+                
+                ai_prob = result.get("ai_probability") or result.get("ai_score") or 0.0
+                is_plagiarism = plagiarism_score > plagiarism_threshold
+
+                is_critical = is_plagiarism or ai_prob >= ai_threshold_error or final_integrity <= integrity_threshold_error
+
+                if final_integrity < 1.0 or is_critical:
+                    penalty_factor = final_integrity
+                    if is_critical:
+                        penalty_factor = 0.0
+                    
+                    reduction_percent = round((1.0 - penalty_factor) * 100)
+                    
+                    if reduction_percent > 0:
+                        result["total_score"] = result["total_score"] * penalty_factor
+                        
+                        reasons = []
+                        if is_plagiarism: reasons.append("Плагиат")
+                        if ai_prob >= ai_threshold_error: reasons.append(f"Использование ИИ: {ai_prob:.2f}")
+                        if final_integrity <= integrity_threshold_error: reasons.append(f"Списывание: {final_integrity:.2f}")
+                        elif final_integrity < 1.0: reasons.append(f"Подозрительное поведение: {final_integrity:.2f}")
+                        
+                        percent_text = "100%" if is_critical else f"{reduction_percent}%"
+                        header = f"Нарушение: Оценка снижена на {percent_text}"
+                        penalty_note = f"{header}\nПричины:\n" + "\n".join(reasons)
+                    else:
+                        penalty_note = ""
+                else:
+                    penalty_note = ""
+                
+                result["integrity_score"] = final_integrity
+                result["ai_probability"] = ai_prob
+                result["plagiarism_found"] = is_plagiarism
+                result["penalty_note"] = penalty_note
                 result["provider"] = f"{fallback_provider.__class__.__name__} (Fallback)"
                 return result
             except Exception as fallback_e:

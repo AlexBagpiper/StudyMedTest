@@ -98,6 +98,9 @@ export interface Question {
   topic?: Topic
   reference_data?: any
   scoring_criteria?: any
+  ai_check_enabled?: boolean
+  plagiarism_check_enabled?: boolean
+  event_log_check_enabled?: boolean
   image_id?: string
   image?: ImageAsset
   created_at: string
@@ -111,5 +114,8 @@ export interface QuestionCreate {
   difficulty: number
   reference_data?: any
   scoring_criteria?: any
+  ai_check_enabled?: boolean
+  plagiarism_check_enabled?: boolean
+  event_log_check_enabled?: boolean
   image_id?: string
 }

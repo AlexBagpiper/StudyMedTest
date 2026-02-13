@@ -399,6 +399,9 @@ export default function SubmissionReviewPage() {
               structure: 'Структура и логика'
             };
 
+            const criteriaScores = evaluation.criteria_scores || {};
+            const rawScore = Object.values(criteriaScores).reduce((acc: number, val: any): number => acc + (Number(val) || 0), 0);
+
             return (
               <Box sx={{ mt: 4, p: 3, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: 'action.hover' }}>
                 <Typography variant="h6" fontWeight="bold" gutterBottom color="primary">
@@ -413,7 +416,7 @@ export default function SubmissionReviewPage() {
                   <Grid container spacing={2} sx={{ mb: 3 }}>
                     {Object.entries(evaluation.criteria_scores).map(([key, score]: [string, any]) => (
                       <Grid item xs={12} sm={6} md={3} key={key}>
-                        <Paper sx={{ p: 1.5, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <Paper elevation={0} sx={{ p: 1.5, textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
                           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 'bold', mb: 0.5, display: 'block', lineHeight: 1.2 }}>
                             {criteriaLabels[key] || key}
                           </Typography>
@@ -435,13 +438,99 @@ export default function SubmissionReviewPage() {
                   </Typography>
                   <Box sx={{ textAlign: 'right' }}>
                     <Typography variant="caption" color="text.secondary" display="block">
+                      Балл за ответ
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold" color="text.primary">
+                      {Math.round(rawScore as number)}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Анти-чит индикаторы */}
+                {((user?.role === 'admin' || user?.role === 'teacher') && 
+                  (evaluation.ai_probability !== undefined || evaluation.integrity_score !== undefined || evaluation.plagiarism_found !== undefined)) ? (
+                  <Box sx={{ mt: 3, pt: 2, borderTop: '1px dotted', borderColor: 'divider' }}>
+                    <Typography variant="h6" fontWeight="bold" gutterBottom sx={{ color: 'warning.main', mb: 2 }}>
+                      Анализ на академическую честность
+                    </Typography>
+                    {(evaluation.integrity_feedback || evaluation.penalty_note) && (
+                      <Typography variant="body2" sx={{ mb: 3, fontStyle: 'italic', color: 'error.dark', borderLeft: '4px solid', borderColor: 'error.main', pl: 2, py: 1, bgcolor: 'background.paper', whiteSpace: 'pre-wrap' }}>
+                        {[evaluation.integrity_feedback, evaluation.penalty_note].filter(Boolean).join('\n\n')}
+                      </Typography>
+                    )}
+                    <Grid container spacing={2}>
+                      {/* Плагиат */}
+                      <Grid item xs={12} sm={4}>
+                        <Paper elevation={0} sx={{ 
+                          p: 1.5, 
+                          bgcolor: evaluation.plagiarism_found === undefined ? 'action.disabledBackground' : (evaluation.plagiarism_found ? 'error.main' : 'success.main'), 
+                          color: evaluation.plagiarism_found === undefined ? 'text.disabled' : 'white', 
+                          textAlign: 'center',
+                          borderRadius: 2
+                        }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', opacity: 0.9 }}>Плагиат в сети</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            {evaluation.plagiarism_found === undefined ? 'Не проводился' : (evaluation.plagiarism_found ? 'Обнаружен' : 'Не найден')}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+
+                      {/* Вероятность ИИ */}
+                      <Grid item xs={12} sm={4}>
+                        <Paper elevation={0} sx={{ 
+                          p: 1.5, 
+                          bgcolor: evaluation.ai_probability === null || evaluation.ai_probability === undefined
+                            ? 'action.disabledBackground' 
+                            : (evaluation.ai_probability > 0.8 ? 'error.main' : evaluation.ai_probability > 0.5 ? 'warning.main' : 'success.main'), 
+                          color: (evaluation.ai_probability === null || evaluation.ai_probability === undefined) ? 'text.disabled' : 'white', 
+                          textAlign: 'center',
+                          borderRadius: 2
+                        }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', opacity: 0.9 }}>Вероятность ИИ</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            {(evaluation.ai_probability === null || evaluation.ai_probability === undefined) ? 'Выключено' : `${Math.round(evaluation.ai_probability * 100)}%`}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+
+                      {/* Коэффициент честности */}
+                      <Grid item xs={12} sm={4}>
+                        <Paper elevation={0} sx={{ 
+                          p: 1.5, 
+                          bgcolor: (evaluation.integrity_score === null || evaluation.integrity_score === undefined)
+                            ? 'action.disabledBackground' 
+                            : (evaluation.integrity_score < 0.6 ? 'error.main' : evaluation.integrity_score < 0.9 ? 'warning.main' : 'success.main'), 
+                          color: (evaluation.integrity_score === null || evaluation.integrity_score === undefined) ? 'text.disabled' : 'white', 
+                          textAlign: 'center',
+                          borderRadius: 2
+                        }}>
+                          <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', opacity: 0.9 }}>Честность (Проктор)</Typography>
+                          <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            {(evaluation.integrity_score === null || evaluation.integrity_score === undefined) ? 'Нет данных' : `${Math.round(evaluation.integrity_score * 100)}%`}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+
+                    <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider', textAlign: 'right' }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Итоговый балл
+                      </Typography>
+                      <Typography variant="h4" fontWeight="bold" color="primary">
+                        {currentAnswer.score !== undefined ? currentAnswer.score.toFixed(0) : '—'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider', textAlign: 'right' }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
                       Итоговый балл
                     </Typography>
                     <Typography variant="h4" fontWeight="bold" color="primary">
                       {currentAnswer.score !== undefined ? currentAnswer.score.toFixed(0) : '—'}
                     </Typography>
                   </Box>
-                </Box>
+                )}
               </Box>
             );
           }

@@ -39,6 +39,12 @@ class CVService:
         precision_weight = config.get("precision_weight", 0.2)
         iou_threshold = config.get("iou_threshold", 0.5)
 
+        # Новые параметры для частичного зачета
+        allow_partial = config.get("allow_partial", False)
+        inclusion_threshold = config.get("inclusion_threshold", 0.8)
+        min_coverage_threshold = config.get("min_coverage_threshold", 0.05)
+        loyalty_factor = config.get("loyalty_factor", 2.0)
+
         # Извлечение аннотаций студента
         student_annotations = student_data.get("annotations", [])
         
@@ -85,7 +91,7 @@ class CVService:
                     logger.warning("Duplicate student polygon detected and ignored")
         
         logger.info(f"Processed polys: stud_valid={len(stud_polys)}, ref_valid={len(ref_polys)}")
-
+        
         if not stud_polys:
             return {
                 "iou": 0,
@@ -98,38 +104,63 @@ class CVService:
         # Матчинг полигонов
         matches = self._match_polygons(stud_polys, ref_polys)
         
-        all_iou_scores = []
+        all_accuracy_scores = []
+        true_positives = 0
+        
         for s_poly, r_poly in matches:
-            iou = self._calculate_iou(s_poly, r_poly)
-            all_iou_scores.append(iou)
+            if not s_poly.is_valid: s_poly = s_poly.buffer(0)
+            if not r_poly.is_valid: r_poly = r_poly.buffer(0)
+            
+            inter_area = s_poly.intersection(r_poly).area
+            union_area = s_poly.union(r_poly).area
+            iou = inter_area / union_area if union_area > 0 else 0
+            
+            inclusion = inter_area / s_poly.area if s_poly.area > 0 else 0
+            coverage = inter_area / r_poly.area if r_poly.area > 0 else 0
+            
+            # Логика определения "Найден ли объект"
+            is_found = iou >= iou_threshold
+            
+            if allow_partial and not is_found:
+                if inclusion >= inclusion_threshold and coverage >= min_coverage_threshold:
+                    is_found = True
+            
+            if is_found:
+                true_positives += 1
+                if allow_partial:
+                    # Улучшенная формула для частичного совпадения
+                    acc = inclusion * (coverage ** (1.0 / loyalty_factor))
+                    all_accuracy_scores.append(acc)
+                else:
+                    all_accuracy_scores.append(iou)
+            else:
+                all_accuracy_scores.append(iou) # Для совместимости со старым расчетом среднего IoU
         
         # Расчет метрик
-        # 1. Точность попадания (IoU) - средний IoU для найденных объектов
-        avg_iou = np.mean(all_iou_scores) if all_iou_scores else 0
+        # 1. Точность попадания (IoU или взвешенная точность) - среднее для найденных объектов
+        avg_accuracy = np.mean(all_accuracy_scores) if all_accuracy_scores else 0
         
-        # 2. Полнота (Recall) - доля найденных эталонных объектов (IoU > iou_threshold)
-        true_positives = sum(1 for iou in all_iou_scores if iou >= iou_threshold)
+        # 2. Полнота (Recall) - доля найденных эталонных объектов
         recall = true_positives / len(ref_polys) if ref_polys else 0
         
-        # 3. Прецизионность (Precision) - отсутствие лишних элементов
-        # Доля правильных объектов среди всех нарисованных студентом
+        # 3. Прецизионность (Precision) - доля правильных объектов среди всех нарисованных студентом
         precision = true_positives / len(stud_polys) if stud_polys else 0
         
         # Итоговый взвешенный балл
         total_score = (
-            avg_iou * iou_weight + 
+            avg_accuracy * iou_weight + 
             recall * recall_weight + 
             precision * precision_weight
         ) * 100
         
-        logger.info(f"Evaluation results: iou={avg_iou:.3f}, recall={recall:.3f}, precision={precision:.3f}, score={total_score:.2f}")
+        logger.info(f"Evaluation results: accuracy={avg_accuracy:.3f}, recall={recall:.3f}, precision={precision:.3f}, score={total_score:.2f}")
 
         return {
-            "iou": round(float(avg_iou), 3),
+            "iou": round(float(avg_accuracy), 3),
             "recall": round(float(recall), 3),
             "precision": round(float(precision), 3),
             "total_score": round(float(total_score), 2),
-            "iou_scores": [round(float(iou), 3) for iou in all_iou_scores]
+            "iou_scores": [round(float(s), 3) for s in all_accuracy_scores]
         }
 
     def _any_to_polygon(self, ann: Dict[str, Any]) -> Optional[Polygon]:

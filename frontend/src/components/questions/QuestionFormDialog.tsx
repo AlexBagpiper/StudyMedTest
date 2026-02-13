@@ -18,6 +18,8 @@ import {
   Tabs,
   Tab,
   Paper,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -74,6 +76,9 @@ export default function QuestionFormDialog({
         reference_answer: '',
       },
       scoring_criteria: {},
+      ai_check_enabled: false,
+      plagiarism_check_enabled: false,
+      event_log_check_enabled: false,
     },
   })
 
@@ -96,6 +101,9 @@ export default function QuestionFormDialog({
             ...question.reference_data,
           },
           scoring_criteria: question.scoring_criteria || {},
+          ai_check_enabled: question.ai_check_enabled || false,
+          plagiarism_check_enabled: question.plagiarism_check_enabled || false,
+          event_log_check_enabled: question.event_log_check_enabled || false,
           image_id: question.image_id,
         })
         setImageAsset(question.image || null)
@@ -121,6 +129,9 @@ export default function QuestionFormDialog({
             reference_answer: '',
           },
           scoring_criteria: {},
+          ai_check_enabled: false,
+          plagiarism_check_enabled: false,
+          event_log_check_enabled: false,
           image_id: undefined,
         })
         setImageAsset(null)
@@ -290,30 +301,118 @@ export default function QuestionFormDialog({
               />
 
               {questionType === 'text' && (
-                <Controller
-                  name="reference_data.reference_answer"
-                  control={control}
-                  rules={{ required: t('questions.enterReferenceAnswer') }}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label={t('questions.referenceAnswer')}
-                      fullWidth
-                      multiline
-                      rows={4}
-                      error={!!(errors.reference_data as any)?.reference_answer}
-                      helperText={
-                        (errors.reference_data as any)?.reference_answer?.message ||
-                        t('questions.referenceAnswerDesc')
-                      }
-                      disabled={readOnly}
-                    />
-                  )}
-                />
+                <>
+                  <Controller
+                    name="reference_data.reference_answer"
+                    control={control}
+                    rules={{ required: t('questions.enterReferenceAnswer') }}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label={t('questions.referenceAnswer')}
+                        fullWidth
+                        multiline
+                        rows={4}
+                        error={!!(errors.reference_data as any)?.reference_answer}
+                        helperText={
+                          (errors.reference_data as any)?.reference_answer?.message ||
+                          t('questions.referenceAnswerDesc')
+                        }
+                        disabled={readOnly}
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="ai_check_enabled"
+                    control={control}
+                    render={({ field }) => (
+                      <Box>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={!!field.value}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              disabled={readOnly}
+                            />
+                          }
+                          label="Включить проверку на применение ИИ"
+                        />
+                        {field.value && (
+                          <Alert severity="warning" sx={{ mt: 0.5, mb: 1 }}>
+                            Использует LLM для анализа стиля ответа. Может давать ложные срабатывания.
+                          </Alert>
+                        )}
+                      </Box>
+                    )}
+                  />
+                  <Controller
+                    name="plagiarism_check_enabled"
+                    control={control}
+                    render={({ field }) => (
+                      <Box>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={!!field.value}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              disabled={readOnly}
+                            />
+                          }
+                          label="Включить проверку на плагиат"
+                        />
+                        {field.value && (
+                          <Alert severity="warning" sx={{ mt: 0.5 }}>
+                            Ищет точные совпадения фрагментов ответа в поисковой выдаче Яндекса.
+                          </Alert>
+                        )}
+                      </Box>
+                    )}
+                  />
+                  <Controller
+                    name="event_log_check_enabled"
+                    control={control}
+                    render={({ field }) => (
+                      <Box>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={!!field.value}
+                              onChange={(e) => field.onChange(e.target.checked)}
+                              disabled={readOnly}
+                            />
+                          }
+                          label="Анализ поведения"
+                        />
+                        {field.value && (
+                          <Alert severity="warning" sx={{ mt: 0.5 }}>
+                            ИИ проанализирует логи поведения в системе для оценки честности ответа.
+                          </Alert>
+                        )}
+                      </Box>
+                    )}
+                  />
+                </>
               )}
 
               {questionType === 'image_annotation' && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Controller
+                    name="scoring_criteria.allow_partial"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={!!field.value}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                            disabled={readOnly}
+                          />
+                        }
+                        label={t('questions.allowPartial')}
+                      />
+                    )}
+                  />
+
                   {uploadError && (
                     <Alert severity="error" onClose={() => setUploadError(null)}>
                       {uploadError}

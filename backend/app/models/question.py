@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -45,6 +45,11 @@ class Question(Base):
     
     # Критерии оценки
     scoring_criteria = Column(JSONB, nullable=True)  # Веса критериев, пороги и т.д.
+    
+    # Флаги анти-чита
+    ai_check_enabled = Column(Boolean, default=False, server_default='false', nullable=False)
+    plagiarism_check_enabled = Column(Boolean, default=False, server_default='false', nullable=False)
+    event_log_check_enabled = Column(Boolean, default=False, server_default='false', nullable=False)
     
     # Связь с изображением (для image_annotation вопросов)
     image_id = Column(UUID(as_uuid=True), ForeignKey("image_assets.id"), nullable=True)

@@ -125,6 +125,9 @@ async def create_question(
         difficulty=question_in.difficulty,
         reference_data=question_data.get("reference_data"),
         scoring_criteria=question_data.get("scoring_criteria"),
+        ai_check_enabled=question_in.ai_check_enabled,
+        plagiarism_check_enabled=question_in.plagiarism_check_enabled,
+        event_log_check_enabled=question_in.event_log_check_enabled,
         image_id=question_in.image_id,
     )
     
@@ -245,6 +248,7 @@ async def update_question(
         )
     
     update_data = question_update.model_dump(exclude_unset=True)
+    
     for field, value in update_data.items():
         if field in ['reference_data', 'scoring_criteria'] and value is not None:
             # Конвертируем только JSONB поля в JSON-совместимый вид

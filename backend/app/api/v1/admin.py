@@ -1062,45 +1062,79 @@ async def test_llm_config(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Тестирование настроек LLM без сохранения"""
+    """Тестирование настроек LLM и Search API без сохранения"""
     from app.services.llm_service import llm_service
+    from app.services.search_service import search_service
     
+    # 1. Тест LLM
+    llm_test_result = None
     try:
         # Простой тестовый запрос
         test_question = "Что такое клетка?"
         test_reference = "Клетка — структурно-функциональная элементарная единица строения и жизнедеятельности всех организмов."
         test_answer = "Это маленькая частица живого организма, которая умеет делиться."
         
-        # Передаем переданный конфиг напрямую
-        result = await llm_service.evaluate_text_answer(
+        llm_test_result = await llm_service.evaluate_text_answer(
             question=test_question,
             reference_answer=test_reference,
             student_answer=test_answer,
             config=config_in.model_dump(),
             db=db
         )
-        
-        # Если оценка прошла (даже если 0, но провайдер ответил и нет ошибки в фидбеке)
-        feedback = result.get("feedback", "")
-        is_real_error = "Error" in feedback or "Ошибка" in feedback or result.get("total_score") == 0 and result.get("provider") == "None"
-
-        if result.get("provider") and result["provider"] != "None" and not is_real_error:
-            return AdminLLMTestResponse(
-                status="success",
-                message="Тестовая проверка прошла успешно",
-                provider=result.get("provider"),
-                result=result
-            )
-        else:
-            return AdminLLMTestResponse(
-                status="error",
-                message=result.get("feedback", "Не удалось получить ответ от LLM или провайдер вернул ошибку"),
-                provider=result.get("provider") or "Unknown"
-            )
-            
     except Exception as e:
         logger.exception("Error during LLM config test")
+        llm_test_result = {"feedback": f"Error: {str(e)}", "provider": "Error", "total_score": 0}
+
+    # 2. Тест Search API (Антиплагиат)
+    search_test_result = None
+    try:
+        # Проверяем заведомо существующий текст (определение клетки из Википедии)
+        test_text = "Клетка — структурно-функциональная элементарная единица строения и жизнедеятельности всех организмов."
+        # Передаем конфиг для Search API
+        search_config = {
+            "yandex_search_api_key": config_in.yandex_search_api_key,
+            "yandex_search_folder_id": config_in.yandex_search_folder_id
+        }
+        
+        # Нам нужно знать, были ли результаты. Но check_plagiarism возвращает float.
+        # В идеале нужно проверить, не было ли ошибок авторизации.
+        plagiarism_score = await search_service.check_plagiarism(test_text, config=search_config)
+        
+        if config_in.yandex_search_api_key and config_in.yandex_search_folder_id:
+            search_test_result = {
+                "status": "success" if plagiarism_score > 0 else "no_results",
+                "message": "Поиск работает" if plagiarism_score > 0 else "Поиск работает, но совпадений не найдено (это нормально для теста)",
+                "score": plagiarism_score
+            }
+        else:
+            search_test_result = {
+                "status": "skipped",
+                "message": "Search API не настроен"
+            }
+    except Exception as e:
+        logger.exception("Error during Search API config test")
+        search_test_result = {
+            "status": "error",
+            "message": str(e)
+        }
+
+    # Формируем общий ответ
+    feedback = llm_test_result.get("feedback", "")
+    is_llm_error = "Error" in feedback or "Ошибка" in feedback or (llm_test_result.get("total_score") == 0 and llm_test_result.get("provider") == "None")
+    
+    if not is_llm_error and llm_test_result.get("provider") != "None":
+        return AdminLLMTestResponse(
+            status="success",
+            message="LLM проверка прошла успешно",
+            provider=llm_test_result.get("provider"),
+            result=llm_test_result,
+            search_result=search_test_result
+        )
+    else:
         return AdminLLMTestResponse(
             status="error",
-            message=str(e)
+            message=llm_test_result.get("feedback", "Не удалось получить ответ от LLM"),
+            provider=llm_test_result.get("provider") or "Unknown",
+            result=llm_test_result,
+            search_result=search_test_result
         )

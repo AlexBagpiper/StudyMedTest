@@ -21,6 +21,9 @@ interface CVConfig {
   recall_weight: number
   precision_weight: number
   iou_threshold: number
+  inclusion_threshold: number
+  min_coverage_threshold: number
+  loyalty_factor: number
 }
 
 export default function CVSettings() {
@@ -29,6 +32,9 @@ export default function CVSettings() {
     recall_weight: 0.3,
     precision_weight: 0.2,
     iou_threshold: 0.5,
+    inclusion_threshold: 0.8,
+    min_coverage_threshold: 0.05,
+    loyalty_factor: 2.0,
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -213,6 +219,68 @@ export default function CVSettings() {
                 </Typography>
               </Box>
 
+              <Divider />
+
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="subtitle2">Минимальный порог включения (Inclusion)</Typography>
+                  <Typography variant="body2" color="primary" fontWeight="bold">
+                    {(cvConfig.inclusion_threshold * 100).toFixed(0)}%
+                  </Typography>
+                </Box>
+                <Slider
+                  value={cvConfig.inclusion_threshold}
+                  step={0.05}
+                  min={0.5}
+                  max={1.0}
+                  valueLabelDisplay="auto"
+                  onChange={(_, value) => setCvConfig({ ...cvConfig, inclusion_threshold: value as number })}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Доля ответа студента, которая должна находиться внутри эталона (для частичного зачета).
+                </Typography>
+              </Box>
+
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="subtitle2">Минимальное покрытие (Coverage)</Typography>
+                  <Typography variant="body2" color="primary" fontWeight="bold">
+                    {(cvConfig.min_coverage_threshold * 100).toFixed(0)}%
+                  </Typography>
+                </Box>
+                <Slider
+                  value={cvConfig.min_coverage_threshold}
+                  step={0.01}
+                  min={0.01}
+                  max={0.5}
+                  valueLabelDisplay="auto"
+                  onChange={(_, value) => setCvConfig({ ...cvConfig, min_coverage_threshold: value as number })}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Минимальная площадь эталона, которую должен выделить студент (защита от случайных точек).
+                </Typography>
+              </Box>
+
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="subtitle2">Коэффициент лояльности (Loyalty Factor)</Typography>
+                  <Typography variant="body2" color="primary" fontWeight="bold">
+                    {cvConfig.loyalty_factor.toFixed(1)}
+                  </Typography>
+                </Box>
+                <Slider
+                  value={cvConfig.loyalty_factor}
+                  step={0.5}
+                  min={1.0}
+                  max={5.0}
+                  valueLabelDisplay="auto"
+                  onChange={(_, value) => setCvConfig({ ...cvConfig, loyalty_factor: value as number })}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Степень мягкости оценки при частичном покрытии. Чем выше, тем больше баллов за малую площадь.
+                </Typography>
+              </Box>
+
               <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   variant="contained"
@@ -240,6 +308,15 @@ export default function CVSettings() {
             </Typography>
             <Typography variant="body2" paragraph>
               <strong>Порог IoU</strong> — это «проходной балл» для каждого объекта. Если пересечение области студента с эталоном выше этого порога, объект считается найденным верно.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              <strong>Inclusion (Включение)</strong> — «Насколько точно студент попал». Показывает, не выходят ли контуры студента за границы эталона. Если нарисовать лишнее вне зоны, этот показатель упадет.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              <strong>Coverage (Покрытие)</strong> — «Какую часть работы студент сделал». Показывает, какую долю огромного объекта студент выделил.
+            </Typography>
+            <Typography variant="body2" paragraph>
+              <strong>Loyalty Factor</strong> — «Коэффициент лояльности». Чем он выше, тем больше баллов система начисляет за частичное выделение сложного объекта.
             </Typography>
             <Typography variant="body2" component="div">
               <strong>Как выбрать порог:</strong>

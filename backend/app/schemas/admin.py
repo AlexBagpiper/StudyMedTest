@@ -313,6 +313,17 @@ class AdminLLMConfig(BaseModel):
     strategy: str = Field("yandex", description="Стратегия: yandex, local, hybrid, deepseek, qwen, gigachat")
     hybrid_cloud_provider: str = Field("deepseek", description="Основной облачный провайдер для гибридной стратегии")
     evaluation_prompt: Optional[str] = Field(None, description="Кастомный промпт для оценки")
+    
+    # Поля для анти-чита
+    yandex_search_api_key: Optional[str] = Field(None, description="API ключ Yandex Search")
+    yandex_search_folder_id: Optional[str] = Field(None, description="Folder ID для Yandex Search")
+    ai_check_prompt: Optional[str] = Field(None, description="Промпт для детекции ИИ")
+    integrity_check_prompt: Optional[str] = Field(None, description="Промпт для анализа поведения")
+    
+    # Пороги для анти-чита
+    ai_threshold_warning: float = Field(0.5, description="Порог предупреждения ИИ")
+    ai_threshold_error: float = Field(0.8, description="Порог ошибки ИИ")
+    plagiarism_threshold: float = Field(0.5, description="Порог плагиата")
 
     @field_validator("yandex_api_key")
     @classmethod
@@ -331,3 +342,4 @@ class AdminLLMTestResponse(BaseModel):
     message: str
     provider: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
+    search_result: Optional[Dict[str, Any]] = None

@@ -54,6 +54,14 @@ class BulkDeleteRequest(BaseModel):
     ids: List[UUID]
 
 
+class SubmissionEventCreate(BaseModel):
+    """
+    Схема для логирования событий прохождения теста
+    """
+    event_type: str
+    details: Optional[Dict[str, Any]] = None
+
+
 class SubmissionCreate(BaseModel):
     """
     Схема для создания submission
