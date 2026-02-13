@@ -267,58 +267,6 @@ export default function TestDetailPage() {
                     : (getSubmissionForTest()?.status === 'completed' ? t('tests.action.completed') : t('tests.action.start')))}
               </Button>
             )}
-
-            {!isStudent && (
-              <Button
-                variant="outlined"
-                startIcon={<ContentCopyIcon />}
-                onClick={handleDuplicate}
-                disabled={duplicateTest.isPending}
-              >
-                {t('tests.action.duplicate')}
-              </Button>
-            )}
-
-            {!isStudent && canEdit && (
-              <>
-                {test.status === 'draft' && (
-                  <>
-                    <Button
-                      variant="outlined"
-                      startIcon={<EditIcon />}
-                      onClick={() => navigate(`/tests/${id}/edit`)}
-                    >
-                      {t('common.edit')}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="success"
-                      startIcon={<PublishIcon />}
-                      onClick={handlePublish}
-                      disabled={publishTest.isPending}
-                    >
-                      {t('tests.action.publish')}
-                    </Button>
-                  </>
-                )}
-                {test.status === 'published' && (
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    startIcon={<UnpublishedIcon />}
-                    onClick={handleUnpublish}
-                    disabled={unpublishTest.isPending}
-                  >
-                    {t('tests.action.unpublish')}
-                  </Button>
-                )}
-              </>
-            )}
-            {!isStudent && !canEdit && (
-              <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', alignSelf: 'center' }}>
-                {t('tests.adminReadOnly')}
-              </Typography>
-            )}
           </Box>
         </Box>
 

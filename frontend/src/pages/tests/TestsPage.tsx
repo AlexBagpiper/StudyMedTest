@@ -316,12 +316,14 @@ export default function TestsPage() {
                       </Typography>
                       
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Chip
-                          label={`Попытка №${submission?.attempt_number || 1}`}
-                          size="small"
-                          variant="outlined"
-                          sx={{ color: 'text.secondary', borderColor: 'divider' }}
-                        />
+                        {isStudent && submission && (
+                          <Chip
+                            label={`Попытка №${submission.attempt_number || 1}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ color: 'text.secondary', borderColor: 'divider' }}
+                          />
+                        )}
                         {!isStudent && (
                           <Chip
                             label={getStatusLabel(test.status)}
@@ -422,6 +424,14 @@ export default function TestsPage() {
                             startIcon={<ContentCopyIcon />}
                             onClick={() => handleDuplicate(test.id)}
                             disabled={duplicateTest.isPending}
+                            sx={{
+                              color: '#9c27b0',
+                              borderColor: '#9c27b0',
+                              '&:hover': {
+                                borderColor: '#7b1fa2',
+                                bgcolor: 'rgba(156, 39, 176, 0.04)',
+                              },
+                            }}
                           >
                             {t('tests.action.duplicate')}
                           </Button>
@@ -455,6 +465,14 @@ export default function TestsPage() {
                             startIcon={<ContentCopyIcon />}
                             onClick={() => handleDuplicate(test.id)}
                             disabled={duplicateTest.isPending}
+                            sx={{
+                              color: '#9c27b0',
+                              borderColor: '#9c27b0',
+                              '&:hover': {
+                                borderColor: '#7b1fa2',
+                                bgcolor: 'rgba(156, 39, 176, 0.04)',
+                              },
+                            }}
                           >
                             {t('tests.action.duplicate')}
                           </Button>
