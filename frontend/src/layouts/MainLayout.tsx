@@ -115,7 +115,7 @@ export default function MainLayout() {
       </List>
       <Box sx={{ p: 2, mt: 'auto' }}>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center' }}>
-          Version {APP_CONFIG.VERSION}
+          Версия {APP_CONFIG.VERSION}
         </Typography>
       </Box>
     </Box>
