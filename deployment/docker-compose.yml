@@ -102,12 +102,9 @@ services:
     networks:
       - medtest-network
 
-  # Celery Worker
+  # Celery Worker (тот же образ, что backend — сборка только у backend)
   celery_worker:
     image: medtest-backend:${APP_VERSION:-latest}
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
     container_name: medtest-celery-worker
     restart: always
     env_file: .env
