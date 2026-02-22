@@ -50,7 +50,8 @@ export default function TestDetailPage() {
 
   const { data: test, isLoading, error } = useTest(id)
   const { data: topics } = useTopics()
-  const { data: submissions = [] } = useSubmissions({ student_id: user?.id }, { enabled: !!user?.id })
+  const { data: submissionsData } = useSubmissions({ student_id: user?.id, limit: 500 }, { enabled: !!user?.id })
+  const submissions = submissionsData?.items ?? []
   const { data: retakePermissions = [] } = useMyRetakePermissions()
   
   const publishTest = usePublishTest()

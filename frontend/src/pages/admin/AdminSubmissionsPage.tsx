@@ -19,7 +19,8 @@ import {
   CircularProgress,
   TableSortLabel,
   Checkbox,
-  Stack
+  Stack,
+  TablePagination
 } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -38,12 +39,13 @@ import RestoreIcon from '@mui/icons-material/Restore'
 import ReplayIcon from '@mui/icons-material/Replay'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
+import { TablePaginationActions } from '../../components/common/TablePaginationActions'
 import { useState, useEffect, useMemo } from 'react'
 import { useGrantRetake } from '../../lib/api/hooks/useSubmissions'
 
 export default function AdminSubmissionsPage() {
   const { user } = useAuth()
-  const { t, formatName } = useLocale()
+  const { t, formatName, locale } = useLocale()
   const navigate = useNavigate()
   const deleteSubmission = useDeleteSubmission()
   const bulkDeleteSubmissions = useBulkDeleteSubmissions()
@@ -70,19 +72,26 @@ export default function AdminSubmissionsPage() {
     severity: 'error'
   })
   
-  const { data: submissions = [], isLoading: loading, error } = useSubmissions(
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(25)
+  const { data: submissionsData, isLoading: loading, error } = useSubmissions(
     {
-      include_hidden: user?.role === 'admin' ? true : showHidden
+      include_hidden: user?.role === 'admin' ? true : showHidden,
+      skip: page * pageSize,
+      limit: pageSize
     },
     {
       refetchInterval: (query: any) => {
-        const hasActive = query.state.data?.some(
+        const items = query.state.data?.items ?? []
+        const hasActive = items.some(
           (sub: any) => sub.status === 'evaluating' || sub.status === 'submitted'
         )
-        return hasActive ? 3000 : 30000 // Poll every 3s if active, else every 30s
+        return hasActive ? 3000 : 30000
       }
     }
   )
+  const submissions = submissionsData?.items ?? []
+  const totalSubmissions = submissionsData?.total ?? 0
 
   useEffect(() => {
     if (error) {
@@ -478,6 +487,29 @@ export default function AdminSubmissionsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            component="div"
+            count={totalSubmissions}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(0)
+            }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            labelRowsPerPage={t('admin.rowsPerPage')}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} ${locale === 'ru' ? 'из' : 'of'} ${count !== -1 ? count : `>${to}`}`}
+            ActionsComponent={TablePaginationActions}
+            sx={{
+              borderTop: 1,
+              borderColor: 'divider',
+              alignItems: 'center',
+              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { mt: 0, mb: 0 },
+              '& .MuiTablePagination-toolbar': { minHeight: 52, paddingRight: 2 },
+            }}
+          />
         </TableContainer>
       )}
 

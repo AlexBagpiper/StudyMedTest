@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Box,
   Typography,
@@ -22,7 +22,9 @@ import {
   TableRow,
   Tooltip,
   Rating,
+  TablePagination,
 } from '@mui/material'
+import { TablePaginationActions } from '../../components/common/TablePaginationActions'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { useAuth } from '../../contexts/AuthContext'
@@ -30,7 +32,7 @@ import { useTest, useCreateTest, useUpdateTest, usePublishTest } from '../../lib
 import { useQuestions } from '../../lib/api/hooks/useQuestions'
 import { useTopics } from '../../lib/api/hooks/useTopics'
 import { useLocale } from '../../contexts/LocaleContext'
-import type { TestSettings, Question, TestStructureItem } from '../../types'
+import type { TestSettings, Question, TestStructureItem, QuestionType } from '../../types'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -42,6 +44,7 @@ import { MenuItem, Select, FormControl, InputLabel } from '@mui/material'
 import QuestionFormDialog from '../../components/questions/QuestionFormDialog'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
+import { TruncatedContentTooltip } from '../../components/common/TruncatedContentTooltip'
 
 interface TestFormData {
   title: string
@@ -59,13 +62,14 @@ interface SelectedQuestion {
 export default function TestFormPage() {
   const { testId } = useParams()
   const navigate = useNavigate()
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const isEdit = !!testId
 
   const { data: test, isLoading: testLoading } = useTest(testId)
   const { user } = useAuth()
   const { data: topics = [] } = useTopics()
-  const { data: questions = [], isLoading: questionsLoading } = useQuestions()
+  const { data: questionsData, isLoading: questionsLoading } = useQuestions({ limit: 1000 })
+  const questions = questionsData?.items ?? []
   const createTest = useCreateTest()
   const updateTest = useUpdateTest()
   const publishTest = usePublishTest()
@@ -79,6 +83,10 @@ export default function TestFormPage() {
 
   const [selectedQuestions, setSelectedQuestions] = useState<SelectedQuestion[]>([])
   const [structure, setStructure] = useState<TestStructureItem[]>([])
+  const [availableTopicFilter, setAvailableTopicFilter] = useState<string>('')
+  const [availableTypeFilter, setAvailableTypeFilter] = useState<QuestionType | ''>('')
+  const [availablePage, setAvailablePage] = useState(0)
+  const [availablePageSize, setAvailablePageSize] = useState(10)
   const [showQuestionPicker, setShowQuestionPicker] = useState(false)
   const [viewingQuestion, setViewingQuestion] = useState<Question | undefined>()
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
@@ -249,6 +257,37 @@ export default function TestFormPage() {
     }
   }
 
+  const availableQuestions = useMemo(
+    () => questions.filter((q: any) => !selectedQuestions.find((sq) => sq.question_id === q.id)),
+    [questions, selectedQuestions]
+  )
+
+  const filteredAvailableQuestions = useMemo(() => {
+    return availableQuestions.filter((q: Question) => {
+      const matchTopic = !availableTopicFilter || q.topic_id === availableTopicFilter || q.topic?.id === availableTopicFilter
+      const matchType = !availableTypeFilter || q.type === availableTypeFilter
+      return matchTopic && matchType
+    })
+  }, [availableQuestions, availableTopicFilter, availableTypeFilter])
+
+  const sortedAvailableQuestions = useMemo(() => {
+    return [...filteredAvailableQuestions].sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+      return tb - ta
+    })
+  }, [filteredAvailableQuestions])
+
+  const paginatedAvailableQuestions = useMemo(() => {
+    const start = availablePage * availablePageSize
+    return sortedAvailableQuestions.slice(start, start + availablePageSize)
+  }, [sortedAvailableQuestions, availablePage, availablePageSize])
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(sortedAvailableQuestions.length / availablePageSize) - 1)
+    if (availablePage > maxPage) setAvailablePage(maxPage)
+  }, [sortedAvailableQuestions.length, availablePageSize, availablePage])
+
   if (testLoading || questionsLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -256,10 +295,6 @@ export default function TestFormPage() {
       </Box>
     )
   }
-
-  const availableQuestions = questions.filter(
-    (q: any) => !selectedQuestions.find((sq) => sq.question_id === q.id)
-  )
 
   return (
     <Box>
@@ -459,15 +494,7 @@ export default function TestFormPage() {
                           </Tooltip>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{
-                            display: '-webkit-box',
-                            WebkitLineClamp: 1,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            fontWeight: 500
-                          }}>
-                            {sq.question?.content}
-                          </Typography>
+                          <TruncatedContentTooltip content={sq.question?.content ?? ''} />
                         </TableCell>
                         <TableCell>
                           {sq.question?.topic ? (
@@ -520,8 +547,36 @@ export default function TestFormPage() {
               {availableQuestions.length === 0 ? (
                 <Alert severity="warning">Все вопросы уже добавлены или нет доступных вопросов</Alert>
               ) : (
-                <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
-                  <Table size="small" stickyHeader>
+                <>
+                  <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                    <FormControl size="small" sx={{ minWidth: 180 }}>
+                      <InputLabel>{t('questions.topic')}</InputLabel>
+                      <Select
+                        value={availableTopicFilter}
+                        label={t('questions.topic')}
+                        onChange={(e) => { setAvailableTopicFilter(e.target.value); setAvailablePage(0) }}
+                      >
+                        <MenuItem value="">{t('questions.allTopics')}</MenuItem>
+                        {topics.map((topic: any) => (
+                          <MenuItem key={topic.id} value={topic.id}>{topic.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl size="small" sx={{ minWidth: 180 }}>
+                      <InputLabel>{t('questions.type')}</InputLabel>
+                      <Select
+                        value={availableTypeFilter}
+                        label={t('questions.type')}
+                        onChange={(e) => { setAvailableTypeFilter(e.target.value as QuestionType | ''); setAvailablePage(0) }}
+                      >
+                        <MenuItem value="">{t('questions.allTypes')}</MenuItem>
+                        <MenuItem value="text">{t('questions.type.text')}</MenuItem>
+                        <MenuItem value="image_annotation">{t('questions.type.imageAnnotation')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Box>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
                     <TableHead>
                       <TableRow>
                         <TableCell width={50}>{t('admin.type')}</TableCell>
@@ -532,7 +587,7 @@ export default function TestFormPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {availableQuestions.map((question: Question) => (
+                      {paginatedAvailableQuestions.map((question: Question) => (
                         <TableRow key={question.id} hover>
                           <TableCell>
                             <Tooltip title={question.type === 'text' ? t('questions.type.text') : t('questions.type.imageAnnotation')}>
@@ -540,15 +595,7 @@ export default function TestFormPage() {
                             </Tooltip>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="body2" sx={{
-                              display: '-webkit-box',
-                              WebkitLineClamp: 1,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              fontWeight: 500
-                            }}>
-                              {question.content}
-                            </Typography>
+                            <TruncatedContentTooltip content={question.content} />
                           </TableCell>
                           <TableCell>
                             {question.topic ? (
@@ -569,7 +616,31 @@ export default function TestFormPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePagination
+                    component="div"
+                    count={sortedAvailableQuestions.length}
+                    page={availablePage}
+                    onPageChange={(_, newPage) => setAvailablePage(newPage)}
+                    rowsPerPage={availablePageSize}
+                    onRowsPerPageChange={(e) => {
+                      setAvailablePageSize(Number(e.target.value))
+                      setAvailablePage(0)
+                    }}
+                    rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                    labelRowsPerPage={t('admin.rowsPerPage')}
+                    labelDisplayedRows={({ from, to, count }) =>
+                      `${from}–${to} ${locale === 'ru' ? 'из' : 'of'} ${count !== -1 ? count : `>${to}`}`}
+                    ActionsComponent={TablePaginationActions}
+                    sx={{
+                      borderTop: 1,
+                      borderColor: 'divider',
+                      alignItems: 'center',
+                      '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { mt: 0, mb: 0 },
+                      '& .MuiTablePagination-toolbar': { minHeight: 52, paddingRight: 2 },
+                    }}
+                  />
                 </TableContainer>
+                </>
               )}
             </Box>
           )}

@@ -3,28 +3,38 @@ import os
 import subprocess
 import sys
 
+def get_project_root():
+    """Project root (parent of scripts/)."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 def get_python_executable():
-    """Returns the path to the python executable in the venv if it exists, else sys.executable."""
-    venv_python = os.path.join(os.getcwd(), "backend", "venv", "Scripts", "python.exe")
+    """Returns backend/venv python if it exists, else sys.executable. Use for dev & testing."""
+    root = get_project_root()
+    # Windows
+    venv_python = os.path.join(root, "backend", "venv", "Scripts", "python.exe")
     if os.path.exists(venv_python):
         return venv_python
+    # Linux/macOS
+    venv_python_unix = os.path.join(root, "backend", "venv", "bin", "python")
+    if os.path.exists(venv_python_unix):
+        return venv_python_unix
     return sys.executable
 
 def run_backend_tests():
     print("\n--- Running Backend Tests ---")
-    os.chdir("backend")
+    root = get_project_root()
     python_exe = get_python_executable()
-    # Using the detected python to run pytest
-    result = subprocess.run([python_exe, "-m", "pytest"], shell=True)
-    os.chdir("..")
+    if python_exe == sys.executable:
+        print("[!] Backend venv not found. Run: python scripts/setup_dev_venv.py")
+    backend_dir = os.path.join(root, "backend")
+    result = subprocess.run([python_exe, "-m", "pytest"], shell=True, cwd=backend_dir)
     return result.returncode
 
 def run_frontend_tests():
     print("\n--- Running Frontend Tests ---")
-    os.chdir("frontend")
-    # Using vitest
-    result = subprocess.run(["npm", "test", "--", "--run"], shell=True)
-    os.chdir("..")
+    root = get_project_root()
+    frontend_dir = os.path.join(root, "frontend")
+    result = subprocess.run(["npm", "test", "--", "--run"], shell=True, cwd=frontend_dir)
     return result.returncode
 
 def main():

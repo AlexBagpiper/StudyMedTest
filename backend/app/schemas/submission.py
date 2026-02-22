@@ -97,6 +97,14 @@ class SubmissionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PaginatedSubmissionsResponse(BaseModel):
+    """Пагинированный список submissions"""
+    items: List[SubmissionResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 class RetakePermissionCreate(BaseModel):
     """
     Схема для выдачи разрешения на пересдачу

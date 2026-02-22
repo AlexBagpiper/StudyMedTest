@@ -9,8 +9,13 @@
 
 ## Настройка окружения
 
-Для работы тестов бэкенда и автоматической генерации необходимо установить зависимости:
+Для разработки и тестов используется **backend/venv** с зависимостями из **requirements-dev.txt** (на сервере при развёртывании — только requirements.txt). Один раз из корня проекта:
 
+```bash
+python scripts/setup_dev_venv.py
+```
+
+Либо вручную:
 ```bash
 cd backend
 python -m venv venv
@@ -18,9 +23,10 @@ python -m venv venv
 .\venv\Scripts\activate
 # Linux/macOS:
 source venv/bin/activate
-
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
+
+После этого `python scripts/run_tests.py` и `npm run testing` используют этот venv автоматически.
 
 ### Настройка тестовой БД
 Для тестов бэкенда используется отдельная база данных. Убедитесь, что она создана или измените `TEST_DATABASE_URL` в `backend/tests/conftest.py`.
@@ -41,7 +47,7 @@ npm run testing
 ### Запуск только бэкенда
 ```bash
 cd backend
-pytest
+.\venv\Scripts\python -m pytest   # Windows; Linux: venv/bin/python -m pytest
 ```
 
 ### Запуск только фронтенда

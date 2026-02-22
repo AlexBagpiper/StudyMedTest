@@ -33,13 +33,15 @@ export default function SubmissionReviewPage() {
   const grantRetake = useGrantRetake()
   const [submission, setSubmission] = useState<any>(null)
   
-  const { data: allSubmissions = [] } = useSubmissions(
+  const { data: allSubmissionsData } = useSubmissions(
     submission?.test_id ? { 
       student_id: submission.student_id, 
-      test_id: submission.test_id 
+      test_id: submission.test_id,
+      limit: 100
     } : undefined,
     { enabled: !!submission?.test_id }
   )
+  const allSubmissions = allSubmissionsData?.items ?? []
   const [questions, setQuestions] = useState<any[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})

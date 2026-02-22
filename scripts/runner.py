@@ -2,18 +2,19 @@ import os
 import subprocess
 import sys
 
+def get_project_root():
+    """Корень проекта (родитель каталога scripts/)."""
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 def get_python_executable():
-    """Находит путь к python в виртуальном окружении."""
-    # Проверяем backend/venv/Scripts/python.exe (Windows)
-    venv_python = os.path.join(os.getcwd(), "backend", "venv", "Scripts", "python.exe")
+    """Находит python в backend/venv для dev и тестов. Иначе sys.executable."""
+    root = get_project_root()
+    venv_python = os.path.join(root, "backend", "venv", "Scripts", "python.exe")
     if os.path.exists(venv_python):
         return venv_python
-    
-    # Проверяем backend/venv/bin/python (Linux/macOS)
-    venv_python_unix = os.path.join(os.getcwd(), "backend", "venv", "bin", "python")
+    venv_python_unix = os.path.join(root, "backend", "venv", "bin", "python")
     if os.path.exists(venv_python_unix):
         return venv_python_unix
-        
     return sys.executable
 
 def main():
@@ -32,9 +33,7 @@ def main():
     print("[*] Running Bandit (Backend code security)...")
     subprocess.run([python_exe, "-m", "bandit", "-r", "backend", "-x", "backend/tests,backend/venv"], check=False)
     
-    # Safety (Backend dependencies)
-    print("\n[*] Running Safety (Backend dependencies security)...")
-    # Используем --stdin для передачи списка установленных пакетов или просто проверяем requirements
+    # Safety (Backend dependencies). В dev-venv не ставится (конфликт с pydantic 2.5.x).
     subprocess.run([python_exe, "-m", "safety", "check", "-r", "backend/requirements.txt"], check=False)
     
     # NPM Audit (Frontend dependencies)
@@ -74,10 +73,11 @@ def main():
         if os.getcwd().endswith("deployment"):
             os.chdir("..")
 
-    # 4. Запуск всех тестов
+    # 4. Запуск всех тестов (cwd=корень, чтобы run_tests нашёл backend/venv)
     print("\n[*] Step 4: Running functional tests...")
+    root = get_project_root()
     run_tests_cmd = [python_exe, "scripts/run_tests.py"]
-    result = subprocess.run(run_tests_cmd)
+    result = subprocess.run(run_tests_cmd, cwd=root)
     
     sys.exit(result.returncode)
 

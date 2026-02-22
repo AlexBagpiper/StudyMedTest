@@ -1,6 +1,14 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = vi.fn().mockImplementation((callback: ResizeObserverCallback) => ({
+    observe: vi.fn(),
+    disconnect: vi.fn(),
+    unobserve: vi.fn(),
+  }))
+}
+
 // Mock canvas for fabric.js
 if (typeof window !== 'undefined') {
   // @ts-ignore

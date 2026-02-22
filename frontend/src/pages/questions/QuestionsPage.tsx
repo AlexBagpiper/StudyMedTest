@@ -23,6 +23,7 @@ import {
   Chip,
   Tooltip,
   Rating,
+  TablePagination,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import SearchIcon from '@mui/icons-material/Search'
@@ -46,6 +47,8 @@ import QuestionFormDialog from '../../components/questions/QuestionFormDialog'
 import type { Question, QuestionCreate, QuestionType } from '../../types'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
+import { TablePaginationActions } from '../../components/common/TablePaginationActions'
+import { TruncatedContentTooltip } from '../../components/common/TruncatedContentTooltip'
 
 export default function QuestionsPage() {
   const { user } = useAuth()
@@ -61,8 +64,15 @@ export default function QuestionsPage() {
     open: false,
     message: ''
   })
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(25)
 
-  const { data: questions = [], isLoading, error } = useQuestions()
+  const { data: paginated, isLoading, error } = useQuestions({
+    skip: page * pageSize,
+    limit: pageSize
+  })
+  const questions = paginated?.items ?? []
+  const total = paginated?.total ?? 0
   const { data: topics = [] } = useTopics()
 
   useEffect(() => {
@@ -110,7 +120,10 @@ export default function QuestionsPage() {
 
   const handleDuplicateClick = async (questionId: string) => {
     try {
-      await duplicateQuestion.mutateAsync(questionId)
+      const newQuestion = await duplicateQuestion.mutateAsync(questionId)
+      setEditingQuestion(newQuestion)
+      setIsViewOnly(false)
+      setDialogOpen(true)
     } catch (error: any) {
       console.error('Failed to duplicate question:', error)
       setErrorDialog({
@@ -276,15 +289,7 @@ export default function QuestionsPage() {
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" sx={{
-                      display: '-webkit-box',
-                      WebkitLineClamp: 1,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                      fontWeight: 500
-                    }}>
-                      {question.content}
-                    </Typography>
+                    <TruncatedContentTooltip content={question.content} />
                   </TableCell>
                   <TableCell>
                     {question.topic ? (
@@ -345,6 +350,29 @@ export default function QuestionsPage() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            component="div"
+            count={total}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(0)
+            }}
+            rowsPerPageOptions={[10, 25, 50, 100, 500]}
+            labelRowsPerPage={t('admin.rowsPerPage')}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} ${locale === 'ru' ? 'из' : 'of'} ${count !== -1 ? count : `>${to}`}`}
+            ActionsComponent={TablePaginationActions}
+            sx={{
+              borderTop: 1,
+              borderColor: 'divider',
+              alignItems: 'center',
+              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { mt: 0, mb: 0 },
+              '& .MuiTablePagination-toolbar': { minHeight: 52, paddingRight: 2 },
+            }}
+          />
         </TableContainer>
       )}
 

@@ -33,13 +33,15 @@ export default function SubmissionDetailsPage() {
   const [isLoading, setIsLoading] = useState(true)
   
   // Получаем историю всех попыток студента по этому тесту
-  const { data: allSubmissions = [] } = useSubmissions(
+  const { data: allSubmissionsData } = useSubmissions(
     submission?.test_id ? { 
       student_id: submission.student_id, 
-      test_id: submission.test_id 
+      test_id: submission.test_id,
+      limit: 100
     } : undefined,
     { enabled: !!submission?.test_id }
   )
+  const allSubmissions = allSubmissionsData?.items ?? []
 
   const [errorDialog, setErrorDialog] = useState<{ open: boolean; message: string }>({
     open: false,

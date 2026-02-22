@@ -25,6 +25,7 @@ import {
   Checkbox,
   TableSortLabel,
   Tooltip,
+  TablePagination,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
@@ -33,6 +34,7 @@ import SearchIcon from '@mui/icons-material/Search'
 import { adminApi } from '../../lib/api'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
+import { TablePaginationActions } from '../../components/common/TablePaginationActions'
 import { useLocale } from '../../contexts/LocaleContext'
 
 interface User {
@@ -71,7 +73,7 @@ const initialFormData: UserFormData = {
 }
 
 export default function UsersManagement() {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   
@@ -107,6 +109,8 @@ export default function UsersManagement() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [sortBy, setSortBy] = useState<string>('created_at')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(25)
 
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
 
@@ -123,15 +127,20 @@ export default function UsersManagement() {
   }
 
   useEffect(() => {
-    loadUsers()
+    setPage(0)
     setSelectedIds([])
   }, [roleFilter, searchQuery, sortBy, order])
 
-  const loadUsers = async () => {
+  useEffect(() => {
+    loadUsers(page, pageSize)
+  }, [page, pageSize, roleFilter, searchQuery, sortBy, order])
+
+  const loadUsers = async (pageNum: number = page, limit: number = pageSize) => {
     try {
       setLoading(true)
       const params: any = { 
-        limit: 100,
+        skip: pageNum * limit,
+        limit,
         sort_by: sortBy,
         order: order
       }
@@ -505,6 +514,29 @@ export default function UsersManagement() {
               )}
             </TableBody>
           </Table>
+          <TablePagination
+            component="div"
+            count={total}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(0)
+            }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            labelRowsPerPage={t('admin.rowsPerPage')}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} ${locale === 'ru' ? 'из' : 'of'} ${count !== -1 ? count : `>${to}`}`}
+            ActionsComponent={TablePaginationActions}
+            sx={{
+              borderTop: 1,
+              borderColor: 'divider',
+              alignItems: 'center',
+              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { mt: 0, mb: 0 },
+              '& .MuiTablePagination-toolbar': { minHeight: 52, paddingRight: 2 },
+            }}
+          />
         </TableContainer>
       )}
 

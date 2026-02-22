@@ -35,7 +35,8 @@ export default function TestsPage() {
   const isStudent = user?.role === 'student'
 
   const { data: tests = [], isLoading, error } = useTests()
-  const { data: submissions = [] } = useSubmissions({ student_id: user?.id })
+  const { data: submissionsData } = useSubmissions({ student_id: user?.id, limit: 500 })
+  const submissions = submissionsData?.items ?? []
   const { data: retakePermissions = [] } = useMyRetakePermissions()
 
   useEffect(() => {

@@ -90,11 +90,19 @@ docker-compose exec backend python -m app.cli create-admin
 
 ### Backend
 
+Для разработки и тестов используйте отдельный venv с зависимостями из `requirements-dev.txt` (на сервере — только `requirements.txt`, dev-зависимости там конфликтуют).
+
+**Одной командой из корня проекта:**
+```bash
+python scripts/setup_dev_venv.py
+```
+
+Либо вручную:
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+source venv/bin/activate   # Windows: .\venv\Scripts\activate
+pip install -r requirements-dev.txt   # включает requirements.txt + pytest, black, bandit и т.д.
 uvicorn app.main:app --reload
 ```
 
@@ -108,9 +116,15 @@ npm start
 
 ### Запуск тестов
 
+Скрипты `run_tests.py` и `runner.py` сами используют `backend/venv`, если он есть (после `setup_dev_venv.py`).
+
 ```bash
-# Backend
+# Все тесты (backend venv + frontend)
+python scripts/run_tests.py
+
+# Backend вручную
 cd backend
+.\venv\Scripts\activate   # или source venv/bin/activate
 pytest
 
 # Frontend

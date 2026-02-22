@@ -3,11 +3,18 @@ import api from '../index'
 
 const SUBMISSIONS_KEY = ['submissions']
 
-export function useSubmissions(params?: any, options?: any) {
-  return useQuery<any[]>({
+export interface SubmissionsPaginated {
+  items: any[]
+  total: number
+  skip: number
+  limit: number
+}
+
+export function useSubmissions(params?: Record<string, unknown> & { skip?: number; limit?: number }, options?: any) {
+  return useQuery<SubmissionsPaginated>({
     queryKey: [...SUBMISSIONS_KEY, params],
     queryFn: async () => {
-      const response = await api.get('/submissions', { params })
+      const response = await api.get<SubmissionsPaginated>('/submissions', { params })
       return response.data
     },
     ...options,

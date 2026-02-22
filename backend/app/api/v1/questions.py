@@ -7,8 +7,8 @@ import colorsys
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from PIL import Image
@@ -20,16 +20,16 @@ from app.models.user import User, Role
 from app.models.question import Question, ImageAsset, QuestionType
 from app.models.test import TestQuestion
 from app.models.submission import Answer
-from app.schemas.question import QuestionCreate, QuestionUpdate, QuestionResponse, ImageAssetResponse
+from app.schemas.question import QuestionCreate, QuestionUpdate, QuestionResponse, ImageAssetResponse, PaginatedQuestionsResponse
 from app.schemas.annotation import AnnotationData
 
 router = APIRouter()
 
 
-@router.get("", response_model=List[QuestionResponse])
+@router.get("", response_model=PaginatedQuestionsResponse)
 async def list_questions(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(500, ge=1, le=1000),
     type: QuestionType = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -58,7 +58,16 @@ async def list_questions(
     if type:
         query = query.where(Question.type == type)
     
-    query = query.offset(skip).limit(limit)
+    count_query = select(func.count(Question.id)).join(User, Question.author_id == User.id)
+    if current_user.role == Role.TEACHER:
+        count_query = count_query.where(
+            (Question.author_id == current_user.id) | (User.role == Role.ADMIN)
+        )
+    if type:
+        count_query = count_query.where(Question.type == type)
+    total = (await db.scalar(count_query)) or 0
+    
+    query = query.order_by(Question.created_at.desc()).offset(skip).limit(limit)
     result = await db.execute(query)
     questions = result.scalars().all()
     
@@ -99,9 +108,9 @@ async def list_questions(
                 resp_obj.image.coco_annotations = clean_data(resp_obj.image.coco_annotations)
             resp_obj.scoring_criteria = None
             cleaned_questions.append(resp_obj)
-        return cleaned_questions
+        return PaginatedQuestionsResponse(items=cleaned_questions, total=total, skip=skip, limit=limit)
     
-    return questions
+    return PaginatedQuestionsResponse(items=questions, total=total, skip=skip, limit=limit)
 
 
 @router.post("", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)

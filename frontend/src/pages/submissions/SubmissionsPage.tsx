@@ -41,20 +41,23 @@ export default function SubmissionsPage() {
   const [orderBy, setOrderBy] = useState('started_at')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
   
-  const { data: submissions = [], isLoading: loading, error } = useSubmissions(
+  const { data: submissionsData, isLoading: loading, error } = useSubmissions(
     { 
       student_id: user?.id,
-      include_hidden: user?.role === 'admin' ? true : (showHidden || user?.role === 'student')
+      include_hidden: user?.role === 'admin' ? true : (showHidden || user?.role === 'student'),
+      limit: 500
     },
     {
       refetchInterval: (query: any) => {
-        const hasActive = query.state.data?.some(
+        const items = query.state.data?.items ?? []
+        const hasActive = items.some(
           (sub: any) => sub.status === 'evaluating' || sub.status === 'submitted'
         )
         return hasActive ? 3000 : false
       }
     }
   )
+  const submissions = submissionsData?.items ?? []
 
   const hideMutation = useHideSubmission()
   const restoreMutation = useRestoreSubmission()

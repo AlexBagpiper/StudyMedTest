@@ -49,8 +49,7 @@ async def test_create_question_as_student_forbidden(client: AsyncClient, auth_he
 
 @pytest.mark.asyncio
 async def test_list_questions_as_teacher(client: AsyncClient, auth_headers_teacher):
-    """Test listing questions as teacher"""
-    # Create a question first
+    """Test listing questions as teacher (paginated response)."""
     await client.post(
         "/api/v1/questions",
         json={
@@ -60,11 +59,31 @@ async def test_list_questions_as_teacher(client: AsyncClient, auth_headers_teach
         },
         headers=auth_headers_teacher,
     )
-    
     response = await client.get(
         "/api/v1/questions",
         headers=auth_headers_teacher,
     )
     assert response.status_code == 200
     data = response.json()
-    assert len(data) >= 1
+    assert "items" in data
+    assert "total" in data
+    assert "skip" in data
+    assert "limit" in data
+    assert isinstance(data["items"], list)
+    assert data["total"] >= 1
+    assert len(data["items"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_list_questions_pagination_params(client: AsyncClient, auth_headers_teacher):
+    """Test questions list accepts skip and limit."""
+    response = await client.get(
+        "/api/v1/questions",
+        params={"skip": 0, "limit": 2},
+        headers=auth_headers_teacher,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["skip"] == 0
+    assert data["limit"] == 2
+    assert len(data["items"]) <= 2

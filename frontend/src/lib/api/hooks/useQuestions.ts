@@ -4,11 +4,18 @@ import type { Question, QuestionCreate } from '../../../types'
 
 const QUESTIONS_KEY = ['questions']
 
-export function useQuestions(params?: any) {
+export interface QuestionsPaginated {
+  items: Question[]
+  total: number
+  skip: number
+  limit: number
+}
+
+export function useQuestions(params?: { skip?: number; limit?: number }) {
   return useQuery({
     queryKey: [...QUESTIONS_KEY, params],
     queryFn: async () => {
-      const response = await api.get<Question[]>('/questions', { params })
+      const response = await api.get<QuestionsPaginated>('/questions', { params })
       return response.data
     },
   })

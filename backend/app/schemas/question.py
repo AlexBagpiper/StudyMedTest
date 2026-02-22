@@ -89,3 +89,11 @@ class QuestionResponse(QuestionBase):
 
     model_config = {"from_attributes": True}
 
+
+class PaginatedQuestionsResponse(BaseModel):
+    """Пагинированный список вопросов"""
+    items: List[QuestionResponse]
+    total: int
+    skip: int
+    limit: int
+

@@ -1,3 +1,5 @@
+# Локальная разработка и тесты. На сервере не использовать (конфликты при развёртывании).
+# Установка: python scripts/setup_dev_venv.py (из корня проекта)
 -r requirements.txt
 
 # Development & Testing

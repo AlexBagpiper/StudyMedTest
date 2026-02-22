@@ -6,8 +6,8 @@ from typing import List, Optional
 from uuid import UUID
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
@@ -20,6 +20,7 @@ from app.models.question import Question
 from app.schemas.submission import (
     SubmissionCreate,
     SubmissionResponse,
+    PaginatedSubmissionsResponse,
     AnswerCreate,
     AnswerUpdate,
     AnswerResponse,
@@ -451,10 +452,10 @@ async def log_submission_event(
     return None
 
 
-@router.get("", response_model=List[SubmissionResponse])
+@router.get("", response_model=PaginatedSubmissionsResponse)
 async def list_submissions(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
     student_id: UUID = None,
     test_id: UUID = None,
     include_hidden: bool = False,
@@ -464,39 +465,44 @@ async def list_submissions(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Список submissions
+    Список submissions (пагинированный)
     """
     query = select(Submission).options(
         selectinload(Submission.answers),
         selectinload(Submission.student),
         selectinload(Submission.variant).selectinload(TestVariant.test).selectinload(Test.author)
     )
+    count_query = select(func.count(Submission.id))
     
     # Students видят только свои submissions и всегда видят скрытые
     if current_user.role == Role.STUDENT:
         query = query.where(Submission.student_id == current_user.id)
+        count_query = count_query.where(Submission.student_id == current_user.id)
     elif current_user.role == Role.TEACHER:
-        # Преподаватели видят только результаты по своим тестам
         query = query.join(Submission.variant).join(TestVariant.test).where(Test.author_id == current_user.id)
-        # Преподаватели видят скрытые только если явно указано
+        count_query = count_query.join(Submission.variant).join(TestVariant.test).where(Test.author_id == current_user.id)
         if not include_hidden:
             query = query.where(Submission.is_hidden == False)
-    # Админы видят всё по умолчанию, фильтр is_hidden не применяется
+            count_query = count_query.where(Submission.is_hidden == False)
     
-    # Фильтры
     if student_id and current_user.role in [Role.TEACHER, Role.ADMIN]:
         query = query.where(Submission.student_id == student_id)
+        count_query = count_query.where(Submission.student_id == student_id)
     
     if test_id:
-        # Нужно джойн через variant
-        query = query.join(Submission.variant).where(TestVariant.test_id == test_id)
+        if current_user.role == Role.TEACHER:
+            query = query.where(TestVariant.test_id == test_id)
+            count_query = count_query.where(TestVariant.test_id == test_id)
+        else:
+            query = query.join(Submission.variant).where(TestVariant.test_id == test_id)
+            count_query = count_query.join(Submission.variant).where(TestVariant.test_id == test_id)
     
-    # Сортировка
+    total = (await db.scalar(count_query)) or 0
+    
     if not hasattr(Submission, sort_by):
         sort_attr = Submission.started_at
     else:
         sort_attr = getattr(Submission, sort_by)
-        # Проверяем, что это атрибут SQLAlchemy
         if not hasattr(sort_attr, "desc"):
             sort_attr = Submission.started_at
 
@@ -509,7 +515,6 @@ async def list_submissions(
     result = await db.execute(query)
     submissions = result.scalars().all()
 
-    # Добавляем time_limit для каждого элемента списка
     for sub in submissions:
         try:
             if sub.variant and sub.variant.test:
@@ -519,7 +524,7 @@ async def list_submissions(
         except Exception:
             sub.time_limit = None
     
-    return submissions
+    return PaginatedSubmissionsResponse(items=submissions, total=total, skip=skip, limit=limit)
 
 
 @router.patch("/{submission_id}/hide", response_model=SubmissionResponse)
