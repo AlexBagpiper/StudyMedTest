@@ -1,7 +1,7 @@
 # Multi-stage build для production
 
 # Stage 1: Development
-FROM node:18-alpine as development
+FROM node:18-alpine AS development
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -10,7 +10,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 # Stage 2: Build
-FROM node:18-alpine as build
+FROM node:18-alpine AS build
 WORKDIR /app
 
 # Build-time argument for API URL (defaults to /api/v1 for nginx proxy)
@@ -26,7 +26,7 @@ COPY . .
 RUN npm run build
 
 # Stage 3: Production
-FROM nginx:alpine as production
+FROM nginx:alpine AS production
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
