@@ -23,7 +23,6 @@ interface CVConfig {
   iou_threshold: number
   inclusion_threshold: number
   min_coverage_threshold: number
-  loyalty_factor: number
 }
 
 export default function CVSettings() {
@@ -34,7 +33,6 @@ export default function CVSettings() {
     iou_threshold: 0.5,
     inclusion_threshold: 0.8,
     min_coverage_threshold: 0.05,
-    loyalty_factor: 2.0,
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -58,7 +56,14 @@ export default function CVSettings() {
     try {
       setLoading(true)
       const data = await adminApi.getCVConfig()
-      setCvConfig(data)
+      // Округляем до 2 знаков для корректной работы с процентами
+      const roundedData = {
+        ...data,
+        iou_weight: Math.round(data.iou_weight * 100) / 100,
+        recall_weight: Math.round(data.recall_weight * 100) / 100,
+        precision_weight: Math.round(data.precision_weight * 100) / 100,
+      }
+      setCvConfig(roundedData)
     } catch (err: any) {
       console.error('Error loading config:', err)
       setMessageDialog({
@@ -72,14 +77,57 @@ export default function CVSettings() {
     }
   }
 
+  const handleWeightChange = (key: keyof CVConfig, value: number) => {
+    const otherKeys = (['iou_weight', 'recall_weight', 'precision_weight'] as const).filter(k => k !== key);
+    const currentSum = cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight;
+    const otherSum = currentSum - cvConfig[key];
+    
+    // Работаем с процентами как с целыми числами для исключения шума плавающей точки
+    const newValPercent = Math.round(value * 100);
+    let newConfig = { ...cvConfig, [key]: newValPercent / 100 };
+    
+    const otherSumPercent = Math.round(otherSum * 100);
+    const newSumPercent = newValPercent + otherSumPercent;
+
+    // Если новая сумма превышает 100%, пропорционально уменьшаем другие веса
+    if (newSumPercent > 100) {
+      let excess = newSumPercent - 100;
+      
+      if (otherSumPercent > 0) {
+        // Уменьшаем остальные веса
+        let distributedExcess = 0;
+        otherKeys.forEach((k, idx) => {
+          if (idx === otherKeys.length - 1) {
+            // Последнему отдаем остаток избытка для точности
+            const finalVal = Math.max(0, Math.round(cvConfig[k] * 100) - (excess - distributedExcess));
+            newConfig[k] = finalVal / 100;
+          } else {
+            const ratio = (cvConfig[k] * 100) / otherSumPercent;
+            const reduction = Math.round(excess * ratio);
+            const finalVal = Math.max(0, Math.round(cvConfig[k] * 100) - reduction);
+            newConfig[k] = finalVal / 100;
+            distributedExcess += reduction;
+          }
+        });
+      } else {
+        otherKeys.forEach(k => { newConfig[k] = 0; });
+      }
+    }
+
+    setCvConfig(newConfig);
+  };
+
   const handleSaveCV = async () => {
-    // Проверка суммы весов
-    const sum = cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight
-    if (Math.abs(sum - 1.0) > 0.001) {
+    // Проверка суммы весов в целых процентах
+    const sumPercent = Math.round(cvConfig.iou_weight * 100) + 
+                       Math.round(cvConfig.recall_weight * 100) + 
+                       Math.round(cvConfig.precision_weight * 100);
+    
+    if (sumPercent !== 100) {
       setMessageDialog({
         open: true,
         title: 'Ошибка валидации',
-        content: 'Сумма весов (IoU, Recall, Precision) должна быть равна 1.0',
+        content: `Сумма весов должна быть равна 100% (сейчас она ${sumPercent}%)`,
         severity: 'warning'
       })
       return
@@ -125,7 +173,7 @@ export default function CVSettings() {
           <Paper sx={{ p: 3, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
               <Typography variant="h6">Параметры CV-оценки</Typography>
-              <Tooltip title="Настройки алгоритма автоматической проверки графических ответов (IoU - Intersection over Union)">
+              <Tooltip title="Настройки алгоритма автоматической проверки графических ответов (IoU)">
                 <IconButton size="small">
                   <InfoIcon fontSize="small" />
                 </IconButton>
@@ -133,24 +181,51 @@ export default function CVSettings() {
             </Box>
             
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Настройте веса различных метрик для итогового балла. Сумма весов должна быть равна 1.0.
+              Настройте веса различных метрик для итогового балла. Сумма весов должна быть равна 100%.
             </Typography>
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Вес геометрической точности (IoU)</Typography>
-                  <Typography variant="body2" color="primary" fontWeight="bold">
+                  <Typography variant="body2" color={Math.abs(cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight - 1.0) > 0.001 ? 'error' : 'primary'} fontWeight="bold">
                     {((cvConfig.iou_weight || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
                   value={cvConfig.iou_weight}
-                  step={0.05}
+                  step={0.01}
                   min={0}
                   max={1}
-                  valueLabelDisplay="auto"
-                  onChange={(_, value) => setCvConfig({ ...cvConfig, iou_weight: value as number })}
+                  track={false}
+                  valueLabelDisplay="off"
+                  sx={{
+                    height: 8,
+                    '& .MuiSlider-rail': {
+                      opacity: 0.2,
+                      background: (theme) => {
+                        const sum = cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight;
+                        const remaining = 1 - sum;
+                        if (remaining > 0) {
+                          const start = cvConfig.iou_weight * 100;
+                          const end = (cvConfig.iou_weight + remaining) * 100;
+                          return `linear-gradient(90deg, 
+                            ${theme.palette.primary.main} 0%, 
+                            ${theme.palette.primary.main} ${start}%, 
+                            ${theme.palette.warning.light} ${start}%, 
+                            ${theme.palette.warning.light} ${end}%, 
+                            #ccc ${end}%, 
+                            #ccc 100%)`;
+                        }
+                        return theme.palette.grey[300];
+                      }
+                    },
+                    '& .MuiSlider-thumb': {
+                      backgroundColor: '#white',
+                      border: '2px solid currentColor',
+                    }
+                  }}
+                  onChange={(_, value) => handleWeightChange('iou_weight', value as number)}
                 />
                 <Typography variant="caption" color="text.secondary">
                   Влияние точности совпадения контуров на итоговый балл.
@@ -160,17 +235,40 @@ export default function CVSettings() {
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Вес полноты (Recall)</Typography>
-                  <Typography variant="body2" color="primary" fontWeight="bold">
+                  <Typography variant="body2" color={Math.abs(cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight - 1.0) > 0.001 ? 'error' : 'primary'} fontWeight="bold">
                     {((cvConfig.recall_weight || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
                   value={cvConfig.recall_weight}
-                  step={0.05}
+                  step={0.01}
                   min={0}
                   max={1}
-                  valueLabelDisplay="auto"
-                  onChange={(_, value) => setCvConfig({ ...cvConfig, recall_weight: value as number })}
+                  track={false}
+                  valueLabelDisplay="off"
+                  sx={{
+                    height: 8,
+                    '& .MuiSlider-rail': {
+                      opacity: 0.2,
+                      background: (theme) => {
+                        const sum = cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight;
+                        const remaining = 1 - sum;
+                        if (remaining > 0) {
+                          const start = cvConfig.recall_weight * 100;
+                          const end = (cvConfig.recall_weight + remaining) * 100;
+                          return `linear-gradient(90deg, 
+                            ${theme.palette.primary.main} 0%, 
+                            ${theme.palette.primary.main} ${start}%, 
+                            ${theme.palette.warning.light} ${start}%, 
+                            ${theme.palette.warning.light} ${end}%, 
+                            #ccc ${end}%, 
+                            #ccc 100%)`;
+                        }
+                        return theme.palette.grey[300];
+                      }
+                    }
+                  }}
+                  onChange={(_, value) => handleWeightChange('recall_weight', value as number)}
                 />
                 <Typography variant="caption" color="text.secondary">
                   Влияние доли найденных объектов на итоговый балл.
@@ -180,17 +278,40 @@ export default function CVSettings() {
               <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Вес точности (Precision)</Typography>
-                  <Typography variant="body2" color="primary" fontWeight="bold">
+                  <Typography variant="body2" color={Math.abs(cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight - 1.0) > 0.001 ? 'error' : 'primary'} fontWeight="bold">
                     {((cvConfig.precision_weight || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
                   value={cvConfig.precision_weight}
-                  step={0.05}
+                  step={0.01}
                   min={0}
                   max={1}
-                  valueLabelDisplay="auto"
-                  onChange={(_, value) => setCvConfig({ ...cvConfig, precision_weight: value as number })}
+                  track={false}
+                  valueLabelDisplay="off"
+                  sx={{
+                    height: 8,
+                    '& .MuiSlider-rail': {
+                      opacity: 0.2,
+                      background: (theme) => {
+                        const sum = cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight;
+                        const remaining = 1 - sum;
+                        if (remaining > 0) {
+                          const start = cvConfig.precision_weight * 100;
+                          const end = (cvConfig.precision_weight + remaining) * 100;
+                          return `linear-gradient(90deg, 
+                            ${theme.palette.primary.main} 0%, 
+                            ${theme.palette.primary.main} ${start}%, 
+                            ${theme.palette.warning.light} ${start}%, 
+                            ${theme.palette.warning.light} ${end}%, 
+                            #ccc ${end}%, 
+                            #ccc 100%)`;
+                        }
+                        return theme.palette.grey[300];
+                      }
+                    }
+                  }}
+                  onChange={(_, value) => handleWeightChange('precision_weight', value as number)}
                 />
                 <Typography variant="caption" color="text.secondary">
                   Влияние отсутствия лишних (ошибочных) аннотаций на итоговый балл.
@@ -203,7 +324,7 @@ export default function CVSettings() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography variant="subtitle2">Порог IoU для зачета объекта</Typography>
                   <Typography variant="body2" color="primary" fontWeight="bold">
-                    {cvConfig.iou_threshold}
+                    {((cvConfig.iou_threshold || 0) * 100).toFixed(0)}%
                   </Typography>
                 </Box>
                 <Slider
@@ -211,7 +332,7 @@ export default function CVSettings() {
                   step={0.05}
                   min={0.1}
                   max={0.9}
-                  valueLabelDisplay="auto"
+                  valueLabelDisplay="off"
                   onChange={(_, value) => setCvConfig({ ...cvConfig, iou_threshold: value as number })}
                 />
                 <Typography variant="caption" color="text.secondary">
@@ -233,7 +354,7 @@ export default function CVSettings() {
                   step={0.05}
                   min={0.5}
                   max={1.0}
-                  valueLabelDisplay="auto"
+                  valueLabelDisplay="off"
                   onChange={(_, value) => setCvConfig({ ...cvConfig, inclusion_threshold: value as number })}
                 />
                 <Typography variant="caption" color="text.secondary">
@@ -253,31 +374,11 @@ export default function CVSettings() {
                   step={0.01}
                   min={0.01}
                   max={0.5}
-                  valueLabelDisplay="auto"
+                  valueLabelDisplay="off"
                   onChange={(_, value) => setCvConfig({ ...cvConfig, min_coverage_threshold: value as number })}
                 />
                 <Typography variant="caption" color="text.secondary">
                   Минимальная площадь эталона, которую должен выделить студент (защита от случайных точек).
-                </Typography>
-              </Box>
-
-              <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="subtitle2">Коэффициент лояльности (Loyalty Factor)</Typography>
-                  <Typography variant="body2" color="primary" fontWeight="bold">
-                    {(cvConfig.loyalty_factor || 0).toFixed(1)}
-                  </Typography>
-                </Box>
-                <Slider
-                  value={cvConfig.loyalty_factor}
-                  step={0.5}
-                  min={1.0}
-                  max={5.0}
-                  valueLabelDisplay="auto"
-                  onChange={(_, value) => setCvConfig({ ...cvConfig, loyalty_factor: value as number })}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Степень мягкости оценки при частичном покрытии. Чем выше, тем больше баллов за малую площадь.
                 </Typography>
               </Box>
 
@@ -300,11 +401,11 @@ export default function CVSettings() {
             <Typography variant="h6" gutterBottom>Справка</Typography>
             <Typography variant="body2" paragraph>
               <strong>IoU (Intersection over Union)</strong> — основная метрика сравнения двух областей. 
-              Рассчитывается как площадь пересечения деленная на площадь объединения (от 0.0 до 1.0).
+              Рассчитывается как площадь пересечения деленная на площадь объединения (от 0% до 100%).
             </Typography>
             <Typography variant="body2" paragraph>
-              <strong>Сумма весов</strong> должна быть равна 1.0 (100%). Если вы хотите оценивать только точность попадания, 
-              установите вес IoU на 1.0, а остальные на 0.
+              <strong>Сумма весов</strong> должна быть равна 100%. Если вы хотите оценивать только точность попадания, 
+              установите вес IoU на 100%, а остальные на 0%.
             </Typography>
             <Typography variant="body2" paragraph>
               <strong>Порог IoU</strong> — это «проходной балл» для каждого объекта. Если пересечение области студента с эталоном выше этого порога, объект считается найденным верно.
@@ -313,17 +414,14 @@ export default function CVSettings() {
               <strong>Inclusion (Включение)</strong> — «Насколько точно студент попал». Показывает, не выходят ли контуры студента за границы эталона. Если нарисовать лишнее вне зоны, этот показатель упадет.
             </Typography>
             <Typography variant="body2" paragraph>
-              <strong>Coverage (Покрытие)</strong> — «Какую часть работы студент сделал». Показывает, какую долю огромного объекта студент выделил.
-            </Typography>
-            <Typography variant="body2" paragraph>
-              <strong>Loyalty Factor</strong> — «Коэффициент лояльности». Чем он выше, тем больше баллов система начисляет за частичное выделение сложного объекта.
+              <strong>Coverage (Покрытие)</strong> — «Какую часть работы студент сделал». Показывает, какую долю объекта студент выделил. Для зачета объекта достаточно преодолеть минимальный порог.
             </Typography>
             <Typography variant="body2" component="div">
               <strong>Как выбрать порог:</strong>
               <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
-                <li><strong>0.5 (стандарт)</strong> — баланс между точностью и гибкостью.</li>
-                <li><strong>Высокий (0.7+)</strong> — для задач, где важна точность контуров.</li>
-                <li><strong>Низкий (0.3-0.4)</strong> — если объекты мелкие или их сложно выделить точно.</li>
+                <li><strong>Стандарт (50%)</strong> — баланс между точностью и гибкостью.</li>
+                <li><strong>Высокий (70%+)</strong> — для задач, где важна точность контуров.</li>
+                <li><strong>Низкий (30-40%)</strong> — если объекты мелкие или их сложно выделить точно.</li>
               </ul>
             </Typography>
           </Paper>

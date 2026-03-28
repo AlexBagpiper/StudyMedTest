@@ -20,7 +20,7 @@ interface AnnotationState {
   viewResetVersion: number
   
   // Действия с метками
-  addLabel: (name: string, color: string) => void
+  addLabel: (name: string, color: string) => string
   updateLabel: (id: string, name: string, color: string) => void
   deleteLabel: (id: string) => void
   setActiveLabelId: (id: string | null) => void
@@ -50,13 +50,17 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   zoom: 1,
   viewResetVersion: 0,
 
-  addLabel: (name, color) => set((state) => {
-    const newLabel = { id: uuidv4(), name, color }
-    return { 
-      labels: [...state.labels, newLabel],
-      activeLabelId: state.activeLabelId || newLabel.id
-    }
-  }),
+  addLabel: (name, color) => {
+    const id = uuidv4()
+    set((state) => {
+      const newLabel = { id, name, color }
+      return { 
+        labels: [...state.labels, newLabel],
+        activeLabelId: state.activeLabelId || newLabel.id
+      }
+    })
+    return id
+  },
 
   updateLabel: (id, name, color) => set((state) => ({
     labels: state.labels.map(l => l.id === id ? { ...l, name, color } : l)

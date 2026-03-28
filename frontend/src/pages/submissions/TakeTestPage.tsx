@@ -445,7 +445,6 @@ export default function TakeTestPage() {
             bgcolor: '#1e2125'
           }}>
             <AnnotationEditor
-              key={`${submission?.id}-${currentQuestion?.id}`}
               imageUrl={currentQuestion?.image?.presigned_url || ''}
               initialData={{
                 labels: currentLabels,

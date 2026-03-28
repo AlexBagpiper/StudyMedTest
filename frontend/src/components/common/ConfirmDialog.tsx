@@ -5,11 +5,11 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  Button,
-  Box,
-  CircularProgress
+  Button
 } from '@mui/material'
 import { useLocale } from '../../contexts/LocaleContext'
+import { useLoading } from '../../contexts/LoadingContext'
+import { useEffect } from 'react'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -35,6 +35,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   color = 'primary'
 }) => {
   const { t } = useLocale()
+  const { showLoading } = useLoading()
+
+  useEffect(() => {
+    showLoading(isLoading)
+    // Cleanup to ensure loading is hidden if component unmounts
+    return () => showLoading(false)
+  }, [isLoading, showLoading])
   
   const finalConfirmText = confirmText || t('common.confirm')
   const finalCancelText = cancelText || t('common.cancel')
@@ -69,9 +76,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           variant="contained" 
           color={color}
           autoFocus
-          startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : null}
         >
-          {isLoading ? t('common.loading') : finalConfirmText}
+          {finalConfirmText}
         </Button>
       </DialogActions>
     </Dialog>

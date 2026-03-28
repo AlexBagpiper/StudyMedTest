@@ -91,7 +91,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
   }, [readOnly, setMode])
 
   // Track previous data to prevent infinite loops
-  const prevInitialDataRef = useRef<string | null>(null)
+  const prevInitialDataRef = useRef<string | null | undefined>(undefined)
   const prevOnChangeDataRef = useRef<string | null>(null)
   
   useEffect(() => {

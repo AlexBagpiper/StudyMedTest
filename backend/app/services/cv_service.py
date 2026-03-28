@@ -34,16 +34,27 @@ class CVService:
         """
         # Настройки из БД или дефолтные
         config = config or {}
-        iou_weight = config.get("iou_weight", 0.5)
-        recall_weight = config.get("recall_weight", 0.3)
-        precision_weight = config.get("precision_weight", 0.2)
-        iou_threshold = config.get("iou_threshold", 0.5)
+        
+        # Хелпер для надежного получения числовых параметров
+        def get_cfg_float(keys: List[str], default: float) -> float:
+            for key in keys:
+                if key in config and config[key] is not None:
+                    try:
+                        return float(config[key])
+                    except (ValueError, TypeError):
+                        continue
+            return default
 
-        # Новые параметры для частичного зачета
+        iou_weight = get_cfg_float(["iou_weight"], 0.5)
+        recall_weight = get_cfg_float(["recall_weight"], 0.3)
+        precision_weight = get_cfg_float(["precision_weight"], 0.2)
+        iou_threshold = get_cfg_float(["iou_threshold"], 0.5)
+
+        # Параметры для частичного зачета
         allow_partial = config.get("allow_partial", False)
-        inclusion_threshold = config.get("inclusion_threshold", 0.8)
-        min_coverage_threshold = config.get("min_coverage_threshold", 0.05)
-        loyalty_factor = config.get("loyalty_factor", 2.0)
+        # Поддерживаем разные варианты именования ключей (длинные и короткие из UI)
+        inclusion_threshold = get_cfg_float(["inclusion_threshold", "inclusion"], 0.8)
+        min_coverage_threshold = get_cfg_float(["min_coverage_threshold", "coverage"], 0.05)
 
         # Извлечение аннотаций студента
         student_annotations = student_data.get("annotations", [])
@@ -106,6 +117,7 @@ class CVService:
         
         all_accuracy_scores = []
         true_positives = 0
+        total_coverage = 0
         
         for s_poly, r_poly in matches:
             if not s_poly.is_valid: s_poly = s_poly.buffer(0)
@@ -118,7 +130,16 @@ class CVService:
             inclusion = inter_area / s_poly.area if s_poly.area > 0 else 0
             coverage = inter_area / r_poly.area if r_poly.area > 0 else 0
             
-            # Логика определения "Найден ли объект"
+            # Геометрическая точность рассчитывается для всех сопоставленных полигонов
+            # Это делает метрику точности независимой от порога покрытия (is_found)
+            if allow_partial:
+                # В частичном режиме точность - это чистота входа в контур (inclusion)
+                all_accuracy_scores.append(inclusion)
+            else:
+                # В обычном режиме точность - это стандартный IoU
+                all_accuracy_scores.append(iou)
+
+            # Логика определения "Найден ли объект" (Recall)
             is_found = iou >= iou_threshold
             
             if allow_partial and not is_found:
@@ -127,23 +148,16 @@ class CVService:
             
             if is_found:
                 true_positives += 1
-                if allow_partial:
-                    # Улучшенная формула для частичного совпадения
-                    acc = inclusion * (coverage ** (1.0 / loyalty_factor))
-                    all_accuracy_scores.append(acc)
-                else:
-                    all_accuracy_scores.append(iou)
-            else:
-                all_accuracy_scores.append(iou) # Для совместимости со старым расчетом среднего IoU
+                total_coverage += 1.0
         
         # Расчет метрик
-        # 1. Точность попадания (IoU или взвешенная точность) - среднее для найденных объектов
+        # 1. Точность попадания (среднее только по найденным объектам)
         avg_accuracy = np.mean(all_accuracy_scores) if all_accuracy_scores else 0
         
-        # 2. Полнота (Recall) - доля найденных эталонных объектов
-        recall = true_positives / len(ref_polys) if ref_polys else 0
+        # 2. Полнота (Recall) - учитывает частичное покрытие если включен allow_partial
+        recall = total_coverage / len(ref_polys) if ref_polys else 0
         
-        # 3. Прецизионность (Precision) - доля правильных объектов среди всех нарисованных студентом
+        # 3. Прецизионность (Precision) - доля правильно найденных среди всех нарисованных
         precision = true_positives / len(stud_polys) if stud_polys else 0
         
         # Итоговый взвешенный балл

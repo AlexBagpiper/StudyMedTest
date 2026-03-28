@@ -95,7 +95,7 @@ export function useBulkDeleteSubmissions() {
 
   return useMutation({
     mutationFn: async (submissionIds: string[]) => {
-      await api.post('/submissions/bulk-delete', { submission_ids: submissionIds })
+      await api.post('/submissions/bulk-delete', { ids: submissionIds })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: SUBMISSIONS_KEY })

@@ -204,7 +204,11 @@ async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) 
         select(SystemConfig).where(SystemConfig.key == "cv_evaluation_params")
     )
     config_obj = result_cfg.scalar_one_or_none()
-    cv_config = config_obj.value if config_obj else None
+    
+    # Объединяем системные настройки и настройки конкретного вопроса
+    cv_config = (config_obj.value if config_obj else {}).copy()
+    if question.scoring_criteria:
+        cv_config.update(question.scoring_criteria)
 
     evaluation_result = await cv_service.evaluate_annotation(
         student_data=answer.annotation_data or {},

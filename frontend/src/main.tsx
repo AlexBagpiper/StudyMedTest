@@ -9,6 +9,7 @@ import App from './App'
 import { theme } from './theme'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
+import { LoadingProvider } from './contexts/LoadingContext'
 
 // React Query client
 const queryClient = new QueryClient({
@@ -33,9 +34,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <ThemeProvider theme={theme}>
           <CssBaseline />
           <LocaleProvider>
-            <AuthProvider>
-              <App />
-            </AuthProvider>
+            <LoadingProvider>
+              <AuthProvider>
+                <App />
+              </AuthProvider>
+            </LoadingProvider>
           </LocaleProvider>
         </ThemeProvider>
       </QueryClientProvider>

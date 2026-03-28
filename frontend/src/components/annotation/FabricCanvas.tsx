@@ -3,9 +3,10 @@ import { fabric } from 'fabric'
 import { 
   Box, Menu, MenuItem, ListItemText,
   Dialog, DialogTitle, List, ListItemButton, TextField, InputAdornment,
-  ListItemIcon, Typography
+  ListItemIcon, Typography, Button
 } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
+import AddIcon from '@mui/icons-material/Add'
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import UndoIcon from '@mui/icons-material/Undo'
@@ -77,7 +78,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
   const { 
     mode, setZoom, zoom, viewResetVersion, 
     addAnnotation, labels, annotations, updateAnnotation, deleteAnnotation, setSelectedAnnotationId,
-    setMode
+    setMode, addLabel
   } = useAnnotationStore()
 
   const annotationsRef = useRef(annotations); const labelsRef = useRef(labels);
@@ -106,6 +107,9 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [labelPicker, setLabelPicker] = useState<{ open: boolean; type: 'polygon' | 'rectangle' | 'edit'; data?: any; annotationId?: string; } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCreatingLabel, setIsCreatingLabel] = useState(false);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('#3B82F6');
 
   // Helper: convert HSL to RGBA for stable color interpolation
   const hslToRgba = (hslStr: string, alpha: number): string => {
@@ -1171,6 +1175,8 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
           }
           setLabelPicker(null)
           setSearchQuery('')
+          setIsCreatingLabel(false)
+          setNewLabelName('')
         }}
         maxWidth="xs"
         fullWidth
@@ -1183,88 +1189,172 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
         }}
       >
         <DialogTitle sx={{ 
-          pb: 1.5, 
+          pb: 1, 
           pt: 2, 
           px: 2, 
           fontSize: '0.95rem', 
           fontWeight: 600,
-          color: 'text.primary'
+          color: 'text.primary',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
         }}>
-          Выберите метку для контура
+          {isCreatingLabel ? 'Создание новой метки' : 'Выберите метку для контура'}
+          {!isCreatingLabel && (
+            <Button 
+              size="small" 
+              startIcon={<AddIcon fontSize="small" />}
+              onClick={() => {
+                setIsCreatingLabel(true);
+                setNewLabelName(searchQuery);
+                setNewLabelColor('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'));
+              }}
+              sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0 }}
+            >
+              Добавить
+            </Button>
+          )}
         </DialogTitle>
-        <Box sx={{ px: 2, pb: 1.5 }}>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Поиск..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && searchQuery) {
-                const filtered = labels.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()));
-                if (filtered.length > 0) handleLabelSelect(filtered[0].id);
-              }
-            }}
-            sx={{
-              '& .MuiInputBase-root': {
-                fontSize: '0.8125rem',
-                borderRadius: '6px'
-              }
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Box>
-        <List sx={{ pt: 0, pb: 1, maxHeight: 350, overflow: 'auto' }}>
-          {(() => {
-            const currentAnnotation = labelPicker?.annotationId 
-              ? annotations.find(a => a.id === labelPicker.annotationId) 
-              : null;
-            const currentLabelId = currentAnnotation?.label_id;
-
-            return labels.filter(label => label.name.toLowerCase().includes(searchQuery.toLowerCase())).map((label) => (
-              <ListItemButton 
-                key={label.id} 
-                onClick={() => handleLabelSelect(label.id)}
-                selected={label.id === currentLabelId}
-                sx={{ 
-                  py: 0.75, 
-                  px: 2,
-                  mx: 1,
-                  borderRadius: '6px',
-                  '&.Mui-selected': {
-                    bgcolor: 'primary.light',
-                    '&:hover': { bgcolor: 'primary.light' }
-                  }
+        {isCreatingLabel ? (
+          <Box sx={{ p: 2, pt: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Название"
+              fullWidth
+              size="small"
+              value={newLabelName}
+              onChange={(e) => setNewLabelName(e.target.value)}
+              autoFocus
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && newLabelName.trim()) {
+                  addLabel(newLabelName.trim(), newLabelColor);
+                  setIsCreatingLabel(false);
+                  setNewLabelName('');
+                }
+              }}
+            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="body2">Цвет:</Typography>
+              <input
+                type="color"
+                value={newLabelColor}
+                onChange={(e) => setNewLabelColor(e.target.value)}
+                style={{ 
+                  width: 50, 
+                  height: 30, 
+                  border: '1px solid #ccc', 
+                  borderRadius: 4,
+                  cursor: 'pointer'
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, mt: 1, justifyContent: 'flex-end' }}>
+              <Button size="small" onClick={() => setIsCreatingLabel(false)}>
+                Отмена
+              </Button>
+              <Button 
+                size="small" 
+                variant="contained" 
+                disabled={!newLabelName.trim()}
+                onClick={() => {
+                  addLabel(newLabelName.trim(), newLabelColor);
+                  setIsCreatingLabel(false);
+                  setNewLabelName('');
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 32 }}>
-                  <FiberManualRecordIcon sx={{ color: label.color, fontSize: '0.75rem' }} />
-                </ListItemIcon>
-                <ListItemText 
-                  primary={label.name} 
-                  primaryTypographyProps={{ 
-                    variant: 'body2', 
-                    fontSize: '0.8125rem',
-                    fontWeight: label.id === currentLabelId ? 600 : 500 
-                  }} 
-                />
-              </ListItemButton>
-            ));
-          })()}
-          {labels.length === 0 && (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-                Нет доступных категорий
-              </Typography>
+                Создать
+              </Button>
             </Box>
-          )}
-        </List>
+          </Box>
+        ) : (
+          <>
+            <Box sx={{ px: 2, pb: 1.5 }}>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="Поиск..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && searchQuery) {
+                    const filtered = labels.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                    if (filtered.length > 0) handleLabelSelect(filtered[0].id);
+                  }
+                }}
+                sx={{
+                  '& .MuiInputBase-root': {
+                    fontSize: '0.8125rem',
+                    borderRadius: '6px'
+                  }
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+            <List sx={{ pt: 0, pb: 1, maxHeight: 350, overflow: 'auto' }}>
+              {(() => {
+                const currentAnnotation = labelPicker?.annotationId 
+                  ? annotations.find(a => a.id === labelPicker.annotationId) 
+                  : null;
+                const currentLabelId = currentAnnotation?.label_id;
+
+                const filteredLabels = labels.filter(label => label.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+                return (
+                  <>
+                    {filteredLabels.map((label) => (
+                      <ListItemButton 
+                        key={label.id} 
+                        onClick={() => handleLabelSelect(label.id)}
+                        selected={label.id === currentLabelId}
+                        sx={{ 
+                          py: 0.75, 
+                          px: 2,
+                          mx: 1,
+                          borderRadius: '6px',
+                          '&.Mui-selected': {
+                            bgcolor: 'primary.light',
+                            '&:hover': { bgcolor: 'primary.light' }
+                          }
+                        }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 32 }}>
+                          <FiberManualRecordIcon sx={{ color: label.color, fontSize: '0.75rem' }} />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={label.name} 
+                          primaryTypographyProps={{ 
+                            variant: 'body2', 
+                            fontSize: '0.8125rem',
+                            fontWeight: label.id === currentLabelId ? 600 : 500 
+                          }} 
+                        />
+                      </ListItemButton>
+                    ))}
+                    {filteredLabels.length === 0 && labels.length > 0 && (
+                      <Box sx={{ p: 2, textAlign: 'center' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+                          Ничего не найдено
+                        </Typography>
+                      </Box>
+                    )}
+                    {labels.length === 0 && (
+                      <Box sx={{ p: 3, textAlign: 'center' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+                          Нет доступных категорий
+                        </Typography>
+                      </Box>
+                    )}
+                  </>
+                );
+              })()}
+            </List>
+          </>
+        )}
       </Dialog>
 
       {/* Hover Tooltip */}

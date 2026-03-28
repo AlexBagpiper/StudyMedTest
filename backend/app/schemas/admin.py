@@ -297,7 +297,6 @@ class AdminCVConfig(BaseModel):
     iou_threshold: float = Field(0.5, ge=0.0, le=1.0)
     inclusion_threshold: float = Field(0.8, ge=0.0, le=1.0)
     min_coverage_threshold: float = Field(0.05, ge=0.0, le=1.0)
-    loyalty_factor: float = Field(2.0, ge=1.0, le=10.0)
 
 class AdminLLMConfig(BaseModel):
     """Схема для настроек LLM"""
