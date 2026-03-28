@@ -56,6 +56,13 @@ class CVService:
         inclusion_threshold = get_cfg_float(["inclusion_threshold", "inclusion"], 0.8)
         min_coverage_threshold = get_cfg_float(["min_coverage_threshold", "coverage"], 0.05)
 
+        # Режим лояльности
+        loyalty_mode = config.get("loyalty_mode", False)
+        accuracy_grace_threshold = get_cfg_float(["accuracy_grace_threshold"], 0.95)
+        loyalty_boost_enabled = config.get("loyalty_boost_enabled", False)
+        loyalty_boost_value = get_cfg_float(["loyalty_boost_value"], 0.05)
+        top_off_threshold = get_cfg_float(["top_off_threshold"], 99.0)
+
         # Извлечение аннотаций студента
         student_annotations = student_data.get("annotations", [])
         
@@ -160,12 +167,26 @@ class CVService:
         # 3. Прецизионность (Precision) - доля правильно найденных среди всех нарисованных
         precision = true_positives / len(stud_polys) if stud_polys else 0
         
+        # --- Применение механизмов лояльности ---
+        if loyalty_mode:
+            # 1. Grace Zone (округление точности до 100%)
+            if avg_accuracy >= accuracy_grace_threshold:
+                avg_accuracy = 1.0
+            
+            # 2. Loyalty Boost (бонус если нет ошибок поиска)
+            if loyalty_boost_enabled and recall >= 0.999 and precision >= 0.999:
+                avg_accuracy = min(1.0, avg_accuracy + (loyalty_boost_value or 0.05))
+        
         # Итоговый взвешенный балл
         total_score = (
             avg_accuracy * iou_weight + 
             recall * recall_weight + 
             precision * precision_weight
         ) * 100
+        
+        # 4. Top-off Rule (округление почти идеального результата до 100)
+        if loyalty_mode and total_score >= (top_off_threshold or 99.0):
+            total_score = 100.0
         
         logger.info(f"Evaluation results: accuracy={avg_accuracy:.3f}, recall={recall:.3f}, precision={precision:.3f}, score={total_score:.2f}")
 

@@ -297,6 +297,13 @@ class AdminCVConfig(BaseModel):
     iou_threshold: float = Field(0.5, ge=0.0, le=1.0)
     inclusion_threshold: float = Field(0.8, ge=0.0, le=1.0)
     min_coverage_threshold: float = Field(0.05, ge=0.0, le=1.0)
+    
+    # Режим лояльности
+    loyalty_mode: bool = Field(False, description="Включить сбалансированный режим лояльности")
+    accuracy_grace_threshold: float = Field(0.95, ge=0.5, le=1.0, description="Порог точности для автоматического округления до 100%")
+    loyalty_boost_enabled: bool = Field(False, description="Дополнительный бонус к точности при отсутствии клинических ошибок (Recall=1, Precision=1)")
+    loyalty_boost_value: float = Field(0.05, ge=0.0, le=0.2, description="Величина бонуса лояльности (0.05 = 5%)")
+    top_off_threshold: float = Field(99.0, ge=90.0, le=100.0, description="Порог итогового балла для округления до 100%")
 
 class AdminLLMConfig(BaseModel):
     """Схема для настроек LLM"""

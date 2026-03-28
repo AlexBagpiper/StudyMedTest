@@ -10,6 +10,8 @@ import {
   Slider,
   Tooltip,
   IconButton,
+  Switch,
+  FormControlLabel,
 } from '@mui/material'
 import InfoIcon from '@mui/icons-material/Info'
 import SaveIcon from '@mui/icons-material/Save'
@@ -23,6 +25,12 @@ interface CVConfig {
   iou_threshold: number
   inclusion_threshold: number
   min_coverage_threshold: number
+  // Loyalty
+  loyalty_mode: boolean
+  accuracy_grace_threshold: number
+  loyalty_boost_enabled: boolean
+  loyalty_boost_value: number
+  top_off_threshold: number
 }
 
 export default function CVSettings() {
@@ -33,6 +41,11 @@ export default function CVSettings() {
     iou_threshold: 0.5,
     inclusion_threshold: 0.8,
     min_coverage_threshold: 0.05,
+    loyalty_mode: false,
+    accuracy_grace_threshold: 0.95,
+    loyalty_boost_enabled: false,
+    loyalty_boost_value: 0.05,
+    top_off_threshold: 99.0,
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -77,7 +90,7 @@ export default function CVSettings() {
     }
   }
 
-  const handleWeightChange = (key: keyof CVConfig, value: number) => {
+  const handleWeightChange = (key: 'iou_weight' | 'recall_weight' | 'precision_weight', value: number) => {
     const otherKeys = (['iou_weight', 'recall_weight', 'precision_weight'] as const).filter(k => k !== key);
     const currentSum = cvConfig.iou_weight + cvConfig.recall_weight + cvConfig.precision_weight;
     const otherSum = currentSum - cvConfig[key];
@@ -382,6 +395,106 @@ export default function CVSettings() {
                 </Typography>
               </Box>
 
+              <Divider />
+
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
+                  <Typography variant="h6">Сбалансированная лояльность</Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={cvConfig.loyalty_mode}
+                        onChange={(e) => setCvConfig({ ...cvConfig, loyalty_mode: e.target.checked })}
+                      />
+                    }
+                    label={cvConfig.loyalty_mode ? "Включено" : "Выключено"}
+                    sx={{ ml: 2 }}
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                  Набор механизмов для прощения мелких геометрических погрешностей, если клиническая суть задания выполнена верно.
+                </Typography>
+
+                {cvConfig.loyalty_mode && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 2, pl: 2, borderLeft: '2px solid', borderColor: 'primary.light' }}>
+                    <Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="subtitle2">Порог «идеальной точности» (Grace Zone)</Typography>
+                        <Typography variant="body2" color="primary" fontWeight="bold">
+                          {((cvConfig.accuracy_grace_threshold || 0) * 100).toFixed(0)}%
+                        </Typography>
+                      </Box>
+                      <Slider
+                        value={cvConfig.accuracy_grace_threshold}
+                        step={0.01}
+                        min={0.80}
+                        max={0.99}
+                        valueLabelDisplay="off"
+                        onChange={(_, value) => setCvConfig({ ...cvConfig, accuracy_grace_threshold: value as number })}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        Если средняя точность студента выше этого порога, она автоматически приравнивается к 100%.
+                      </Typography>
+                    </Box>
+
+                    <Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={cvConfig.loyalty_boost_enabled}
+                              onChange={(e) => setCvConfig({ ...cvConfig, loyalty_boost_enabled: e.target.checked })}
+                            />
+                          }
+                          label={<Typography variant="subtitle2">Бонус за безошибочность (Loyalty Boost)</Typography>}
+                        />
+                        {cvConfig.loyalty_boost_enabled && (
+                          <Typography variant="body2" color="primary" fontWeight="bold">
+                            +{((cvConfig.loyalty_boost_value || 0) * 100).toFixed(0)}%
+                          </Typography>
+                        )}
+                      </Box>
+                      {cvConfig.loyalty_boost_enabled && (
+                        <Box sx={{ px: 1, mt: 1 }}>
+                          <Slider
+                            value={cvConfig.loyalty_boost_value}
+                            step={0.01}
+                            min={0.01}
+                            max={0.20}
+                            valueLabelDisplay="off"
+                            onChange={(_, value) => setCvConfig({ ...cvConfig, loyalty_boost_value: value as number })}
+                          />
+                        </Box>
+                      )}
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        Добавляет бонус к точности, если студент нашел все объекты (Recall=100%) и не добавил лишних (Precision=100%).
+                      </Typography>
+                    </Box>
+
+                    <Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="subtitle2">Порог округления итога (Top-off Rule)</Typography>
+                        <Typography variant="body2" color="primary" fontWeight="bold">
+                          {cvConfig.top_off_threshold}%
+                        </Typography>
+                      </Box>
+                      <Slider
+                        value={cvConfig.top_off_threshold}
+                        step={0.5}
+                        min={95}
+                        max={99.5}
+                        valueLabelDisplay="off"
+                        onChange={(_, value) => setCvConfig({ ...cvConfig, top_off_threshold: value as number })}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        Если итоговый балл за вопрос выше этого порога, он округляется до 100%.
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+
               <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
                 <Button
                   variant="contained"
@@ -416,8 +529,18 @@ export default function CVSettings() {
             <Typography variant="body2" paragraph>
               <strong>Coverage (Покрытие)</strong> — «Какую часть работы студент сделал». Показывает, какую долю объекта студент выделил. Для зачета объекта достаточно преодолеть минимальный порог.
             </Typography>
+            <Divider sx={{ my: 2 }} />
             <Typography variant="body2" component="div">
-              <strong>Как выбрать порог:</strong>
+              <strong>Режим лояльности:</strong>
+              <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
+                <li><strong>Grace Zone</strong> — прощает мелкую неточность. Если студент нарисовал контур очень близко к эталону (напр. 95%+), система считает это за 100%.</li>
+                <li><strong>Loyalty Boost</strong> — поощряет поиск. Если все объекты найдены верно и нет лишних, точность получает настроенный бонус (напр. +5%).</li>
+                <li><strong>Top-off Rule</strong> — финальное округление. Если итоговый балл почти идеален (напр. 99%+), он округляется до 100%.</li>
+              </ul>
+            </Typography>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="body2" component="div">
+              <strong>Как выбрать порог IoU:</strong>
               <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
                 <li><strong>Стандарт (50%)</strong> — баланс между точностью и гибкостью.</li>
                 <li><strong>Высокий (70%+)</strong> — для задач, где важна точность контуров.</li>

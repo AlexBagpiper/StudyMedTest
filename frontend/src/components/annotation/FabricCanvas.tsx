@@ -1211,7 +1211,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
               }}
               sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0 }}
             >
-              Добавить
+              добавить метку
             </Button>
           )}
         </DialogTitle>
