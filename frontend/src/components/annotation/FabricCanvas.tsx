@@ -78,13 +78,14 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
   const { 
     mode, setZoom, zoom, viewResetVersion, 
     addAnnotation, labels, annotations, updateAnnotation, deleteAnnotation, setSelectedAnnotationId,
-    setMode, addLabel
+    setMode, addLabel, setIsDrawingInProgress
   } = useAnnotationStore()
 
   const annotationsRef = useRef(annotations); const labelsRef = useRef(labels);
   const modeRef = useRef<EditorMode>(mode); const zoomRef = useRef(zoom)
   const showReferenceRef = useRef(showReference)
   const referenceDataRef = useRef(referenceData)
+  const isCtrlPressedRef = useRef(false)
 
   useEffect(() => {
     annotationsRef.current = annotations; labelsRef.current = labels;
@@ -92,6 +93,42 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
     showReferenceRef.current = showReference;
     referenceDataRef.current = referenceData;
   }, [annotations, labels, mode, zoom, showReference, referenceData])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'Control' || e.ctrlKey) && !isCtrlPressedRef.current) {
+        isCtrlPressedRef.current = true
+        if (fabricCanvas.current) {
+          fabricCanvas.current.defaultCursor = 'grab'
+          // Скрываем активную линию при панорамировании
+          if (activeLineRef.current) {
+            activeLineRef.current.set({ visible: false })
+          }
+          fabricCanvas.current.requestRenderAll()
+        }
+      }
+    }
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') {
+        isCtrlPressedRef.current = false
+        if (fabricCanvas.current) {
+          const m = modeRef.current
+          fabricCanvas.current.defaultCursor = m === 'hand' ? 'grab' : (m === 'select' ? 'default' : 'crosshair')
+          // Возвращаем видимость линии
+          if (activeLineRef.current) {
+            activeLineRef.current.set({ visible: true })
+          }
+          fabricCanvas.current.requestRenderAll()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [])
 
   const polygonPointsRef = useRef<fabric.Point[]>([])
   const activeLineRef = useRef<fabric.Line | null>(null)
@@ -443,6 +480,9 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
 
     // 4. Pop the point
     polygonPointsRef.current.pop()
+    if (polygonPointsRef.current.length === 0) {
+      setIsDrawingInProgress(false)
+    }
 
     // 5. If there are still points, create a new active line starting from the NEW last point
     if (polygonPointsRef.current.length > 0) {
@@ -482,7 +522,13 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
     const loadAnnotations = (c: ExtendedCanvas) => {
       if (!isMounted || !fabricCanvas.current || !(c as any).lowerCanvasEl) return
       
-      c.remove(...c.getObjects().filter(obj => obj !== c.backgroundImage));
+      // Не удаляем временные объекты рисования и фоновое изображение
+      const objectsToRemove = c.getObjects().filter(obj => 
+        obj !== c.backgroundImage && 
+        !(obj as any).id?.startsWith('temp') &&
+        !(obj as any).isNode
+      );
+      c.remove(...objectsToRemove);
       
       const { scale, left, top } = transformRef.current
       if (scale === 1 && left === 0 && top === 0 && fabricImageRef.current) {
@@ -511,12 +557,22 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
           
           obj.containsPoint = createRectContainsPoint(currentZoom)
         } else if (ann.type === 'polygon' && ann.points) {
-          const fPoints = []
-          for (let i = 0; i < ann.points.length; i += 2) fPoints.push({ x: ann.points[i] * scale + left, y: ann.points[i+1] * scale + top })
-          obj = new fabric.Polygon(fPoints, { 
+          const absolutePoints = []
+          for (let i = 0; i < ann.points.length; i += 2) {
+            absolutePoints.push({ x: ann.points[i] * scale + left, y: ann.points[i+1] * scale + top })
+          }
+          
+          const minX = Math.min(...absolutePoints.map(p => p.x))
+          const minY = Math.min(...absolutePoints.map(p => p.y))
+          const relativePoints = absolutePoints.map(p => ({ x: p.x - minX, y: p.y - minY }))
+
+          obj = new fabric.Polygon(relativePoints, { 
+            left: minX,
+            top: minY,
             fill: getFillColor(label.color), stroke: label.color, 
             strokeWidth: 1.75 / currentZoom, originX: 'left', originY: 'top', 
-            objectCaching: false, lockMovementX: true, lockMovementY: true, 
+            objectCaching: false, 
+            lockMovementX: true, lockMovementY: true, 
             lockRotation: true, lockScalingX: true, lockScalingY: true
           })
           
@@ -584,20 +640,20 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
               width: ann.bbox[2] * scale, 
               height: ann.bbox[3] * scale, 
             })
-          } else if (ann.type === 'polygon' && ann.points) {
-            const fPoints = []
-            for (let i = 0; i < ann.points.length; i += 2) fPoints.push({ x: ann.points[i] * scale + left, y: ann.points[i+1] * scale + top })
-            obj = new fabric.Polygon(fPoints, { 
-              ...commonProps,
-            })
-          } else if (cocoSegmentation && Array.isArray(cocoSegmentation)) {
-            // COCO format: segmentation is array of x,y coordinates
-            const fPoints = []
-            for (let i = 0; i < cocoSegmentation.length; i += 2) {
-              fPoints.push({ x: cocoSegmentation[i] * scale + left, y: cocoSegmentation[i+1] * scale + top })
+          } else if (ann.type === 'polygon' && (ann.points || cocoSegmentation)) {
+            const pointsToUse = ann.points || cocoSegmentation;
+            const absolutePoints = []
+            for (let i = 0; i < pointsToUse.length; i += 2) {
+              absolutePoints.push({ x: pointsToUse[i] * scale + left, y: pointsToUse[i+1] * scale + top })
             }
-            obj = new fabric.Polygon(fPoints, { 
+            const minX = Math.min(...absolutePoints.map(p => p.x))
+            const minY = Math.min(...absolutePoints.map(p => p.y))
+            const relativePoints = absolutePoints.map(p => ({ x: p.x - minX, y: p.y - minY }))
+
+            obj = new fabric.Polygon(relativePoints, { 
               ...commonProps,
+              left: minX,
+              top: minY,
             })
           }
 
@@ -621,7 +677,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
       const cw = container.offsetWidth, ch = container.offsetHeight
       if (cw === 0 || ch === 0) return
       const s = Math.min(cw / (img.width || 1), ch / (img.height || 1))
-      const l = (cw - (img.width || 0) * s) / 2, t = (ch - (img.height || 0) * s) / 2
+      const l = Math.floor((cw - (img.width || 0) * s) / 2), t = Math.floor((ch - (img.height || 0) * s) / 2)
       transformRef.current = { scale: s, left: l, top: t }; lastSizeRef.current = { width: cw, height: ch }
       c.setDimensions({ width: cw, height: ch }); c.setViewportTransform([1, 0, 0, 1, 0, 0])
       c.setBackgroundImage(img, c.renderAll.bind(c), { scaleX: s, scaleY: s, left: l, top: t })
@@ -731,6 +787,17 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
       const evt = opt.e as MouseEvent, currentMode = modeRef.current
       if (opt.target && (opt.target as any).isNode) { canvas.setActiveObject(opt.target); return }
 
+      // Temporary hand mode with Ctrl
+      if (isCtrlPressedRef.current) {
+        canvas.isDragging = true
+        canvas.selection = false
+        canvas.lastPosX = evt.clientX
+        canvas.lastPosY = evt.clientY
+        canvas.setCursor('grabbing')
+        canvas.requestRenderAll()
+        return
+      }
+
       if (currentMode === 'polygon' && polygonPointsRef.current.length === 0) {
         const target = opt.target || canvas.findTarget(evt, false);
         if (target && (target as any).id) {
@@ -792,8 +859,10 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
       if (currentMode === 'rectangle') {
         const rect = new fabric.Rect({ left: pointer.x, top: pointer.y, width: 0, height: 0, fill: 'transparent', stroke: drawingColor, strokeWidth: 1.75 / canvas.getZoom(), id: 'temp', objectCaching: false } as any)
         canvas.add(rect); canvas.setActiveObject(rect); activeShapeRef.current = rect
+        setIsDrawingInProgress(true)
       } else if (currentMode === 'polygon') {
         const isFirstPoint = polygonPointsRef.current.length === 0
+        if (isFirstPoint) setIsDrawingInProgress(true)
         
         // If clicking on the first node and we have enough points, finish the polygon
         if (!isFirstPoint && opt.target && (opt.target as any).isFirstNode) {
@@ -842,7 +911,10 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
       if (canvas.isDragging) {
         const e = opt.e; const vpt = [...canvas.viewportTransform!]
         vpt[4] += e.clientX - canvas.lastPosX!; vpt[5] += e.clientY - canvas.lastPosY!
-        canvas.setViewportTransform(vpt); canvas.lastPosX = e.clientX; canvas.lastPosY = e.clientY; return
+        canvas.setViewportTransform(vpt); canvas.lastPosX = e.clientX; canvas.lastPosY = e.clientY; 
+        canvas.setCursor('grabbing');
+        canvas.requestRenderAll();
+        return
       }
       const pointer = canvas.getPointer(opt.e), currentMode = modeRef.current
       
@@ -862,7 +934,14 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
         }
         canvas.setCursor('default')
       }
-      if (currentMode === 'polygon' && activeLineRef.current) { activeLineRef.current.set({ x2: pointer.x, y2: pointer.y }); canvas.requestRenderAll() }
+      if (currentMode === 'polygon' && activeLineRef.current) { 
+        if (isCtrlPressedRef.current) {
+          activeLineRef.current.set({ visible: false })
+        } else {
+          activeLineRef.current.set({ visible: true, x2: pointer.x, y2: pointer.y })
+        }
+        canvas.requestRenderAll() 
+      }
       if (activeShapeRef.current && currentMode === 'rectangle') {
         const rect = activeShapeRef.current as fabric.Rect
         rect.set({ width: Math.abs(pointer.x - rect.left!), height: Math.abs(pointer.y - rect.top!), originX: pointer.x < rect.left! ? 'right' : 'left', originY: pointer.y < rect.top! ? 'bottom' : 'top' })
@@ -871,7 +950,17 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
     })
 
     canvas.on('mouse:up', () => {
-      if (canvas.isDragging) { canvas.isDragging = false; canvas.selection = !readOnly && modeRef.current === 'select'; canvas.defaultCursor = modeRef.current === 'hand' ? 'grab' : 'default'; canvas.requestRenderAll(); return }
+      if (canvas.isDragging) { 
+        canvas.isDragging = false; 
+        canvas.selection = !readOnly && modeRef.current === 'select'; 
+        const isCtrl = isCtrlPressedRef.current;
+        const m = modeRef.current;
+        const targetCursor = isCtrl ? 'grab' : (m === 'hand' ? 'grab' : (m === 'select' ? 'default' : 'crosshair'));
+        canvas.defaultCursor = targetCursor;
+        canvas.setCursor(targetCursor);
+        canvas.requestRenderAll(); 
+        return 
+      }
       if (activeShapeRef.current) {
         const { scale, left, top } = transformRef.current
         
@@ -979,7 +1068,9 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
   useEffect(() => { 
     if (!fabricCanvas.current) return; 
     const c = fabricCanvas.current; 
-    c.zoomToPoint(c.getVpCenter(), zoom); 
+    if (Math.abs(c.getZoom() - zoom) > 0.001) {
+      c.zoomToPoint(c.getVpCenter(), zoom);
+    }
     
     // Update all objects strokeWidth AND their containsPoint logic
     c.getObjects().forEach(obj => { 
@@ -994,7 +1085,10 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
         });
         obj.setCoords();
       } else if (id) {
-        obj.set({ strokeWidth: 1.75 / zoom });
+        // Update strokeWidth based on type
+        const isReference = (obj as any).isReference;
+        const baseStroke = isReference ? 2.5 : 1.75;
+        obj.set({ strokeWidth: baseStroke / zoom });
         
         // CRITICAL: Update containsPoint with new zoom for all annotation objects
         if (obj instanceof fabric.Rect || (obj as any).type === 'rectangle') {
@@ -1051,6 +1145,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
         c.remove(...tempObjects);
         polygonPointsRef.current = [];
         activeLineRef.current = null;
+        setIsDrawingInProgress(false)
       }
     }
 
@@ -1100,7 +1195,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
           </MenuItem>,
           <MenuItem 
             key="delete" 
-            onClick={() => { if (fabricCanvas.current) { const c = fabricCanvas.current; c.remove(...c.getObjects().filter(o => (o as any).id === 'temp-line' || (o as any).id === 'temp-node')); polygonPointsRef.current = []; activeLineRef.current = null; c.requestRenderAll(); } setContextMenu(null); }}
+            onClick={() => { if (fabricCanvas.current) { const c = fabricCanvas.current; c.remove(...c.getObjects().filter(o => (o as any).id === 'temp-line' || (o as any).id === 'temp-node')); polygonPointsRef.current = []; activeLineRef.current = null; setIsDrawingInProgress(false); c.requestRenderAll(); } setContextMenu(null); }}
             sx={{ py: 0.6, px: 1.5 }}
           >
             <ListItemIcon sx={{ minWidth: '32px !important' }}>
@@ -1177,6 +1272,7 @@ export const FabricCanvas: React.FC<FabricCanvasProps> = ({
           setSearchQuery('')
           setIsCreatingLabel(false)
           setNewLabelName('')
+          setIsDrawingInProgress(false)
         }}
         maxWidth="xs"
         fullWidth

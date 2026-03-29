@@ -2,6 +2,7 @@
 Admin Pydantic схемы
 """
 
+import enum
 from datetime import datetime
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 from uuid import UUID
@@ -289,6 +290,18 @@ class AdminSystemConfigResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class LabelScoringMode(str, enum.Enum):
+    ALL = "all"
+    ANY = "any"
+    AT_LEAST_N = "at_least_n"
+
+class LabelScoringConfig(BaseModel):
+    """Настройка оценки для конкретной метки"""
+    mode: LabelScoringMode = Field(LabelScoringMode.ALL)
+    min_count: int = Field(1, ge=1)
+    weight: float = Field(1.0, ge=0.0)
+    allow_partial: Optional[bool] = Field(None) # Флаг частичного зачета
+
 class AdminCVConfig(BaseModel):
     """Специальная схема для настроек CV"""
     iou_weight: float = Field(0.5, ge=0.0, le=1.0)
@@ -297,6 +310,9 @@ class AdminCVConfig(BaseModel):
     iou_threshold: float = Field(0.5, ge=0.0, le=1.0)
     inclusion_threshold: float = Field(0.8, ge=0.0, le=1.0)
     min_coverage_threshold: float = Field(0.05, ge=0.0, le=1.0)
+    
+    # Гибкая оценка по меткам
+    label_configs: Optional[Dict[str, LabelScoringConfig]] = Field(None, description="Настройки для отдельных меток")
     
     # Режим лояльности
     loyalty_mode: bool = Field(False, description="Включить сбалансированный режим лояльности")

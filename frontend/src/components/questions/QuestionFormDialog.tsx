@@ -113,10 +113,20 @@ export default function QuestionFormDialog({
   const precisionWeight = scoringCriteria?.precision_weight || 0;
   const useCustomCvConfig = scoringCriteria?.use_custom_cv_config || false;
   const allowPartial = scoringCriteria?.allow_partial || false;
+  const labelConfigs = scoringCriteria?.label_configs || {};
+  const anyLabelAllowPartial = Object.values(labelConfigs).some((cfg: any) => cfg.allow_partial);
+  const showPartialThresholds = allowPartial || anyLabelAllowPartial;
 
   const iouThreshold = scoringCriteria?.iou_threshold || 0.5;
   const inclusionThreshold = scoringCriteria?.inclusion_threshold || 0.8;
   const coverageThreshold = scoringCriteria?.min_coverage_threshold || 0.05;
+
+  // Подсчет количества аннотаций для каждой метки для ограничения min_count
+  const labelAnnotationCounts = (manualAnnotations?.annotations || []).reduce((acc: Record<string, number>, ann: any) => {
+    const lid = ann.label_id.toString();
+    acc[lid] = (acc[lid] || 0) + 1;
+    return acc;
+  }, {});
 
   const weightsSum = Math.round((iouWeight + recallWeight + precisionWeight) * 100);
   const displayWeightsError = useCustomCvConfig && weightsSum !== 100;
@@ -327,11 +337,11 @@ export default function QuestionFormDialog({
         return;
       }
 
-      // Очищаем кастомные настройки CV, если они не активированы,
-      // но оставляем allow_partial, так как это отдельный функционал
+      // Очищаем кастомные настройки CV (веса и пороги), если они не активированы,
+      // но оставляем allow_partial и label_configs, так как это относится к логике самого вопроса
       if (cleanData.scoring_criteria && !cleanData.scoring_criteria.use_custom_cv_config) {
-        const { allow_partial } = cleanData.scoring_criteria;
-        cleanData.scoring_criteria = { allow_partial };
+        const { allow_partial, label_configs } = cleanData.scoring_criteria;
+        cleanData.scoring_criteria = { allow_partial, label_configs };
       }
     }
 
@@ -692,7 +702,7 @@ export default function QuestionFormDialog({
                                 disabled={readOnly}
                               />
                             </Box>
-                            {allowPartial && (
+                            {showPartialThresholds && (
                               <>
                                 <Box>
                                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -739,6 +749,181 @@ export default function QuestionFormDialog({
                           </Box>
                         </Grid>
                       </Grid>
+                      
+                      {/* Настройка оценки по меткам */}
+                      {(manualAnnotations?.labels?.length || imageAsset?.coco_annotations?.categories?.length) && (
+                        <>
+                          <Divider sx={{ my: 2 }} />
+                          <Typography variant="subtitle2" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {t('questions.labelScoringTitle') || 'Настройка оценки по меткам'}
+                            <Tooltip title="Выберите, какие метки из эталона будут участвовать в оценке и как">
+                              <InfoIcon sx={{ fontSize: 16, color: 'text.secondary', cursor: 'help' }} />
+                            </Tooltip>
+                          </Typography>
+                          
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            {(manualAnnotations?.labels || imageAsset?.coco_annotations?.categories || []).map((label: any) => {
+                              const labelId = label.id.toString();
+                              const currentLabelConfig = scoringCriteria?.label_configs?.[labelId];
+                              const isActive = !!currentLabelConfig;
+                              
+                              return (
+                                <Paper 
+                                  key={labelId} 
+                                  variant="outlined" 
+                                  sx={{ 
+                                    p: 1.5, 
+                                    border: isActive ? '1px solid #1976d2' : '1px solid #eee',
+                                    bgcolor: isActive ? '#f0f7ff' : '#fafafa'
+                                  }}
+                                >
+                                  {/* Первая строка: Активация и Название */}
+                                  <Box sx={{ display: 'flex', alignItems: 'center', mb: isActive ? 1.5 : 0 }}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          size="small"
+                                          checked={isActive}
+                                          disabled={readOnly}
+                                          onChange={(e) => {
+                                            const newConfigs = { ...(scoringCriteria?.label_configs || {}) };
+                                            if (e.target.checked) {
+                                              newConfigs[labelId] = {
+                                                mode: 'all',
+                                                min_count: 1,
+                                                weight: 1.0,
+                                                allow_partial: allowPartial // Наследуем глобальный при активации
+                                              };
+                                            } else {
+                                              delete newConfigs[labelId];
+                                            }
+                                            setValue('scoring_criteria.label_configs', newConfigs, { shouldValidate: true });
+                                          }}
+                                        />
+                                      }
+                                      label={
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                          <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: label.color || '#ccc', flexShrink: 0 }} />
+                                          <Typography variant="body2" fontWeight={isActive ? 'bold' : 'normal'}>
+                                            {label.name}
+                                          </Typography>
+                                        </Box>
+                                      }
+                                      sx={{ m: 0 }}
+                                    />
+                                  </Box>
+
+                                  {/* Вторая строка: Настройки (только если активно) */}
+                                  {isActive && (
+                                    <Grid container spacing={2} alignItems="center">
+                                      <Grid item xs={12} sm={3.5}>
+                                        <FormControl fullWidth size="small">
+                                          <InputLabel sx={{ fontSize: '0.8rem' }}>{t('questions.labelMode') || 'Режим'}</InputLabel>
+                                          <Select
+                                            value={currentLabelConfig.mode}
+                                            label={t('questions.labelMode') || 'Режим'}
+                                            disabled={readOnly}
+                                            sx={{ fontSize: '0.8rem' }}
+                                            onChange={(e) => {
+                                              const newConfigs = { ...scoringCriteria.label_configs };
+                                              newConfigs[labelId] = { ...currentLabelConfig, mode: e.target.value };
+                                              setValue('scoring_criteria.label_configs', newConfigs, { shouldValidate: true });
+                                            }}
+                                          >
+                                            <MenuItem value="all" sx={{ fontSize: '0.8rem' }}>{t('questions.labelModeAll') || 'Все контуры'}</MenuItem>
+                                            <MenuItem value="at_least_n" sx={{ fontSize: '0.8rem' }}>{t('questions.labelModeAtLeastN') || 'Не менее N'}</MenuItem>
+                                          </Select>
+                                        </FormControl>
+                                      </Grid>
+                                      
+                                      <Grid item xs={12} sm={2}>
+                                        {currentLabelConfig.mode === 'at_least_n' && (
+                                          <TextField
+                                            fullWidth
+                                            size="small"
+                                            type="number"
+                                            label="N"
+                                            value={currentLabelConfig.min_count}
+                                            disabled={readOnly}
+                                            InputProps={{
+                                              sx: { fontSize: '0.8rem' }
+                                            }}
+                                            InputLabelProps={{
+                                              sx: { fontSize: '0.8rem' }
+                                            }}
+                                            inputProps={{ 
+                                              min: 1, 
+                                              max: labelAnnotationCounts[labelId] || 1 
+                                            }}
+                                            onChange={(e) => {
+                                              const maxVal = labelAnnotationCounts[labelId] || 1;
+                                              let val = parseInt(e.target.value) || 1;
+                                              if (val > maxVal) val = maxVal;
+                                              if (val < 1) val = 1;
+                                              const newConfigs = { ...scoringCriteria.label_configs };
+                                              newConfigs[labelId] = { ...currentLabelConfig, min_count: val };
+                                              setValue('scoring_criteria.label_configs', newConfigs, { shouldValidate: true });
+                                            }}
+                                          />
+                                        )}
+                                      </Grid>
+
+                                      <Grid item xs={12} sm={4}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1 }}>
+                                          <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                                            {t('questions.weightShort') || 'Вес'}:
+                                          </Typography>
+                                          <Slider
+                                            size="small"
+                                            value={currentLabelConfig.weight || 1}
+                                            min={1}
+                                            max={5}
+                                            step={1}
+                                            disabled={readOnly}
+                                            marks
+                                            onChange={(_, v) => {
+                                              const newConfigs = { ...scoringCriteria.label_configs };
+                                              newConfigs[labelId] = { ...currentLabelConfig, weight: v as number };
+                                              setValue('scoring_criteria.label_configs', newConfigs, { shouldValidate: true });
+                                            }}
+                                            sx={{ flex: 1 }}
+                                          />
+                                          <Typography variant="caption" fontWeight="bold" sx={{ minWidth: 10 }}>
+                                            {currentLabelConfig.weight || 1}
+                                          </Typography>
+                                        </Box>
+                                      </Grid>
+
+                                      <Grid item xs={12} sm={2.5}>
+                                        <FormControlLabel
+                                          control={
+                                            <Checkbox
+                                              size="small"
+                                              checked={!!currentLabelConfig.allow_partial}
+                                              disabled={readOnly}
+                                              onChange={(e) => {
+                                                const newConfigs = { ...scoringCriteria.label_configs };
+                                                newConfigs[labelId] = { ...currentLabelConfig, allow_partial: e.target.checked };
+                                                setValue('scoring_criteria.label_configs', newConfigs, { shouldValidate: true });
+                                              }}
+                                            />
+                                          }
+                                          label={
+                                            <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
+                                              {t('questions.allowPartialShort') || 'Частичный зачет'}
+                                            </Typography>
+                                          }
+                                          sx={{ m: 0 }}
+                                        />
+                                      </Grid>
+                                    </Grid>
+                                  )}
+                                </Paper>
+                              );
+                            })}
+                          </Box>
+                        </>
+                      )}
                       
                       {displayWeightsError && (
                         <Box sx={{ mt: 2 }}>

@@ -18,6 +18,7 @@ interface AnnotationState {
   selectedAnnotationId: string | null
   zoom: number
   viewResetVersion: number
+  isDrawingInProgress: boolean
   
   // Действия с метками
   addLabel: (name: string, color: string) => string
@@ -34,6 +35,7 @@ interface AnnotationState {
   // Общие действия
   setMode: (mode: EditorMode) => void
   setZoom: (zoom: number) => void
+  setIsDrawingInProgress: (isDrawing: boolean) => void
   zoomIn: () => void
   zoomOut: () => void
   resetZoom: () => void
@@ -49,6 +51,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   selectedAnnotationId: null,
   zoom: 1,
   viewResetVersion: 0,
+  isDrawingInProgress: false,
 
   addLabel: (name, color) => {
     const id = uuidv4()
@@ -77,7 +80,8 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
   addAnnotation: (annotation) => {
     const id = uuidv4()
     set((state) => ({
-      annotations: [...state.annotations, { ...annotation, id }]
+      annotations: [...state.annotations, { ...annotation, id }],
+      isDrawingInProgress: false
     }))
     return id
   },
@@ -95,6 +99,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
 
   setMode: (mode) => set({ mode }),
   setZoom: (zoom) => set({ zoom }),
+  setIsDrawingInProgress: (isDrawingInProgress) => set({ isDrawingInProgress }),
   zoomIn: () => set((state) => ({ zoom: Math.min(state.zoom * 1.1, 20) })),
   zoomOut: () => set((state) => ({ zoom: Math.max(state.zoom / 1.1, 0.01) })),
   resetZoom: () => set((state) => ({ zoom: 1, viewResetVersion: state.viewResetVersion + 1 })),
@@ -109,6 +114,7 @@ export const useAnnotationStore = create<AnnotationState>((set) => ({
     activeLabelId: null,
     selectedAnnotationId: null,
     zoom: 1,
-    viewResetVersion: 0
+    viewResetVersion: 0,
+    isDrawingInProgress: false
   })
 }))

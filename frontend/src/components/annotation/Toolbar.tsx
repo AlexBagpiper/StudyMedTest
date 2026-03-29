@@ -20,13 +20,13 @@ interface ToolbarProps {
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) => {
-  const { mode, setMode } = useAnnotationStore()
+  const { mode, setMode, isDrawingInProgress } = useAnnotationStore()
 
   const handleModeChange = (
     _event: React.MouseEvent<HTMLElement>,
     newMode: EditorMode | null,
   ) => {
-    if (newMode !== null) {
+    if (newMode !== null && !isDrawingInProgress) {
       setMode(newMode)
     }
   }
@@ -41,7 +41,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({ onSave, readOnly = false }) =>
         bgcolor: 'transparent',
         alignItems: 'center',
         borderRadius: 2,
-        boxShadow: 'none'
+        boxShadow: 'none',
+        pointerEvents: isDrawingInProgress ? 'none' : 'auto',
+        opacity: isDrawingInProgress ? 0.6 : 1
       }} 
       variant="elevation"
       elevation={0}

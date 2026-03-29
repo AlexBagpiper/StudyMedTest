@@ -30,7 +30,7 @@ class CVService:
         config: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Оценка аннотации студента
+        Оценка аннотации студента с поддержкой гибких настроек по меткам
         """
         # Настройки из БД или дефолтные
         config = config or {}
@@ -51,10 +51,12 @@ class CVService:
         iou_threshold = get_cfg_float(["iou_threshold"], 0.5)
 
         # Параметры для частичного зачета
-        allow_partial = config.get("allow_partial", False)
-        # Поддерживаем разные варианты именования ключей (длинные и короткие из UI)
+        allow_partial_global = config.get("allow_partial", False)
         inclusion_threshold = get_cfg_float(["inclusion_threshold", "inclusion"], 0.8)
         min_coverage_threshold = get_cfg_float(["min_coverage_threshold", "coverage"], 0.05)
+
+        # Гибкая оценка по меткам
+        label_configs = config.get("label_configs", {})
 
         # Режим лояльности
         loyalty_mode = config.get("loyalty_mode", False)
@@ -63,128 +65,146 @@ class CVService:
         loyalty_boost_value = get_cfg_float(["loyalty_boost_value"], 0.05)
         top_off_threshold = get_cfg_float(["top_off_threshold"], 99.0)
 
-        # Извлечение аннотаций студента
+        # Извлечение аннотаций
         student_annotations = student_data.get("annotations", [])
-        
-        # Извлечение аннотаций эталона
         reference_annotations = reference_data.get("annotations", [])
         
         logger.info(f"Evaluating annotation: stud_count={len(student_annotations)}, ref_count={len(reference_annotations)}")
         
         if not reference_annotations:
             return {
-                "iou": 0,
-                "recall": 0,
-                "precision": 0,
-                "total_score": 0,
-                "iou_scores": []
+                "iou": 0, "recall": 0, "precision": 0, "total_score": 0,
+                "iou_scores": [], "labels_breakdown": []
             }
-        
-        # Конвертация эталона в полигоны
-        ref_polys = []
+
+        # 1. Группировка эталонных аннотаций по label_id
+        ref_groups = {}
         for ann in reference_annotations:
+            lid = str(ann.get("label_id", "default"))
             poly = self._any_to_polygon(ann)
             if poly and poly.is_valid and poly.area > 0.1:
-                ref_polys.append(poly)
-        
-        # Конвертация ответов студента в полигоны с дедупликацией
-        stud_polys = []
-        seen_polys = [] # Для простой дедупликации по площади и центру
-        
+                if lid not in ref_groups: ref_groups[lid] = []
+                ref_groups[lid].append(poly)
+
+        # 2. Группировка студенческих аннотаций по label_id с дедупликацией внутри групп
+        stud_groups = {}
+        total_valid_stud_count = 0
         for ann in student_annotations:
+            lid = str(ann.get("label_id", "default"))
             poly = self._any_to_polygon(ann)
             if poly and poly.is_valid and poly.area > 0.1:
-                # Простая проверка на дубликаты (если полигоны почти идентичны)
+                if lid not in stud_groups: stud_groups[lid] = []
+                
+                # Дедупликация
                 is_duplicate = False
-                for existing_poly in seen_polys:
-                    # Если IoU между двумя полигонами студента > 0.99 - это дубликат
+                for existing_poly in stud_groups[lid]:
                     if self._calculate_iou(poly, existing_poly) > 0.99:
                         is_duplicate = True
                         break
                 
                 if not is_duplicate:
-                    stud_polys.append(poly)
-                    seen_polys.append(poly)
-                else:
-                    logger.warning("Duplicate student polygon detected and ignored")
-        
-        logger.info(f"Processed polys: stud_valid={len(stud_polys)}, ref_valid={len(ref_polys)}")
-        
-        if not stud_polys:
-            return {
-                "iou": 0,
-                "recall": 0,
-                "precision": 0,
-                "total_score": 0,
-                "iou_scores": []
-            }
-            
-        # Матчинг полигонов
-        matches = self._match_polygons(stud_polys, ref_polys)
-        
-        all_accuracy_scores = []
-        true_positives = 0
-        total_coverage = 0
-        
-        for s_poly, r_poly in matches:
-            if not s_poly.is_valid: s_poly = s_poly.buffer(0)
-            if not r_poly.is_valid: r_poly = r_poly.buffer(0)
-            
-            inter_area = s_poly.intersection(r_poly).area
-            union_area = s_poly.union(r_poly).area
-            iou = inter_area / union_area if union_area > 0 else 0
-            
-            inclusion = inter_area / s_poly.area if s_poly.area > 0 else 0
-            coverage = inter_area / r_poly.area if r_poly.area > 0 else 0
-            
-            # Геометрическая точность рассчитывается для всех сопоставленных полигонов
-            # Это делает метрику точности независимой от порога покрытия (is_found)
-            if allow_partial:
-                # В частичном режиме точность - это чистота входа в контур (inclusion)
-                all_accuracy_scores.append(inclusion)
-            else:
-                # В обычном режиме точность - это стандартный IoU
-                all_accuracy_scores.append(iou)
+                    stud_groups[lid].append(poly)
+                    total_valid_stud_count += 1
 
-            # Логика определения "Найден ли объект" (Recall)
-            is_found = iou >= iou_threshold
+        # 3. Основной цикл оценки по меткам
+        labels_breakdown = []
+        label_accuracy_scores = [] # Теперь храним взвешенные точности групп
+        all_iou_vals = [] # Для детального списка IoU в ответе
+        total_true_positives = 0
+        label_recall_scores = []
+        
+        # Если label_configs пуст, создаем одну виртуальную группу из всех активных в эталоне меток
+        active_labels = list(label_configs.keys()) if label_configs else list(ref_groups.keys())
+        
+        for lid in active_labels:
+            if lid not in ref_groups:
+                continue
+                
+            l_cfg = label_configs.get(lid, {}) if label_configs else {}
+            mode = l_cfg.get("mode", "all")
+            min_count = l_cfg.get("min_count", 1)
+            l_weight = l_cfg.get("weight", 1.0)
             
-            if allow_partial and not is_found:
-                if inclusion >= inclusion_threshold and coverage >= min_coverage_threshold:
-                    is_found = True
+            # Индивидуальный флаг частичного зачета для метки
+            l_allow_partial = l_cfg.get("allow_partial", allow_partial_global)
             
-            if is_found:
-                true_positives += 1
-                total_coverage += 1.0
+            l_ref_polys = ref_groups[lid]
+            l_stud_polys = stud_groups.get(lid, [])
+            
+            matches = self._match_polygons(l_stud_polys, l_ref_polys)
+            
+            l_found_count = 0
+            l_accuracy_vals = []
+            
+            for s_poly, r_poly in matches:
+                if not s_poly.is_valid: s_poly = s_poly.buffer(0)
+                if not r_poly.is_valid: r_poly = r_poly.buffer(0)
+                
+                inter_area = s_poly.intersection(r_poly).area
+                union_area = s_poly.union(r_poly).area
+                iou = inter_area / union_area if union_area > 0 else 0
+                
+                inclusion = inter_area / s_poly.area if s_poly.area > 0 else 0
+                coverage = inter_area / r_poly.area if r_poly.area > 0 else 0
+                
+                accuracy = inclusion if l_allow_partial else iou
+                l_accuracy_vals.append(accuracy)
+                all_iou_vals.append(accuracy)
+                
+                is_found = iou >= iou_threshold
+                if l_allow_partial and not is_found:
+                    if inclusion >= inclusion_threshold and coverage >= min_coverage_threshold:
+                        is_found = True
+                
+                if is_found:
+                    l_found_count += 1
+                    total_true_positives += 1
+
+            # Расчет Recall для данной метки
+            if mode == "all":
+                l_recall = l_found_count / len(l_ref_polys) if l_ref_polys else 0
+            else: # any / at_least_n
+                l_recall = 1.0 if l_found_count >= min_count else (l_found_count / min_count if min_count > 0 else 0)
+            
+            l_avg_accuracy = float(np.mean(l_accuracy_vals)) if l_accuracy_vals else 0.0
+            
+            label_recall_scores.append(l_recall * l_weight)
+            label_accuracy_scores.append(l_avg_accuracy * l_weight) # Взвешенная точность
+            
+            labels_breakdown.append({
+                "label_id": lid,
+                "mode": mode,
+                "min_count": min_count,
+                "weight": l_weight,
+                "allow_partial": l_allow_partial,
+                "found_count": l_found_count,
+                "total_count": len(l_ref_polys),
+                "stud_count": len(l_stud_polys),
+                "recall": round(float(l_recall), 3),
+                "avg_accuracy": round(l_avg_accuracy, 3)
+            })
+
+        # 4. Итоговые агрегированные метрики
+        # Средневзвешенные показатели
+        total_label_weights = sum(label_configs.get(lid, {}).get("weight", 1.0) for lid in active_labels if lid in ref_groups) or len(active_labels)
         
-        # Расчет метрик
-        # 1. Точность попадания (среднее только по найденным объектам)
-        avg_accuracy = np.mean(all_accuracy_scores) if all_accuracy_scores else 0
+        avg_accuracy = sum(label_accuracy_scores) / total_label_weights if total_label_weights > 0 else 0
+        recall = sum(label_recall_scores) / total_label_weights if total_label_weights > 0 else 0
         
-        # 2. Полнота (Recall) - учитывает частичное покрытие если включен allow_partial
-        recall = total_coverage / len(ref_polys) if ref_polys else 0
+        precision = total_true_positives / total_valid_stud_count if total_valid_stud_count > 0 else 0
         
-        # 3. Прецизионность (Precision) - доля правильно найденных среди всех нарисованных
-        precision = true_positives / len(stud_polys) if stud_polys else 0
-        
-        # --- Применение механизмов лояльности ---
         if loyalty_mode:
-            # 1. Grace Zone (округление точности до 100%)
             if avg_accuracy >= accuracy_grace_threshold:
                 avg_accuracy = 1.0
-            
-            # 2. Loyalty Boost (бонус если нет ошибок поиска)
             if loyalty_boost_enabled and recall >= 0.999 and precision >= 0.999:
                 avg_accuracy = min(1.0, avg_accuracy + (loyalty_boost_value or 0.05))
         
-        # Итоговый взвешенный балл
         total_score = (
             avg_accuracy * iou_weight + 
             recall * recall_weight + 
             precision * precision_weight
         ) * 100
         
-        # 4. Top-off Rule (округление почти идеального результата до 100)
         if loyalty_mode and total_score >= (top_off_threshold or 99.0):
             total_score = 100.0
         
@@ -195,7 +215,10 @@ class CVService:
             "recall": round(float(recall), 3),
             "precision": round(float(precision), 3),
             "total_score": round(float(total_score), 2),
-            "iou_scores": [round(float(s), 3) for s in all_accuracy_scores]
+            "iou_scores": [round(float(s), 3) for s in all_iou_vals],
+            "labels_breakdown": labels_breakdown,
+            "total_true_positives": total_true_positives,
+            "total_valid_stud_count": total_valid_stud_count
         }
 
     def _any_to_polygon(self, ann: Dict[str, Any]) -> Optional[Polygon]:
@@ -203,33 +226,52 @@ class CVService:
         Универсальная конвертация любой аннотации (COCO или наш формат) в Shapely Polygon
         """
         try:
+            poly = None
             # 1. Проверяем наш формат (points)
             points = ann.get("points")
-            if points and isinstance(points, list) and len(points) >= 6:
-                coords = [(points[i], points[i+1]) for i in range(0, len(points), 2)]
-                return Polygon(coords)
+            if points and isinstance(points, list):
+                if len(points) >= 6:
+                    if isinstance(points[0], (int, float)):
+                        # Плоский список [x1, y1, x2, y2, ...]
+                        coords = [(points[i], points[i+1]) for i in range(0, len(points), 2)]
+                        poly = Polygon(coords)
+                    elif isinstance(points[0], (list, tuple)) and len(points[0]) >= 2:
+                        # Список пар [[x1, y1], [x2, y2], ...]
+                        poly = Polygon(points)
 
             # 2. Проверяем COCO segmentation
-            segmentation = ann.get("segmentation")
-            if segmentation and isinstance(segmentation, list) and len(segmentation) > 0:
-                pts = segmentation[0]
-                if len(pts) >= 6:
-                    coords = [(pts[i], pts[i+1]) for i in range(0, len(pts), 2)]
-                    return Polygon(coords)
+            if not poly:
+                segmentation = ann.get("segmentation")
+                if segmentation and isinstance(segmentation, list) and len(segmentation) > 0:
+                    pts = segmentation[0]
+                    if len(pts) >= 6:
+                        coords = [(pts[i], pts[i+1]) for i in range(0, len(pts), 2)]
+                        poly = Polygon(coords)
 
             # 3. Проверяем bbox (COCO или наш)
-            bbox = ann.get("bbox")
-            if bbox and len(bbox) == 4:
-                x, y, w, h = bbox
-                return Polygon([(x, y), (x+w, y), (x+w, y+h), (x, y+h)])
+            if not poly:
+                bbox = ann.get("bbox")
+                if bbox and len(bbox) == 4:
+                    x, y, w, h = bbox
+                    poly = Polygon([(x, y), (x+w, y), (x+w, y+h), (x, y+h)])
 
             # 4. Ellipse
-            if ann.get("type") == 'ellipse' and "center" in ann and "radius" in ann:
+            if not poly and ann.get("type") == 'ellipse' and "center" in ann and "radius" in ann:
                 cx, cy = ann["center"]
                 rx, ry = ann["radius"]
                 t = np.linspace(0, 2*np.pi, 32)
                 coords = [(cx + rx*np.cos(ti), cy + ry*np.sin(ti)) for ti in t]
-                return Polygon(coords)
+                poly = Polygon(coords)
+            
+            # Валидация и исправление
+            if poly:
+                if not poly.is_valid:
+                    poly = poly.buffer(0) # Лечит самопересечения
+                if poly.is_empty or poly.area <= 0.1:
+                    return None
+                return poly
+                
+            return None
 
             return None
         except Exception:

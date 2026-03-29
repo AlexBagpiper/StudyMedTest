@@ -188,6 +188,14 @@ const translations = {
     'questions.error.invalidJson': 'Некорректный JSON в файле аннотаций',
     'questions.error.imageNotFound': 'Изображение не найдено',
     'questions.error.weightsSum': 'Сумма весов должна быть равна 100%',
+    'questions.labelScoringTitle': 'Настройка оценки по меткам',
+    'questions.labelMode': 'Режим оценки',
+    'questions.labelModeAll': 'Все контуры',
+    'questions.labelModeAtLeastN': 'Не менее',
+    'questions.minCount': 'Мин. кол-во',
+    'questions.weight': 'Вес метки (1-5)',
+    'questions.weightShort': 'Вес',
+    'questions.allowPartialShort': 'Частичный зачет',
 
     // Ошибки
     'error.notEnoughPermissions': 'Недостаточно прав',

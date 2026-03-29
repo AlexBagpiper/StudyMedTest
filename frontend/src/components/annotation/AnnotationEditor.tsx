@@ -50,7 +50,8 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
     zoomIn,
     zoomOut,
     resetZoom,
-    setMode
+    setMode,
+    isDrawingInProgress
   } = useAnnotationStore()
 
   useEffect(() => {
@@ -164,21 +165,22 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: '#f5f5f5', borderRadius: 1.5, px: 1.5, py: 0.5, border: '1px solid #e0e0e0' }}>
-            <Typography sx={{ color: '#333', fontSize: '0.875rem', minWidth: 45, textAlign: 'center', fontWeight: 500 }}>
+            <Typography sx={{ color: isDrawingInProgress ? '#aaa' : '#333', fontSize: '0.875rem', minWidth: 45, textAlign: 'center', fontWeight: 500 }}>
               {Math.round(zoom * 100)}%
             </Typography>
             <Divider orientation="vertical" flexItem sx={{ bgcolor: '#ddd', mx: 0.5 }} />
-            <IconButton onClick={zoomOut} size="small" sx={{ color: '#666', '&:hover': { bgcolor: '#e0e0e0' } }}>
+            <IconButton onClick={zoomOut} size="small" disabled={isDrawingInProgress} sx={{ color: isDrawingInProgress ? '#ccc' : '#666', '&:hover': { bgcolor: '#e0e0e0' } }}>
               <RemoveIcon fontSize="inherit" />
             </IconButton>
-            <IconButton onClick={zoomIn} size="small" sx={{ color: '#666', '&:hover': { bgcolor: '#e0e0e0' } }}>
+            <IconButton onClick={zoomIn} size="small" disabled={isDrawingInProgress} sx={{ color: isDrawingInProgress ? '#ccc' : '#666', '&:hover': { bgcolor: '#e0e0e0' } }}>
               <AddIcon fontSize="inherit" />
             </IconButton>
             <Button 
               onClick={resetZoom} 
               size="small" 
+              disabled={isDrawingInProgress}
               sx={{ 
-                color: 'primary.main', 
+                color: isDrawingInProgress ? 'text.disabled' : 'primary.main', 
                 fontSize: '0.75rem', 
                 minWidth: 'auto',
                 ml: 0.5,
@@ -198,6 +200,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
             <Button 
               variant="outlined" 
               onClick={onCancel}
+              disabled={isDrawingInProgress}
               sx={{ 
                 color: '#666',
                 borderColor: '#e0e0e0',
@@ -219,6 +222,7 @@ export const AnnotationEditor: React.FC<AnnotationEditorProps> = ({
                 onFinish()
               }}
               color="primary"
+              disabled={isDrawingInProgress}
               sx={{ 
                 fontWeight: 600,
                 px: 3

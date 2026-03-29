@@ -222,6 +222,9 @@ async def run_evaluate_annotation_answer(session: AsyncSession, answer_id: str) 
         "recall": evaluation_result["recall"],
         "precision": evaluation_result["precision"],
         "iou_scores": evaluation_result["iou_scores"],
+        "labels_breakdown": evaluation_result.get("labels_breakdown", []),
+        "total_true_positives": evaluation_result.get("total_true_positives"),
+        "total_valid_stud_count": evaluation_result.get("total_valid_stud_count"),
         "evaluated_at": datetime.utcnow().isoformat(),
     }
     answer.score = round(evaluation_result["total_score"])

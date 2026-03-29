@@ -67,6 +67,14 @@ export interface TestVariant {
 
 export type QuestionType = 'text' | 'image_annotation' | 'choice'
 
+export type LabelScoringMode = 'all' | 'any' | 'at_least_n'
+
+export interface LabelScoringConfig {
+  mode: LabelScoringMode
+  min_count: number
+  weight: number
+}
+
 export interface ImageAsset {
   id: string
   filename: string

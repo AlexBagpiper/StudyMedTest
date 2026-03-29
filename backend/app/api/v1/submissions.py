@@ -184,6 +184,25 @@ async def get_submission(
             detail="Not enough permissions"
         )
     
+    # Фильтрация детальной оценки для студентов
+    if current_user.role == Role.STUDENT:
+        # Мы не должны изменять объекты submission.answers напрямую, 
+        # так как SQLAlchemy может синхронизировать эти изменения с БД (удалить данные).
+        # Вместо этого мы создаем копию submission для ответа.
+        # Но проще всего - создать транзитный объект или глубокую копию.
+        from copy import deepcopy
+        submission_copy = deepcopy(submission)
+        if submission_copy.answers:
+            for answer in submission_copy.answers:
+                if answer.evaluation:
+                    # Очищаем детальные поля только в копии для ответа
+                    new_eval = dict(answer.evaluation)
+                    new_eval.pop("labels_breakdown", None)
+                    new_eval.pop("total_true_positives", None)
+                    new_eval.pop("total_valid_stud_count", None)
+                    answer.evaluation = new_eval
+        return submission_copy
+
     # ВАЖНО: Если это первый запрос к submission (нет ответов), 
     # обновляем started_at на текущий момент
     # Это гарантирует, что таймер начинается с момента открытия страницы теста
@@ -523,6 +542,25 @@ async def list_submissions(
                 sub.time_limit = None
         except Exception:
             sub.time_limit = None
+            
+    # Фильтрация детальной оценки для студентов
+    if current_user.role == Role.STUDENT:
+        from copy import deepcopy
+        # Мы возвращаем PaginatedSubmissionsResponse, поэтому фильтруем объекты в списке items
+        # Делаем это максимально аккуратно, чтобы не задеть оригинальные объекты в сессии
+        filtered_submissions = []
+        for sub in submissions:
+            sub_copy = deepcopy(sub)
+            if sub_copy.answers:
+                for answer in sub_copy.answers:
+                    if answer.evaluation:
+                        new_eval = dict(answer.evaluation)
+                        new_eval.pop("labels_breakdown", None)
+                        new_eval.pop("total_true_positives", None)
+                        new_eval.pop("total_valid_stud_count", None)
+                        answer.evaluation = new_eval
+            filtered_submissions.append(sub_copy)
+        submissions = filtered_submissions
     
     return PaginatedSubmissionsResponse(items=submissions, total=total, skip=skip, limit=limit)
 

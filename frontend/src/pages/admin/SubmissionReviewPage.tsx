@@ -9,6 +9,7 @@ import {
   TextField,
   Chip,
   Grid,
+  Alert,
 } from '@mui/material'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../../lib/api'
@@ -20,15 +21,18 @@ import { MessageDialog } from '../../components/common/MessageDialog'
 import { adminApi } from '../../lib/api'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import ReplayIcon from '@mui/icons-material/Replay'
+import InfoIcon from '@mui/icons-material/Info'
 import { FormControlLabel, Switch } from '@mui/material'
 import { useGrantRetake, useSubmissions } from '../../lib/api/hooks/useSubmissions'
 import { Submission } from '../../types/submission'
+import { useAnnotationStore } from '../../components/annotation/hooks/useAnnotationStore'
 
 export default function SubmissionReviewPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t, formatName } = useLocale()
   const { user } = useAuth()
+  const { isDrawingInProgress } = useAnnotationStore()
   
   const grantRetake = useGrantRetake()
   const [submission, setSubmission] = useState<any>(null)
@@ -215,12 +219,12 @@ export default function SubmissionReviewPage() {
               variant="outlined" 
               startIcon={isRevaluating ? <CircularProgress size={20} /> : <RefreshIcon />}
               onClick={handleRevaluate}
-              disabled={isRevaluating}
+              disabled={isRevaluating || isDrawingInProgress}
             >
               {isRevaluating ? 'Пересчет...' : 'Пересчитать оценку'}
             </Button>
           )}
-          <Button variant="outlined" onClick={() => navigate(user?.role === 'student' ? '/submissions' : `/admin/submissions/${id}`)}>
+          <Button variant="outlined" onClick={() => navigate(user?.role === 'student' ? '/submissions' : `/admin/submissions/${id}`)} disabled={isDrawingInProgress}>
             {t('common.back')}
           </Button>
         </Box>
@@ -427,6 +431,106 @@ export default function SubmissionReviewPage() {
                     </Typography>
                   </Grid>
                 </Grid>
+
+                {/* Детализация по меткам (Inspector Mode) */}
+                {(user?.role === 'admin' || user?.role === 'teacher') && (
+                  <Box sx={{ mt: 3, pt: 2, borderTop: '1px dotted', borderColor: 'divider' }}>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom sx={{ mb: 2 }}>
+                      Анализ по категориям объектов
+                    </Typography>
+                    
+                    {evaluation.labels_breakdown && evaluation.labels_breakdown.length > 0 ? (
+                      <Box sx={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                          <thead>
+                            <tr style={{ textAlign: 'left', borderBottom: '1px solid #ddd' }}>
+                              <th style={{ padding: '8px 4px' }}>Метка</th>
+                              <th style={{ padding: '8px 4px' }}>Режим</th>
+                            <th style={{ padding: '8px 4px' }}>Найдено</th>
+                            <th style={{ padding: '8px 4px' }}>Вес</th>
+                            <th style={{ padding: '8px 4px' }}>Част. зачет</th>
+                            <th style={{ padding: '8px 4px' }}>Полнота</th>
+                            <th style={{ padding: '8px 4px' }}>Точность</th>
+                            <th style={{ padding: '8px 4px' }}>Статус</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {evaluation.labels_breakdown.map((lb: any) => {
+                            const label = currentLabels.find(l => l.id.toString() === lb.label_id.toString());
+                            const isPassed = lb.recall >= 1.0;
+                            
+                            return (
+                              <tr key={lb.label_id} style={{ borderBottom: '1px solid #eee' }}>
+                                <td style={{ padding: '8px 4px' }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: label?.color || '#ccc' }} />
+                                    {label?.name || lb.label_id}
+                                  </Box>
+                                </td>
+                                <td style={{ padding: '8px 4px' }}>
+                                  {lb.mode === 'all' ? 'Все' : `>= ${lb.min_count || 1}`}
+                                </td>
+                                <td style={{ padding: '8px 4px' }}>
+                                  {lb.found_count} / {lb.total_count}
+                                </td>
+                                <td style={{ padding: '8px 4px' }}>
+                                  {lb.weight}x
+                                </td>
+                                <td style={{ padding: '8px 4px' }}>
+                                  {lb.allow_partial ? (
+                                    <Chip label="Вкл" size="small" color="info" variant="outlined" sx={{ height: 18, fontSize: '0.65rem' }} />
+                                  ) : (
+                                    <Typography variant="caption" color="text.disabled">—</Typography>
+                                  )}
+                                </td>
+                                  <td style={{ padding: '8px 4px', color: isPassed ? 'success.main' : 'error.main' }}>
+                                    {Math.round(lb.recall * 100)}%
+                                  </td>
+                                  <td style={{ padding: '8px 4px' }}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                                        {Math.round(lb.avg_accuracy * 100)}%
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                                        ({lb.allow_partial ? 'Inclusion' : 'IoU'})
+                                      </Typography>
+                                    </Box>
+                                  </td>
+                                  <td style={{ padding: '8px 4px' }}>
+                                    <Chip 
+                                      size="small" 
+                                      label={isPassed ? 'Выполнено' : 'Не выполнено'} 
+                                      color={isPassed ? 'success' : 'error'} 
+                                      variant="outlined"
+                                      sx={{ height: 20, fontSize: '0.7rem' }}
+                                    />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </Box>
+                    ) : (
+                      <Alert severity="info" sx={{ py: 0 }}>
+                        Детальная информация по меткам недоступна для этого ответа. Нажмите «Пересчитать оценку», если расчет был произведен в старой версии системы.
+                      </Alert>
+                    )}
+
+                    {evaluation.total_valid_stud_count > evaluation.total_true_positives && (
+                      <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(211, 47, 47, 0.05)', borderRadius: 1, border: '1px solid', borderColor: 'error.light' }}>
+                        <Typography variant="caption" color="error.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <InfoIcon sx={{ fontSize: 14 }} />
+                          Штраф за точность:
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ ml: 2.2 }}>
+                          Студент нарисовал {evaluation.total_valid_stud_count} контур(ов), но только {evaluation.total_true_positives} из них соответствуют эталону. 
+                          {evaluation.total_valid_stud_count - evaluation.total_true_positives} лишних или неверных контура(ов) снижают итоговый балл.
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                )}
               </Box>
             );
           }
@@ -582,7 +686,7 @@ export default function SubmissionReviewPage() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
         <Button 
           variant="outlined"
-          disabled={currentQuestionIndex === 0} 
+          disabled={currentQuestionIndex === 0 || isDrawingInProgress} 
           onClick={handlePrev}
           sx={{ borderRadius: 2, px: 4 }}
         >
@@ -591,7 +695,7 @@ export default function SubmissionReviewPage() {
         
         <Button 
           variant="contained" 
-          disabled={currentQuestionIndex === questions.length - 1}
+          disabled={currentQuestionIndex === questions.length - 1 || isDrawingInProgress}
           onClick={handleNext}
           sx={{ borderRadius: 2, px: 4 }}
         >

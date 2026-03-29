@@ -57,19 +57,23 @@ vi.mock('../../../lib/api/hooks/useTests', () => ({
   usePublishTest: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }))
 
+import { LoadingProvider } from '../../../contexts/LoadingContext'
+
 function renderTestForm(route = '/tests/new') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[route]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route path="/tests/new" element={<TestFormPage />} />
-          <Route path="/tests/:testId/edit" element={<TestFormPage />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>
+    <LoadingProvider>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[route]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes>
+            <Route path="/tests/new" element={<TestFormPage />} />
+            <Route path="/tests/:testId/edit" element={<TestFormPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </LoadingProvider>
   )
 }
 
