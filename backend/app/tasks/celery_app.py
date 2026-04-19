@@ -28,6 +28,7 @@ celery_app.conf.update(
     task_soft_time_limit=25 * 60,  # 25 minutes soft limit
     worker_prefetch_multiplier=1,  # Для длительных задач
     worker_max_tasks_per_child=50,  # Перезапуск worker после 50 задач
+    broker_connection_retry_on_startup=True,  # Решаем CPendingDeprecationWarning
 )
 
 # Routes для разных типов задач

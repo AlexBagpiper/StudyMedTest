@@ -211,6 +211,7 @@ export default function QuestionFormDialog({
               ...question.reference_data,
             },
             scoring_criteria: {
+              ...question.scoring_criteria,
               allow_partial: question.scoring_criteria?.allow_partial || false,
               use_custom_cv_config: question.scoring_criteria?.use_custom_cv_config || false,
               iou_weight: question.scoring_criteria?.iou_weight ?? currentSystemConfig.iou_weight,
@@ -219,6 +220,7 @@ export default function QuestionFormDialog({
               iou_threshold: question.scoring_criteria?.iou_threshold ?? currentSystemConfig.iou_threshold,
               inclusion_threshold: question.scoring_criteria?.inclusion_threshold ?? currentSystemConfig.inclusion_threshold,
               min_coverage_threshold: question.scoring_criteria?.min_coverage_threshold ?? currentSystemConfig.min_coverage_threshold,
+              label_configs: question.scoring_criteria?.label_configs || {},
             },
             ai_check_enabled: question.ai_check_enabled || false,
             plagiarism_check_enabled: question.plagiarism_check_enabled || false,
@@ -256,6 +258,7 @@ export default function QuestionFormDialog({
               iou_threshold: currentSystemConfig.iou_threshold,
               inclusion_threshold: currentSystemConfig.inclusion_threshold,
               min_coverage_threshold: currentSystemConfig.min_coverage_threshold,
+              label_configs: {},
             },
             ai_check_enabled: false,
             plagiarism_check_enabled: false,
