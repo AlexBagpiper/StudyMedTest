@@ -47,6 +47,7 @@ vi.mock('../../../lib/api/hooks/useQuestions', () => ({
   useQuestions: vi.fn(() => ({
     data: { items: mockQuestions, total: 2, skip: 0, limit: 1000 },
     isLoading: false,
+    isFetching: false,
   })),
 }))
 

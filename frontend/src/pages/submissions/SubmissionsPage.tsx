@@ -18,7 +18,10 @@ import {
   Switch,
   Tooltip,
   IconButton,
-  TableSortLabel
+  TableSortLabel,
+  TablePagination,
+  alpha,
+  useTheme
 } from '@mui/material'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
@@ -30,22 +33,29 @@ import {
   useHideSubmission, 
   useRestoreSubmission 
 } from '../../lib/api/hooks/useSubmissions'
+import { TablePaginationActions } from '../../components/common/TablePaginationActions'
 import { useState, useMemo } from 'react'
 
 export default function SubmissionsPage() {
   const { user } = useAuth()
+  const theme = useTheme()
   
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const navigate = useNavigate()
   const [showHidden, setShowHidden] = useState(false)
   const [orderBy, setOrderBy] = useState('started_at')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(25)
   
-  const { data: submissionsData, isLoading: loading, error } = useSubmissions(
+  const { data: submissionsData, isLoading: loading, isFetching, error } = useSubmissions(
     { 
       student_id: user?.id,
       include_hidden: user?.role === 'admin' ? true : (showHidden || user?.role === 'student'),
-      limit: 500
+      skip: page * pageSize,
+      limit: pageSize,
+      sort_by: orderBy,
+      order: order
     },
     {
       refetchInterval: (query: any) => {
@@ -58,6 +68,7 @@ export default function SubmissionsPage() {
     }
   )
   const submissions = submissionsData?.items ?? []
+  const totalSubmissions = submissionsData?.total ?? 0
 
   const hideMutation = useHideSubmission()
   const restoreMutation = useRestoreSubmission()
@@ -69,32 +80,9 @@ export default function SubmissionsPage() {
   }
 
   const sortedSubmissions = useMemo(() => {
-    return [...submissions].sort((a, b) => {
-      let comparison = 0
-      
-      switch (orderBy) {
-        case 'test_title':
-          comparison = (a.test_title || '').localeCompare(b.test_title || '')
-          break
-        case 'started_at':
-          comparison = new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-          break
-        case 'status':
-          comparison = (a.status || '').localeCompare(b.status || '')
-          break
-        case 'result': {
-          const scoreA = a.result?.total_score ?? -1
-          const scoreB = b.result?.total_score ?? -1
-          comparison = scoreA - scoreB
-          break
-        }
-        default:
-          comparison = 0
-      }
-      
-      return order === 'desc' ? -comparison : comparison
-    })
-  }, [submissions, order, orderBy])
+    // Серверная сортировка теперь используется
+    return submissions
+  }, [submissions])
 
   const handleHide = async (id: string) => {
     try {
@@ -162,16 +150,35 @@ export default function SubmissionsPage() {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
-      ) : submissions.length === 0 ? (
-        <Card sx={{ borderRadius: 1 }}>
-          <CardContent sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="h6" color="text.secondary">
-              {t('submissions.noResults.my')}
-            </Typography>
-          </CardContent>
-        </Card>
       ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 1, boxShadow: 3 }}>
+        <TableContainer 
+          component={Paper} 
+          sx={{ 
+            borderRadius: 1, 
+            boxShadow: 3,
+            position: 'relative',
+            opacity: isFetching ? 0.7 : 1,
+            transition: 'opacity 0.2s',
+            pointerEvents: isFetching ? 'none' : 'auto'
+          }}
+          aria-busy={isFetching}
+        >
+          {isFetching && (
+            <Box sx={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              zIndex: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.4)
+            }}>
+              <CircularProgress size={40} />
+            </Box>
+          )}
           <Table>
             <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
@@ -217,89 +224,121 @@ export default function SubmissionsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedSubmissions.map((sub: any) => (
-                <TableRow 
-                  key={sub.id} 
-                  hover
-                  sx={{ 
-                    opacity: sub.is_hidden ? 0.6 : 1,
-                    bgcolor: sub.is_hidden ? 'action.hover' : 'inherit'
-                  }}
-                >
-                  <TableCell sx={{ fontWeight: '500' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {sub.test_title || 'Загрузка...'}
-                      {sub.is_hidden && (
-                        <Chip 
-                          label={t('submissions.hidden')} 
-                          size="small" 
-                          variant="outlined" 
-                          sx={{ height: 20, fontSize: '0.65rem' }} 
-                        />
-                      )}
-                    </Box>
+              {submissions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={user?.role !== 'student' ? 5 : 4} align="center" sx={{ py: 6 }}>
+                    <Typography variant="h6" color="text.secondary">
+                      {t('submissions.noResults.my')}
+                    </Typography>
                   </TableCell>
-                  <TableCell>{new Date(sub.started_at).toLocaleString('ru-RU')}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={getStatusLabel(sub.status)} 
-                      color={getStatusColor(sub.status) as any} 
-                      size="small" 
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>
-                    {sub.result?.total_score !== undefined ? `${sub.result.total_score} / ${sub.result.max_score}` : '-'}
-                  </TableCell>
-                  {user?.role !== 'student' && (
-                    <TableCell align="right">
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                        {sub.status === 'in_progress' ? (
-                          <Button 
+                </TableRow>
+              ) : (
+                sortedSubmissions.map((sub: any) => (
+                  <TableRow 
+                    key={sub.id} 
+                    hover
+                    sx={{ 
+                      opacity: sub.is_hidden ? 0.6 : 1,
+                      bgcolor: sub.is_hidden ? 'action.hover' : 'inherit'
+                    }}
+                  >
+                    <TableCell sx={{ fontWeight: '500' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {sub.test_title || 'Загрузка...'}
+                        {sub.is_hidden && (
+                          <Chip 
+                            label={t('submissions.hidden')} 
                             size="small" 
                             variant="outlined" 
-                            onClick={() => navigate(`/submissions/${sub.id}`)}
-                          >
-                            {t('tests.action.continue')}
-                          </Button>
-                        ) : (
-                          <>
-                            {user?.role === 'teacher' && (
-                              <>
-                                {sub.is_hidden ? (
-                                  <Tooltip title={t('submissions.action.restore')}>
-                                    <IconButton 
-                                      size="small" 
-                                      color="primary" 
-                                      onClick={() => handleRestore(sub.id)}
-                                      disabled={restoreMutation.isPending}
-                                    >
-                                      <VisibilityIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                ) : (
-                                  <Tooltip title={t('submissions.action.hide')}>
-                                    <IconButton 
-                                      size="small" 
-                                      color="default" 
-                                      onClick={() => handleHide(sub.id)}
-                                      disabled={hideMutation.isPending}
-                                    >
-                                      <VisibilityOffIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                              </>
-                            )}
-                          </>
+                            sx={{ height: 20, fontSize: '0.65rem' }} 
+                          />
                         )}
                       </Box>
                     </TableCell>
-                  )}
-                </TableRow>
-              ))}
+                    <TableCell>{new Date(sub.started_at).toLocaleString('ru-RU')}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={getStatusLabel(sub.status)} 
+                        color={getStatusColor(sub.status) as any} 
+                        size="small" 
+                        variant="outlined" 
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>
+                      {sub.result?.total_score !== undefined ? `${sub.result.total_score} / ${sub.result.max_score}` : '-'}
+                    </TableCell>
+                    {user?.role !== 'student' && (
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                          {sub.status === 'in_progress' ? (
+                            <Button 
+                              size="small" 
+                              variant="outlined" 
+                              onClick={() => navigate(`/submissions/${sub.id}`)}
+                            >
+                              {t('tests.action.continue')}
+                            </Button>
+                          ) : (
+                            <>
+                              {user?.role === 'teacher' && (
+                                <>
+                                  {sub.is_hidden ? (
+                                    <Tooltip title={t('submissions.action.restore')}>
+                                      <IconButton 
+                                        size="small" 
+                                        color="primary" 
+                                        onClick={() => handleRestore(sub.id)}
+                                        disabled={restoreMutation.isPending}
+                                      >
+                                        <VisibilityIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  ) : (
+                                    <Tooltip title={t('submissions.action.hide')}>
+                                      <IconButton 
+                                        size="small" 
+                                        color="default" 
+                                        onClick={() => handleHide(sub.id)}
+                                        disabled={hideMutation.isPending}
+                                      >
+                                        <VisibilityOffIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+                                </>
+                              )}
+                            </>
+                          )}
+                        </Box>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
+          <TablePagination
+            component="div"
+            count={totalSubmissions}
+            page={page}
+            onPageChange={(_, newPage) => setPage(newPage)}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(0)
+            }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            labelRowsPerPage={t('admin.rowsPerPage')}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} ${locale === 'ru' ? 'из' : 'of'} ${count !== -1 ? count : `>${to}`}`}
+            ActionsComponent={TablePaginationActions}
+            sx={{
+              borderTop: 1,
+              borderColor: 'divider',
+              alignItems: 'center',
+              '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': { mt: 0, mb: 0 },
+              '& .MuiTablePagination-toolbar': { minHeight: 52, paddingRight: 2 },
+            }}
+          />
         </TableContainer>
       )}
     </Box>

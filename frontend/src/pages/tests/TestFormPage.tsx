@@ -23,6 +23,9 @@ import {
   Tooltip,
   Rating,
   TablePagination,
+  alpha,
+  useTheme,
+  InputAdornment,
 } from '@mui/material'
 import { TablePaginationActions } from '../../components/common/TablePaginationActions'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -40,6 +43,8 @@ import PublishIcon from '@mui/icons-material/Publish'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import TextFieldsIcon from '@mui/icons-material/TextFields'
 import ImageIcon from '@mui/icons-material/Image'
+import SearchIcon from '@mui/icons-material/Search'
+import ClearIcon from '@mui/icons-material/Clear'
 import { MenuItem, Select, FormControl, InputLabel } from '@mui/material'
 import QuestionFormDialog from '../../components/questions/QuestionFormDialog'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
@@ -63,13 +68,44 @@ export default function TestFormPage() {
   const { testId } = useParams()
   const navigate = useNavigate()
   const { t, locale } = useLocale()
+  const theme = useTheme()
   const isEdit = !!testId
 
   const { data: test, isLoading: testLoading } = useTest(testId)
   const { user } = useAuth()
   const { data: topics = [] } = useTopics()
-  const { data: questionsData, isLoading: questionsLoading } = useQuestions({ limit: 1000 })
+
+  const [selectedQuestions, setSelectedQuestions] = useState<SelectedQuestion[]>([])
+  const [structure, setStructure] = useState<TestStructureItem[]>([])
+  const [availableTopicFilter, setAvailableTopicFilter] = useState<string>('')
+  const [availableTypeFilter, setAvailableTypeFilter] = useState<QuestionType | ''>('')
+  const [availableSearchQuery, setAvailableSearchQuery] = useState('')
+  const [debouncedAvailableSearch, setDebouncedAvailableSearch] = useState('')
+  const [availablePage, setAvailablePage] = useState(0)
+  const [availablePageSize, setAvailablePageSize] = useState(10)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedAvailableSearch(availableSearchQuery)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [availableSearchQuery])
+
+  // Сброс страницы при изменении фильтров
+  useEffect(() => {
+    setAvailablePage(0)
+  }, [availableTopicFilter, availableTypeFilter, debouncedAvailableSearch])
+
+  const { data: questionsData, isLoading: questionsLoading, isFetching: questionsFetching } = useQuestions({
+    skip: availablePage * availablePageSize,
+    limit: availablePageSize,
+    topic_id: availableTopicFilter || undefined,
+    type: availableTypeFilter || undefined,
+    search: debouncedAvailableSearch || undefined
+  })
   const questions = questionsData?.items ?? []
+  const questionsTotal = questionsData?.total ?? 0
+
   const createTest = useCreateTest()
   const updateTest = useUpdateTest()
   const publishTest = usePublishTest()
@@ -81,12 +117,6 @@ export default function TestFormPage() {
     }
   }, [test, user, navigate])
 
-  const [selectedQuestions, setSelectedQuestions] = useState<SelectedQuestion[]>([])
-  const [structure, setStructure] = useState<TestStructureItem[]>([])
-  const [availableTopicFilter, setAvailableTopicFilter] = useState<string>('')
-  const [availableTypeFilter, setAvailableTypeFilter] = useState<QuestionType | ''>('')
-  const [availablePage, setAvailablePage] = useState(0)
-  const [availablePageSize, setAvailablePageSize] = useState(10)
   const [showQuestionPicker, setShowQuestionPicker] = useState(false)
   const [viewingQuestion, setViewingQuestion] = useState<Question | undefined>()
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
@@ -257,36 +287,8 @@ export default function TestFormPage() {
     }
   }
 
-  const availableQuestions = useMemo(
-    () => questions.filter((q: any) => !selectedQuestions.find((sq) => sq.question_id === q.id)),
-    [questions, selectedQuestions]
-  )
-
-  const filteredAvailableQuestions = useMemo(() => {
-    return availableQuestions.filter((q: Question) => {
-      const matchTopic = !availableTopicFilter || q.topic_id === availableTopicFilter || q.topic?.id === availableTopicFilter
-      const matchType = !availableTypeFilter || q.type === availableTypeFilter
-      return matchTopic && matchType
-    })
-  }, [availableQuestions, availableTopicFilter, availableTypeFilter])
-
-  const sortedAvailableQuestions = useMemo(() => {
-    return [...filteredAvailableQuestions].sort((a, b) => {
-      const ta = a.created_at ? new Date(a.created_at).getTime() : 0
-      const tb = b.created_at ? new Date(b.created_at).getTime() : 0
-      return tb - ta
-    })
-  }, [filteredAvailableQuestions])
-
-  const paginatedAvailableQuestions = useMemo(() => {
-    const start = availablePage * availablePageSize
-    return sortedAvailableQuestions.slice(start, start + availablePageSize)
-  }, [sortedAvailableQuestions, availablePage, availablePageSize])
-
-  useEffect(() => {
-    const maxPage = Math.max(0, Math.ceil(sortedAvailableQuestions.length / availablePageSize) - 1)
-    if (availablePage > maxPage) setAvailablePage(maxPage)
-  }, [sortedAvailableQuestions.length, availablePageSize, availablePage])
+  const availableQuestions = questions
+  // Удаляем старые useMemo для фильтрации на клиенте
 
   if (testLoading || questionsLoading) {
     return (
@@ -544,38 +546,88 @@ export default function TestFormPage() {
                 Доступные вопросы
               </Typography>
 
-              {availableQuestions.length === 0 ? (
-                <Alert severity="warning">Все вопросы уже добавлены или нет доступных вопросов</Alert>
+              <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  placeholder={t('questions.searchPlaceholder')}
+                  value={availableSearchQuery}
+                  onChange={(e) => setAvailableSearchQuery(e.target.value)}
+                  sx={{ flex: 1, minWidth: 250 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: availableSearchQuery && (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => setAvailableSearchQuery('')}
+                          edge="end"
+                        >
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel>{t('questions.topic')}</InputLabel>
+                  <Select
+                    value={availableTopicFilter}
+                    label={t('questions.topic')}
+                    onChange={(e) => setAvailableTopicFilter(e.target.value)}
+                  >
+                    <MenuItem value="">{t('questions.allTopics')}</MenuItem>
+                    {topics.map((topic: any) => (
+                      <MenuItem key={topic.id} value={topic.id}>{topic.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel>{t('questions.type')}</InputLabel>
+                  <Select
+                    value={availableTypeFilter}
+                    label={t('questions.type')}
+                    onChange={(e) => setAvailableTypeFilter(e.target.value as QuestionType | '')}
+                  >
+                    <MenuItem value="">{t('questions.allTypes')}</MenuItem>
+                    <MenuItem value="text">{t('questions.type.text')}</MenuItem>
+                    <MenuItem value="image_annotation">{t('questions.type.imageAnnotation')}</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+
+              {availableQuestions.length === 0 && !questionsFetching ? (
+                <Alert severity="warning">Вопросы не найдены или все уже добавлены</Alert>
               ) : (
-                <>
-                  <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-                    <FormControl size="small" sx={{ minWidth: 180 }}>
-                      <InputLabel>{t('questions.topic')}</InputLabel>
-                      <Select
-                        value={availableTopicFilter}
-                        label={t('questions.topic')}
-                        onChange={(e) => { setAvailableTopicFilter(e.target.value); setAvailablePage(0) }}
-                      >
-                        <MenuItem value="">{t('questions.allTopics')}</MenuItem>
-                        {topics.map((topic: any) => (
-                          <MenuItem key={topic.id} value={topic.id}>{topic.name}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl size="small" sx={{ minWidth: 180 }}>
-                      <InputLabel>{t('questions.type')}</InputLabel>
-                      <Select
-                        value={availableTypeFilter}
-                        label={t('questions.type')}
-                        onChange={(e) => { setAvailableTypeFilter(e.target.value as QuestionType | ''); setAvailablePage(0) }}
-                      >
-                        <MenuItem value="">{t('questions.allTypes')}</MenuItem>
-                        <MenuItem value="text">{t('questions.type.text')}</MenuItem>
-                        <MenuItem value="image_annotation">{t('questions.type.imageAnnotation')}</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Box>
-                <TableContainer component={Paper} variant="outlined">
+                <TableContainer 
+                  component={Paper} 
+                  variant="outlined"
+                  sx={{ 
+                    position: 'relative',
+                    opacity: questionsFetching ? 0.7 : 1,
+                    transition: 'opacity 0.2s',
+                    pointerEvents: questionsFetching ? 'none' : 'auto'
+                  }}
+                >
+                  {questionsFetching && (
+                    <Box sx={{ 
+                      position: 'absolute', 
+                      top: 0, 
+                      left: 0, 
+                      right: 0, 
+                      bottom: 0, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      zIndex: 2,
+                      bgcolor: alpha(theme.palette.background.paper, 0.4)
+                    }}>
+                      <CircularProgress size={40} />
+                    </Box>
+                  )}
                   <Table size="small">
                     <TableHead>
                       <TableRow>
@@ -587,38 +639,46 @@ export default function TestFormPage() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {paginatedAvailableQuestions.map((question: Question) => (
-                        <TableRow key={question.id} hover>
-                          <TableCell>
-                            <Tooltip title={question.type === 'text' ? t('questions.type.text') : t('questions.type.imageAnnotation')}>
-                              {question.type === 'text' ? <TextFieldsIcon fontSize="small" color="primary" /> : <ImageIcon fontSize="small" color="primary" />}
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell>
-                            <TruncatedContentTooltip content={question.content} />
-                          </TableCell>
-                          <TableCell>
-                            {question.topic ? (
-                              <Chip label={question.topic.name} size="small" variant="outlined" />
-                            ) : (
-                              <Typography variant="caption" color="text.disabled">{t('questions.noTopic')}</Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Rating value={question.difficulty} readOnly size="small" />
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button variant="outlined" size="small" onClick={() => handleAddQuestion(question)}>
-                              Добавить
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {availableQuestions.map((question: Question) => {
+                        const isAlreadySelected = selectedQuestions.some(sq => sq.question_id === question.id)
+                        return (
+                          <TableRow key={question.id} hover>
+                            <TableCell>
+                              <Tooltip title={question.type === 'text' ? t('questions.type.text') : t('questions.type.imageAnnotation')}>
+                                {question.type === 'text' ? <TextFieldsIcon fontSize="small" color="primary" /> : <ImageIcon fontSize="small" color="primary" />}
+                              </Tooltip>
+                            </TableCell>
+                            <TableCell>
+                              <TruncatedContentTooltip content={question.content} />
+                            </TableCell>
+                            <TableCell>
+                              {question.topic ? (
+                                <Chip label={question.topic.name} size="small" variant="outlined" />
+                              ) : (
+                                <Typography variant="caption" color="text.disabled">{t('questions.noTopic')}</Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Rating value={question.difficulty} readOnly size="small" />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Button 
+                                variant="outlined" 
+                                size="small" 
+                                onClick={() => handleAddQuestion(question)}
+                                disabled={isAlreadySelected}
+                              >
+                                {isAlreadySelected ? 'Добавлен' : 'Добавить'}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                   <TablePagination
                     component="div"
-                    count={sortedAvailableQuestions.length}
+                    count={questionsTotal}
                     page={availablePage}
                     onPageChange={(_, newPage) => setAvailablePage(newPage)}
                     rowsPerPage={availablePageSize}
@@ -640,7 +700,6 @@ export default function TestFormPage() {
                     }}
                   />
                 </TableContainer>
-                </>
               )}
             </Box>
           )}

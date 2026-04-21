@@ -20,7 +20,15 @@ import {
   TableSortLabel,
   Checkbox,
   Stack,
-  TablePagination
+  TablePagination,
+  TextField,
+  InputAdornment,
+  alpha,
+  useTheme,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -37,6 +45,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import RestoreIcon from '@mui/icons-material/Restore'
 import ReplayIcon from '@mui/icons-material/Replay'
+import SearchIcon from '@mui/icons-material/Search'
+import ClearIcon from '@mui/icons-material/Clear'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
 import { TablePaginationActions } from '../../components/common/TablePaginationActions'
@@ -46,6 +56,7 @@ import { useGrantRetake } from '../../lib/api/hooks/useSubmissions'
 export default function AdminSubmissionsPage() {
   const { user } = useAuth()
   const { t, formatName, locale } = useLocale()
+  const theme = useTheme()
   const navigate = useNavigate()
   const deleteSubmission = useDeleteSubmission()
   const bulkDeleteSubmissions = useBulkDeleteSubmissions()
@@ -58,27 +69,37 @@ export default function AdminSubmissionsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('')
   const [orderBy, setOrderBy] = useState('started_at')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
-  const [errorDialog, setErrorDialog] = useState<{ 
-    open: boolean; 
-    message: string; 
-    title?: string; 
-    severity?: 'error' | 'success' | 'info' | 'warning' 
-  }>({
-    open: false,
-    message: '',
-    title: '',
-    severity: 'error'
-  })
   
+  // ... rest of state
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
-  const { data: submissionsData, isLoading: loading, error } = useSubmissions(
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setPage(0)
+    setSelectedIds([])
+  }, [debouncedSearch, statusFilter, showHidden])
+
+  const { data: submissionsData, isLoading: loading, isFetching, error } = useSubmissions(
     {
       include_hidden: user?.role === 'admin' ? true : showHidden,
       skip: page * pageSize,
-      limit: pageSize
+      limit: pageSize,
+      search: debouncedSearch || undefined,
+      status: statusFilter || undefined,
+      sort_by: orderBy,
+      order: order
     },
     {
       refetchInterval: (query: any) => {
@@ -109,47 +130,9 @@ export default function AdminSubmissionsPage() {
   }
 
   const sortedSubmissions = useMemo(() => {
-    return [...submissions].sort((a, b) => {
-      let comparison = 0
-      
-      switch (orderBy) {
-        case 'student': {
-          const nameA = a.student ? formatName(a.student.last_name, a.student.first_name, a.student.middle_name) : ''
-          const nameB = b.student ? formatName(b.student.last_name, b.student.first_name, b.student.middle_name) : ''
-          comparison = nameA.localeCompare(nameB)
-          break
-        }
-        case 'teacher': {
-          const teacherA = a.teacher ? formatName(a.teacher.last_name, a.teacher.first_name, a.teacher.middle_name) : ''
-          const teacherB = b.teacher ? formatName(b.teacher.last_name, b.teacher.first_name, b.teacher.middle_name) : ''
-          comparison = teacherA.localeCompare(teacherB)
-          break
-        }
-        case 'test_title': {
-          comparison = (a.test_title || '').localeCompare(b.test_title || '')
-          break
-        }
-        case 'started_at': {
-          comparison = new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-          break
-        }
-        case 'status': {
-          comparison = (a.status || '').localeCompare(b.status || '')
-          break
-        }
-        case 'result': {
-          const scoreA = a.result?.total_score ?? -1
-          const scoreB = b.result?.total_score ?? -1
-          comparison = scoreA - scoreB
-          break
-        }
-        default:
-          comparison = 0
-      }
-      
-      return order === 'desc' ? -comparison : comparison
-    })
-  }, [submissions, order, orderBy, formatName])
+    // Больше не сортируем на клиенте, так как сортировка теперь серверная
+    return submissions
+  }, [submissions])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -255,34 +238,97 @@ export default function AdminSubmissionsPage() {
           )}
         </Stack>
         
-        {user?.role === 'teacher' && (
-          <FormControlLabel
-            control={
-              <Switch 
-                checked={showHidden} 
-                onChange={(e) => setShowHidden(e.target.checked)} 
-                color="primary"
-              />
-            }
-            label={t('submissions.showHidden')}
-          />
-        )}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {user?.role === 'teacher' && (
+            <FormControlLabel
+              control={
+                <Switch 
+                  checked={showHidden} 
+                  onChange={(e) => setShowHidden(e.target.checked)} 
+                  color="primary"
+                />
+              }
+              label={t('submissions.showHidden')}
+            />
+          )}
+        </Box>
       </Box>
+
+      <Paper sx={{ mb: 3, p: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        <TextField
+          placeholder="Поиск по студенту или тесту..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ flex: 1, minWidth: 250 }}
+          size="small"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: searchQuery && (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => setSearchQuery('')}
+                  edge="end"
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+        <FormControl size="small" sx={{ minWidth: 180 }}>
+          <InputLabel>Статус</InputLabel>
+          <Select
+            value={statusFilter}
+            label="Статус"
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <MenuItem value="">Все статусы</MenuItem>
+            <MenuItem value="in_progress">{t('submissions.status.inProgress')}</MenuItem>
+            <MenuItem value="submitted">{t('submissions.status.submitted')}</MenuItem>
+            <MenuItem value="evaluating">{t('submissions.status.evaluating')}</MenuItem>
+            <MenuItem value="completed">{t('submissions.status.completed')}</MenuItem>
+          </Select>
+        </FormControl>
+      </Paper>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
-      ) : submissions.length === 0 ? (
-        <Card sx={{ borderRadius: 1 }}>
-          <CardContent sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="h6" color="text.secondary">
-              {t('submissions.noResults.all')}
-            </Typography>
-          </CardContent>
-        </Card>
       ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 1, boxShadow: 3 }}>
+        <TableContainer 
+          component={Paper} 
+          sx={{ 
+            borderRadius: 1, 
+            boxShadow: 3,
+            position: 'relative',
+            opacity: isFetching ? 0.7 : 1,
+            transition: 'opacity 0.2s',
+            pointerEvents: isFetching ? 'none' : 'auto'
+          }}
+          aria-busy={isFetching}
+        >
+          {isFetching && (
+            <Box sx={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              zIndex: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.4)
+            }}>
+              <CircularProgress size={40} />
+            </Box>
+          )}
           <Table>
             <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
@@ -355,7 +401,16 @@ export default function AdminSubmissionsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedSubmissions.map((sub: any) => (
+              {submissions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={user?.role === 'admin' ? 8 : 7} align="center" sx={{ py: 6 }}>
+                    <Typography variant="h6" color="text.secondary">
+                      {t('submissions.noResults.all')}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                sortedSubmissions.map((sub: any) => (
                 <TableRow 
                   key={sub.id} 
                   hover

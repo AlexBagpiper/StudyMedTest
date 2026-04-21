@@ -477,6 +477,8 @@ async def list_submissions(
     limit: int = Query(50, ge=1, le=500),
     student_id: UUID = None,
     test_id: UUID = None,
+    status: SubmissionStatus = None,
+    search: str = None,
     include_hidden: bool = False,
     sort_by: str = "started_at",
     order: str = "desc",
@@ -490,16 +492,17 @@ async def list_submissions(
         selectinload(Submission.answers),
         selectinload(Submission.student),
         selectinload(Submission.variant).selectinload(TestVariant.test).selectinload(Test.author)
-    )
-    count_query = select(func.count(Submission.id))
+    ).join(User, Submission.student_id == User.id).join(TestVariant, Submission.variant_id == TestVariant.id).join(Test, TestVariant.test_id == Test.id)
+
+    count_query = select(func.count(Submission.id)).join(User, Submission.student_id == User.id).join(TestVariant, Submission.variant_id == TestVariant.id).join(Test, TestVariant.test_id == Test.id)
     
     # Students видят только свои submissions и всегда видят скрытые
     if current_user.role == Role.STUDENT:
         query = query.where(Submission.student_id == current_user.id)
         count_query = count_query.where(Submission.student_id == current_user.id)
     elif current_user.role == Role.TEACHER:
-        query = query.join(Submission.variant).join(TestVariant.test).where(Test.author_id == current_user.id)
-        count_query = count_query.join(Submission.variant).join(TestVariant.test).where(Test.author_id == current_user.id)
+        query = query.where(Test.author_id == current_user.id)
+        count_query = count_query.where(Test.author_id == current_user.id)
         if not include_hidden:
             query = query.where(Submission.is_hidden == False)
             count_query = count_query.where(Submission.is_hidden == False)
@@ -509,12 +512,22 @@ async def list_submissions(
         count_query = count_query.where(Submission.student_id == student_id)
     
     if test_id:
-        if current_user.role == Role.TEACHER:
-            query = query.where(TestVariant.test_id == test_id)
-            count_query = count_query.where(TestVariant.test_id == test_id)
-        else:
-            query = query.join(Submission.variant).where(TestVariant.test_id == test_id)
-            count_query = count_query.join(Submission.variant).where(TestVariant.test_id == test_id)
+        query = query.where(Test.id == test_id)
+        count_query = count_query.where(Test.id == test_id)
+
+    if status:
+        query = query.where(Submission.status == status)
+        count_query = count_query.where(Submission.status == status)
+
+    if search:
+        search_filter = (
+            User.email.ilike(f"%{search}%") |
+            User.last_name.ilike(f"%{search}%") |
+            User.first_name.ilike(f"%{search}%") |
+            Test.title.ilike(f"%{search}%")
+        )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
     
     total = (await db.scalar(count_query)) or 0
     

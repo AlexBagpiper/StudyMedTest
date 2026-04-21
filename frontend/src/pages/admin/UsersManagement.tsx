@@ -26,11 +26,14 @@ import {
   TableSortLabel,
   Tooltip,
   TablePagination,
+  alpha,
+  useTheme,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import SearchIcon from '@mui/icons-material/Search'
+import ClearIcon from '@mui/icons-material/Clear'
 import { adminApi } from '../../lib/api'
 import { ConfirmDialog } from '../../components/common/ConfirmDialog'
 import { MessageDialog } from '../../components/common/MessageDialog'
@@ -74,8 +77,10 @@ const initialFormData: UserFormData = {
 
 export default function UsersManagement() {
   const { t, locale } = useLocale()
+  const theme = useTheme()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
+  const [fetching, setFetching] = useState(false)
   
   // Dialog states
   const [messageDialog, setMessageDialog] = useState<{
@@ -103,6 +108,7 @@ export default function UsersManagement() {
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [total, setTotal] = useState(0)
 
   // Selection and Sorting states
@@ -127,17 +133,28 @@ export default function UsersManagement() {
   }
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
     setPage(0)
     setSelectedIds([])
-  }, [roleFilter, searchQuery, sortBy, order])
+  }, [roleFilter, debouncedSearch, sortBy, order])
 
   useEffect(() => {
     loadUsers(page, pageSize)
-  }, [page, pageSize, roleFilter, searchQuery, sortBy, order])
+  }, [page, pageSize, roleFilter, debouncedSearch, sortBy, order])
 
   const loadUsers = async (pageNum: number = page, limit: number = pageSize) => {
     try {
-      setLoading(true)
+      if (users.length === 0) {
+        setLoading(true)
+      } else {
+        setFetching(true)
+      }
       const params: any = { 
         skip: pageNum * limit,
         limit,
@@ -149,8 +166,8 @@ export default function UsersManagement() {
         params.role = roleFilter
       }
       
-      if (searchQuery) {
-        params.search = searchQuery
+      if (debouncedSearch) {
+        params.search = debouncedSearch
       }
 
       const response = await adminApi.getUsers(params)
@@ -165,6 +182,7 @@ export default function UsersManagement() {
       })
     } finally {
       setLoading(false)
+      setFetching(false)
     }
   }
 
@@ -364,6 +382,17 @@ export default function UsersManagement() {
                   <SearchIcon />
                 </InputAdornment>
               ),
+              endAdornment: searchQuery && (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setSearchQuery('')}
+                    edge="end"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ),
             }}
           />
         </Box>
@@ -384,7 +413,32 @@ export default function UsersManagement() {
           <CircularProgress />
         </Box>
       ) : (
-        <TableContainer component={Paper}>
+        <TableContainer 
+          component={Paper}
+          sx={{ 
+            position: 'relative',
+            opacity: fetching ? 0.7 : 1,
+            transition: 'opacity 0.2s',
+            pointerEvents: fetching ? 'none' : 'auto'
+          }}
+          aria-busy={fetching}
+        >
+          {fetching && (
+            <Box sx={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              zIndex: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.4)
+            }}>
+              <CircularProgress size={40} />
+            </Box>
+          )}
           <Table>
             <TableHead>
               <TableRow>
