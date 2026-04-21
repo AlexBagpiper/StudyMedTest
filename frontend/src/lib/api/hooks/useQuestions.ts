@@ -11,7 +11,13 @@ export interface QuestionsPaginated {
   limit: number
 }
 
-export function useQuestions(params?: { skip?: number; limit?: number }) {
+export function useQuestions(params?: { 
+  skip?: number; 
+  limit?: number;
+  type?: string;
+  topic_id?: string;
+  search?: string;
+}) {
   return useQuery({
     queryKey: [...QUESTIONS_KEY, params],
     queryFn: async () => {

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # API Settings
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "MedTest Platform"
-    VERSION: str = "1.0.1"
+    VERSION: str = "1.1.0"
     
     # Security
     SECRET_KEY: str = "6067b57b6f633519c6295b958e805d21a57c5e5b3b3a6d4b9b9c9d9e9f0a1b2c"  # Stable key for dev
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     YANDEX_FOLDER_ID: Optional[str] = None
     
     # Versioning
-    APP_VERSION: str = "1.0.1"
+    APP_VERSION: str = "1.1.0"
     APP_REVISION: str = "dev"
     
     # Yandex Search API (for plagiarism check)

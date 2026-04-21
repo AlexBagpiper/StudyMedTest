@@ -24,9 +24,12 @@ import {
   Tooltip,
   Rating,
   TablePagination,
+  alpha,
+  useTheme,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import SearchIcon from '@mui/icons-material/Search'
+import ClearIcon from '@mui/icons-material/Clear'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
@@ -53,6 +56,7 @@ import { TruncatedContentTooltip } from '../../components/common/TruncatedConten
 export default function QuestionsPage() {
   const { user } = useAuth()
   const { t, translateError, locale } = useLocale()
+  const theme = useTheme()
   const [typeFilter, setTypeFilter] = useState<QuestionType | ''>('')
   const [topicFilter, setTopicFilter] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -66,10 +70,26 @@ export default function QuestionsPage() {
   })
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
+  const [debouncedSearch, setDebouncedSearch] = useState(searchQuery)
 
-  const { data: paginated, isLoading, error } = useQuestions({
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // Сброс страницы при изменении фильтров
+  useEffect(() => {
+    setPage(0)
+  }, [typeFilter, topicFilter, debouncedSearch])
+
+  const { data: paginated, isLoading, isFetching, error } = useQuestions({
     skip: page * pageSize,
-    limit: pageSize
+    limit: pageSize,
+    type: typeFilter || undefined,
+    topic_id: topicFilter || undefined,
+    search: debouncedSearch || undefined
   })
   const questions = paginated?.items ?? []
   const total = paginated?.total ?? 0
@@ -177,16 +197,6 @@ export default function QuestionsPage() {
     setEditingQuestion(undefined)
   }
 
-  // Фильтрация вопросов
-  const filteredQuestions = questions.filter((q: Question) => {
-    const matchesType = !typeFilter || q.type === typeFilter
-    const matchesTopic = !topicFilter || q.topic_id === topicFilter
-    const matchesSearch =
-      !searchQuery ||
-      q.content.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesType && matchesTopic && matchesSearch
-  })
-
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -215,6 +225,17 @@ export default function QuestionsPage() {
             startAdornment: (
               <InputAdornment position="start">
                 <SearchIcon />
+              </InputAdornment>
+            ),
+            endAdornment: searchQuery && (
+              <InputAdornment position="end">
+                <MuiIconButton
+                  size="small"
+                  onClick={() => setSearchQuery('')}
+                  edge="end"
+                >
+                  <ClearIcon fontSize="small" />
+                </MuiIconButton>
               </InputAdornment>
             ),
           }}
@@ -249,13 +270,36 @@ export default function QuestionsPage() {
       </Box>
 
       {/* Список вопросов */}
-      {filteredQuestions.length === 0 ? (
-        <Card>
+      {questions.length === 0 ? (
+        <Card 
+          sx={{ 
+            opacity: isFetching ? 0.6 : 1, 
+            transition: 'opacity 0.2s',
+            position: 'relative'
+          }}
+          aria-busy={isFetching}
+        >
           <CardContent sx={{ textAlign: 'center', py: 6 }}>
+            {isFetching && (
+              <Box sx={{ 
+                position: 'absolute', 
+                top: 0, 
+                left: 0, 
+                right: 0, 
+                bottom: 0, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                zIndex: 1,
+                bgcolor: alpha(theme.palette.background.paper, 0.5)
+              }}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
             <Typography variant="h6" color="text.secondary">
-              {questions.length === 0 ? t('questions.emptyBank') : t('questions.noResults')}
+              {(debouncedSearch || topicFilter || typeFilter) ? t('questions.noResults') : t('questions.emptyBank')}
             </Typography>
-            {questions.length === 0 && (
+            {!(debouncedSearch || topicFilter || typeFilter) && (
               <Button
                 variant="outlined"
                 startIcon={<AddIcon />}
@@ -268,7 +312,33 @@ export default function QuestionsPage() {
           </CardContent>
         </Card>
       ) : (
-        <TableContainer component={Paper} variant="outlined">
+        <TableContainer 
+          component={Paper} 
+          variant="outlined" 
+          sx={{ 
+            position: 'relative',
+            opacity: isFetching ? 0.7 : 1, 
+            transition: 'opacity 0.2s',
+            pointerEvents: isFetching ? 'none' : 'auto'
+          }}
+          aria-busy={isFetching}
+        >
+          {isFetching && (
+            <Box sx={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              right: 0, 
+              bottom: 0, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              zIndex: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.4)
+            }}>
+              <CircularProgress size={40} />
+            </Box>
+          )}
           <Table size="small">
             <TableHead>
               <TableRow>
@@ -281,7 +351,7 @@ export default function QuestionsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredQuestions.map((question: Question) => (
+              {questions.map((question: Question) => (
                 <TableRow key={question.id} hover>
                   <TableCell>
                     <Tooltip title={question.type === 'text' ? t('questions.type.text') : t('questions.type.imageAnnotation')}>

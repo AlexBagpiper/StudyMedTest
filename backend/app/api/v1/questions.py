@@ -30,7 +30,9 @@ router = APIRouter()
 async def list_questions(
     skip: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=1000),
-    type: QuestionType = None,
+    type: Optional[QuestionType] = None,
+    topic_id: Optional[UUID] = None,
+    search: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -57,6 +59,10 @@ async def list_questions(
     
     if type:
         query = query.where(Question.type == type)
+    if topic_id:
+        query = query.where(Question.topic_id == topic_id)
+    if search:
+        query = query.where(Question.content.ilike(f"%{search}%"))
     
     count_query = select(func.count(Question.id)).join(User, Question.author_id == User.id)
     if current_user.role == Role.TEACHER:
@@ -65,6 +71,11 @@ async def list_questions(
         )
     if type:
         count_query = count_query.where(Question.type == type)
+    if topic_id:
+        count_query = count_query.where(Question.topic_id == topic_id)
+    if search:
+        count_query = count_query.where(Question.content.ilike(f"%{search}%"))
+        
     total = (await db.scalar(count_query)) or 0
     
     query = query.order_by(Question.created_at.desc()).offset(skip).limit(limit)
