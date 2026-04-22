@@ -152,11 +152,13 @@ echo "📊 Service status:"
 $COMPOSE ps
 
 echo ""
-echo "🩺 Backend /health:"
-if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
-  curl -s http://localhost:8000/health | head -c 200; echo ""
+echo "🩺 Backend health check:"
+# Используем docker inspect для проверки статуса здоровья, так как порт 8000 не проброшен наружу
+if [ "$(docker inspect --format='{{.State.Health.Status}}' medtest-backend)" == "healthy" ]; then
+  echo "  ✅ Backend is healthy (internal docker check)"
 else
-  echo "⚠️  Backend /health unreachable. Check: $COMPOSE logs backend --tail=50"
+  echo "  ⚠️  Backend health check failed or container is starting."
+  echo "     Check logs: $COMPOSE logs backend --tail=50"
   exit 1
 fi
 
@@ -209,7 +211,8 @@ if [[ $SMOKE -eq 1 ]]; then
   echo "🔬 Registration smoke test:"
   SMOKE_EMAIL="smoke_$(date +%s)@example.com"
 
-  RESPONSE=$(curl -sS -X POST http://localhost:8000/api/v1/auth/register \
+  # Стучимся через Nginx (порт 80), так как 8000 закрыт
+  RESPONSE=$(curl -sS -X POST http://localhost/api/v1/auth/register \
     -H "Content-Type: application/json" \
     -d "{\"email\":\"$SMOKE_EMAIL\",\"password\":\"Smoke123!\",\"last_name\":\"Smoke\",\"first_name\":\"Test\"}")
   echo "  register response: $RESPONSE"
