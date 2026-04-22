@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { 
-  Box, 
-  TextField, 
-  Button, 
-  Typography,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+import {
+  Alert,
+  Box,
+  Button,
   CircularProgress,
-  Alert
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Snackbar,
+  TextField,
+  Typography,
 } from '@mui/material'
 import { useLocale } from '../../contexts/LocaleContext'
-import { MessageDialog } from '../../components/common/MessageDialog'
 import api from '../../lib/api'
 
 export default function TeacherRegisterPage() {
@@ -23,7 +23,7 @@ export default function TeacherRegisterPage() {
   const [middleName, setMiddleName] = useState('')
   const [phone, setPhone] = useState('')
   
-  const [messageDialog, setMessageDialog] = useState<{ open: boolean; message: string }>({
+  const [snack, setSnack] = useState<{ open: boolean; message: string }>({
     open: false,
     message: ''
   })
@@ -31,23 +31,21 @@ export default function TeacherRegisterPage() {
   const [successDialogOpen, setSuccessDialogOpen] = useState(false)
 
   const { t } = useLocale()
+  const showError = (message: string) => setSnack({ open: true, message })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Валидация
     if (lastName.length < 1) {
-      setMessageDialog({ open: true, message: 'Введите фамилию' })
+      showError('Введите фамилию')
       return
     }
-
     if (firstName.length < 1) {
-      setMessageDialog({ open: true, message: 'Введите имя' })
+      showError('Введите имя')
       return
     }
-
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setMessageDialog({ open: true, message: 'Введите корректный email' })
+      showError('Введите корректный email')
       return
     }
 
@@ -61,7 +59,7 @@ export default function TeacherRegisterPage() {
         middle_name: middleName || undefined,
         phone: phone || undefined,
       })
-      
+
       setSuccessDialogOpen(true)
     } catch (err: any) {
       const detail = err.response?.data?.detail
@@ -71,7 +69,7 @@ export default function TeacherRegisterPage() {
       } else if (typeof detail === 'string') {
         message = detail
       }
-      setMessageDialog({ open: true, message })
+      showError(message)
     } finally {
       setLoading(false)
     }
@@ -196,13 +194,20 @@ export default function TeacherRegisterPage() {
         </DialogActions>
       </Dialog>
 
-      <MessageDialog
-        open={messageDialog.open}
-        title="Ошибка"
-        content={messageDialog.message}
-        severity="error"
-        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
-      />
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={5000}
+        onClose={() => setSnack({ ...snack, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="error"
+          onClose={() => setSnack({ ...snack, open: false })}
+          sx={{ width: '100%' }}
+        >
+          {snack.message}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }

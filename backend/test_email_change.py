@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.core.database import async_session_maker
 from app.models.user import User
-from app.services.email_service import send_email_change_code
+from app.services.email import get_email_sender
 
 
 async def test_email_change():
@@ -49,12 +49,11 @@ async def test_email_change():
     test_code = "123456"
     
     print(f"\nОтправка кода {test_code} на {test_email}...")
-    success = await send_email_change_code(test_email, test_code)
-    
-    if success:
-        print("✅ Email отправлен успешно (или залогирован в dev режиме)")
-    else:
-        print("❌ Ошибка при отправке email")
+    try:
+        await get_email_sender().send_email_change(test_email, test_code)
+        print("Email отправлен (или залогирован в dev режиме)")
+    except Exception as exc:
+        print(f"Ошибка при отправке email: {exc}")
         return False
     
     print("\n" + "=" * 60)

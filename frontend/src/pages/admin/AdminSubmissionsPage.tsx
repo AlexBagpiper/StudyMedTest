@@ -74,8 +74,17 @@ export default function AdminSubmissionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [orderBy, setOrderBy] = useState('started_at')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
-  
-  // ... rest of state
+  const [errorDialog, setErrorDialog] = useState<{ 
+    open: boolean; 
+    message: string; 
+    title?: string; 
+    severity?: 'error' | 'success' | 'info' | 'warning' 
+  }>({
+    open: false,
+    message: '',
+    title: '',
+    severity: 'error'
+  })
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
 
@@ -539,7 +548,7 @@ export default function AdminSubmissionsPage() {
                     </Box>
                   </TableCell>
                 </TableRow>
-              ))}
+              )))}
             </TableBody>
           </Table>
           <TablePagination

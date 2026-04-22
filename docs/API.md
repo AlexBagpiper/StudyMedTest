@@ -17,31 +17,62 @@ Authorization: Bearer <access_token>
 
 ### POST /auth/register
 
-Регистрация нового студента.
+Начало регистрации студента. Поле `role` НЕ принимается. Подробности,
+rate-limits и threat-model: [REGISTRATION.md](REGISTRATION.md).
 
 **Request:**
 ```json
 {
   "email": "student@example.com",
-  "password": "securepassword",
+  "password": "Secret123",
   "last_name": "Иванов",
   "first_name": "Иван",
-  "middle_name": "Иванович",
-  "role": "student"
+  "middle_name": "Иванович"
 }
 ```
 
-**Response: 201 Created**
+**Response: 200 OK** (uniform — одинаковый для нового и существующего email)
 ```json
 {
-  "id": "uuid",
+  "message": "If this email is valid, a verification code has been sent.",
   "email": "student@example.com",
-  "last_name": "Иванов",
-  "first_name": "Иван",
-  "middle_name": "Иванович",
-  "role": "student",
-  "is_active": true,
-  "created_at": "2024-01-01T00:00:00Z"
+  "resend_after": 60
+}
+```
+
+### POST /auth/verify-email
+
+Подтверждение email OTP-кодом. Пользователь создаётся в БД только после
+успешной верификации.
+
+**Request:**
+```json
+{ "email": "student@example.com", "code": "123456" }
+```
+
+**Response: 200 OK**
+```json
+{ "message": "Email verified successfully", "email": "student@example.com" }
+```
+
+Возможные ошибки: 400 (неверный код + осталось попыток), 410 (код истёк),
+429 (превышены попытки или rate limit).
+
+### POST /auth/resend-verification
+
+Повторная отправка кода (учитывает cooldown 60 сек и лимит 5/час).
+
+**Request:**
+```json
+{ "email": "student@example.com" }
+```
+
+**Response: 200 OK**
+```json
+{
+  "message": "If this email is valid, a verification code has been sent.",
+  "email": "student@example.com",
+  "resend_after": 60
 }
 ```
 

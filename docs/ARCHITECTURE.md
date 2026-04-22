@@ -136,6 +136,19 @@ medtest-storage/
 
 ## Безопасность
 
+### Authentication & Registration
+
+Самостоятельная регистрация студента реализована по OTP-флоу с разделением
+черновика и кода в Redis, атомарной Lua-верификацией и доставкой писем через
+выделенную очередь Celery `email`. См. детальное описание, API, threat-model,
+operations runbook: [REGISTRATION.md](REGISTRATION.md).
+
+Ключевые компоненты:
+- `app.core.otp.OtpService` — атомарный OTP-сервис (HMAC-SHA256 + Lua).
+- `app.services.email.*` — EmailSender Strategy (Celery / sync SMTP).
+- `app.core.rate_limit` — slowapi с Redis backend (DB 4).
+- `celery_email_worker` — отдельный worker-сервис для SMTP (см. docker-compose).
+
 ### Authorization (RBAC)
 ```python
 PERMISSIONS = {

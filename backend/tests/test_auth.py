@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 @pytest.mark.asyncio
 async def test_register_student(client: AsyncClient):
-    """Test student registration"""
+    """Test student registration — returns 200 with generic OTP-dispatched response.
+
+    Note: contract changed in the registration overhaul (see docs/REGISTRATION.md).
+    The new endpoint never creates a user synchronously — it issues an OTP.
+    The `role` field is rejected by StudentRegisterSchema (extra=forbid).
+    """
     response = await client.post(
         "/api/v1/auth/register",
         json={
@@ -18,19 +23,18 @@ async def test_register_student(client: AsyncClient):
             "last_name": "Студентов",
             "first_name": "Новый",
             "middle_name": "Студентович",
-            "role": "student",
         },
     )
-    assert response.status_code == 201
+    assert response.status_code == 200
     data = response.json()
     assert data["email"] == "newstudent@example.com"
-    # Регистрация возвращает сообщение о коде, а не данные пользователя
     assert "message" in data
+    assert "resend_after" in data
 
 
 @pytest.mark.asyncio
 async def test_register_duplicate_email(client: AsyncClient, test_user):
-    """Test registration with duplicate email"""
+    """Duplicate email returns a uniform 200 (user enumeration defence)."""
     response = await client.post(
         "/api/v1/auth/register",
         json={
@@ -38,10 +42,11 @@ async def test_register_duplicate_email(client: AsyncClient, test_user):
             "password": "password123",
             "last_name": "Дубликатов",
             "first_name": "Дублик",
-            "role": "student",
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 200
+    # Same response shape as for a fresh email — no "already registered" leak.
+    assert "message" in response.json()
 
 
 @pytest.mark.asyncio

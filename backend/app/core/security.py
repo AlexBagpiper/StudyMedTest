@@ -106,7 +106,7 @@ def decode_token(token: str) -> dict:
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail="Не удалось проверить учётные данные.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -125,7 +125,7 @@ async def get_current_user_id(
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail="Не удалось проверить учётные данные.",
         )
     
     return user_id

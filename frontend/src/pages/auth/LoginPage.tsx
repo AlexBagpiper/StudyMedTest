@@ -1,20 +1,34 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Box, TextField, Button, Typography } from '@mui/material'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Alert, Box, Button, Snackbar, TextField, Typography } from '@mui/material'
 import { useAuth } from '../../contexts/AuthContext'
 import { useLocale } from '../../contexts/LocaleContext'
-import { MessageDialog } from '../../components/common/MessageDialog'
+
+const PENDING_EMAIL_KEY = 'pendingEmail'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [messageDialog, setMessageDialog] = useState<{ open: boolean; message: string }>({
+  const [snack, setSnack] = useState<{ open: boolean; message: string }>({
     open: false,
     message: ''
   })
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const { t, translateError } = useLocale()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  const pendingEmail = typeof window !== 'undefined' ? localStorage.getItem(PENDING_EMAIL_KEY) : null
+  const justVerifiedParam = searchParams.get('verified') === '1'
+  const [verifiedVisible, setVerifiedVisible] = useState(justVerifiedParam)
+
+  // Авто-скрытие success-баннера через 5 секунд.
+  useEffect(() => {
+    if (!verifiedVisible) return
+    const timer = window.setTimeout(() => setVerifiedVisible(false), 5000)
+    return () => window.clearTimeout(timer)
+  }, [verifiedVisible])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,7 +37,7 @@ export default function LoginPage() {
     try {
       await login(email, password)
     } catch (err: any) {
-      setMessageDialog({
+      setSnack({
         open: true,
         message: translateError(err.response?.data?.detail)
       })
@@ -34,6 +48,24 @@ export default function LoginPage() {
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%', mt: 1 }}>
+      {verifiedVisible && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setVerifiedVisible(false)}>
+          Email успешно подтверждён. Войдите в систему.
+        </Alert>
+      )}
+      {pendingEmail && !verifiedVisible && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => navigate('/verify-email')}>
+              Продолжить
+            </Button>
+          }
+        >
+          Незавершённая регистрация: <strong>{pendingEmail}</strong>
+        </Alert>
+      )}
       <TextField
         margin="normal"
         required
@@ -83,13 +115,20 @@ export default function LoginPage() {
         </Link>
       </Typography>
 
-      <MessageDialog
-        open={messageDialog.open}
-        title={t('common.error')}
-        content={messageDialog.message}
-        severity="error"
-        onClose={() => setMessageDialog({ ...messageDialog, open: false })}
-      />
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={5000}
+        onClose={() => setSnack({ ...snack, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="error"
+          onClose={() => setSnack({ ...snack, open: false })}
+          sx={{ width: '100%' }}
+        >
+          {snack.message}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }

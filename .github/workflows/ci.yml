@@ -54,12 +54,12 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov pytest-asyncio
-    
+        # Dev-зависимости (pytest, fakeredis[lua], hypothesis) нужны только в CI/locally.
+        pip install -r requirements-dev.txt
+
     - name: Run linting
       working-directory: ./backend
       run: |
-        pip install black isort flake8 bandit pip-audit
         black --check app/
         isort --check-only app/
         flake8 app/ --max-line-length=100
@@ -72,12 +72,17 @@ jobs:
       working-directory: ./backend
       run: pip-audit -r requirements.txt
     
-    - name: Run tests
+    - name: Run all tests (unit + integration + security + resilience)
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/medtest_test
+        DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/medtest_test
+        POSTGRES_SERVER: localhost
+        POSTGRES_USER: test_user
+        POSTGRES_PASSWORD: test_password
+        POSTGRES_DB: medtest_test
         REDIS_URL: redis://localhost:6379/0
         SECRET_KEY: test-secret-key-for-ci-only-min-32-chars
+        ENVIRONMENT: development
       run: |
         pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
     

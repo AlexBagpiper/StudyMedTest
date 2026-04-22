@@ -136,6 +136,8 @@ npm test
 
 - 📖 **[Полное руководство пользователя (Wiki)](docs/wiki/Home.md)** — Основной источник документации для всех ролей.
 - [Архитектура системы](docs/ARCHITECTURE.md)
+- [Workflow разработки и деплоя](docs/DEVELOPMENT_WORKFLOW.md) — local-native dev + remote Docker deploy через `./deploy.sh`
+- [Регистрация и верификация email](docs/REGISTRATION.md) — флоу, OTP-политика, runbook, threat-model
 - [Методология оценки и веса](docs/wiki/ScoringMethodology.md) (Актуально)
 - [Технические детали функций](docs/FEATURES_TECHNICAL.md)
 - [API Documentation](docs/API.md)

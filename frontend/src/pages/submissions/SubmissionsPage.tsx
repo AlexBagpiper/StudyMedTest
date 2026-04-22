@@ -313,7 +313,7 @@ export default function SubmissionsPage() {
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
+                )))}
             </TableBody>
           </Table>
           <TablePagination

@@ -3,7 +3,7 @@
 """
 
 import secrets
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import AnyHttpUrl, EmailStr, PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # API Settings
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "MedTest Platform"
-    VERSION: str = "1.1.0"
+    VERSION: str = "1.2.0"
     
     # Security
     SECRET_KEY: str = "6067b57b6f633519c6295b958e805d21a57c5e5b3b3a6d4b9b9c9d9e9f0a1b2c"  # Stable key for dev
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     YANDEX_FOLDER_ID: Optional[str] = None
     
     # Versioning
-    APP_VERSION: str = "1.1.0"
+    APP_VERSION: str = "1.2.0"
     APP_REVISION: str = "dev"
     
     # Yandex Search API (for plagiarism check)
@@ -118,6 +118,23 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 60
+    # Redis DB for slowapi storage (separate from main cache/broker)
+    RATE_LIMIT_STORAGE_URL: Optional[str] = None
+
+    # Registration / OTP policy (OWASP ASVS §6.2, NIST SP 800-63B)
+    OTP_LENGTH: int = 6
+    OTP_TTL_SECONDS: int = 600                    # 10 min
+    OTP_MAX_ATTEMPTS: int = 5
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    OTP_MAX_RESENDS_PER_HOUR: int = 5
+    REGISTRATION_DRAFT_TTL_SECONDS: int = 900     # 15 min
+    REGISTER_RATE_LIMIT_PER_IP: str = "10/hour"
+    RESEND_RATE_LIMIT_PER_IP: str = "20/hour"
+    VERIFY_RATE_LIMIT_PER_IP: str = "30/minute"
+
+    # Email delivery transport. "celery" (prod) dispatches to worker queue,
+    # "sync" runs smtplib in a thread (for tests/dev without Celery).
+    EMAIL_TRANSPORT: Literal["celery", "sync"] = "celery"
     
     # File Upload
     MAX_UPLOAD_SIZE: int = 100 * 1024 * 1024  # 100 MB

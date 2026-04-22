@@ -24,14 +24,31 @@ class UserBase(BaseModel):
 
 class UserCreate(BaseModel):
     """
-    Схема для создания пользователя
+    Схема для создания пользователя администратором (role настраиваемый).
+    Для self-registration студентов используется StudentRegisterSchema.
     """
+    model_config = {"extra": "forbid"}
+
     email: EmailStr
     last_name: str = Field(..., min_length=1, max_length=100)
     first_name: str = Field(..., min_length=1, max_length=100)
     middle_name: Optional[str] = Field(None, max_length=100)
     password: str = Field(..., min_length=6, max_length=100)
     role: Optional[Role] = Role.STUDENT
+
+
+class StudentRegisterSchema(BaseModel):
+    """
+    Схема self-registration студентом. Поле `role` намеренно отсутствует —
+    даже с `extra=forbid` любая попытка передать role вернёт 422 (§2.9 аудита).
+    """
+    model_config = {"extra": "forbid"}
+
+    email: EmailStr
+    last_name: str = Field(..., min_length=1, max_length=100)
+    first_name: str = Field(..., min_length=1, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
 
 
 class UserUpdate(BaseModel):
@@ -117,4 +134,23 @@ class RefreshTokenRequest(BaseModel):
     Схема запроса на обновление токена
     """
     refresh_token: str
+
+
+class RegistrationAccepted(BaseModel):
+    """
+    Унифицированный ответ на /register и /resend-verification.
+    resend_after — через сколько секунд можно снова запросить код.
+    """
+    message: str
+    email: EmailStr
+    resend_after: int = 0
+
+
+class VerifyEmailResponse(BaseModel):
+    """
+    Ответ на успешный /verify-email.
+    """
+    message: str
+    email: EmailStr
+    attempts_left: Optional[int] = None
 

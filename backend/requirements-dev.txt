@@ -12,3 +12,11 @@ flake8==7.0.0
 mypy==1.8.0
 bandit==1.7.7
 # safety несовместим с pydantic 2.x; при необходимости: pip install safety в отдельном venv
+
+# Registration / OTP tests — [lua] extra нужен для EVAL/SCRIPT LOAD.
+fakeredis[lua]==2.21.0
+freezegun==1.4.0
+hypothesis==6.97.0
+# Опционально для resilience-тестов:
+# testcontainers[redis,postgres]==4.0.0
+# locust==2.20.0

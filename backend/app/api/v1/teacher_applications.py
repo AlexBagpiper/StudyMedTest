@@ -22,11 +22,7 @@ from app.schemas.teacher_application import (
     TeacherApplicationApprove,
     TeacherApplicationReject,
 )
-from app.services.email_service import (
-    send_teacher_application_notification,
-    send_teacher_account_created,
-    send_teacher_application_rejected,
-)
+from app.services.email import get_email_sender
 
 router = APIRouter()
 
@@ -90,8 +86,9 @@ async def create_teacher_application(
     if application.middle_name:
         full_name += f" {application.middle_name}"
     
+    sender = get_email_sender()
     for admin in admins:
-        await send_teacher_application_notification(
+        await sender.send_teacher_application_notification(
             admin.email,
             application.email,
             full_name
@@ -220,7 +217,7 @@ async def approve_teacher_application(
     if application.middle_name:
         full_name += f" {application.middle_name}"
     
-    await send_teacher_account_created(
+    await get_email_sender().send_teacher_account_created(
         application.email,
         full_name,
         temp_password
@@ -271,7 +268,7 @@ async def reject_teacher_application(
     if application.middle_name:
         full_name += f" {application.middle_name}"
     
-    await send_teacher_application_rejected(
+    await get_email_sender().send_teacher_application_rejected(
         application.email,
         full_name,
         review_data.admin_comment

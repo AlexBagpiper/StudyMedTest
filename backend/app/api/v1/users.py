@@ -16,7 +16,7 @@ from app.core.security import get_current_user, get_password_hash
 from app.core.redis import set_json, get_json, delete_key
 from app.models.user import User, Role
 from app.schemas.user import UserCreate, UserResponse, UserUpdate, EmailChangeRequest, EmailChangeConfirm
-from app.services.email_service import send_email_change_code
+from app.services.email import get_email_sender
 
 router = APIRouter()
 
@@ -85,8 +85,8 @@ async def request_email_change(
     }
     await set_json(f"email_change:{current_user.id}", change_data, expire=900)
     
-    # Отправляем код на новый email
-    await send_email_change_code(new_email, code)
+    # Отправляем код на новый email через фабрику EmailSender (Celery/sync)
+    await get_email_sender().send_email_change(new_email, code)
     
     # В dev режиме возвращаем код в ответе для удобства тестирования
     from app.core.config import settings

@@ -105,3 +105,14 @@ async def test_list_submissions_pagination(client: AsyncClient, auth_headers_adm
     data = resp.json()
     assert data["limit"] == 1
     assert len(data["items"]) <= 1
+
+@pytest.mark.asyncio
+async def test_list_submissions_student(client: AsyncClient, auth_headers_student):
+    """Test student listing their own submissions."""
+    resp = await client.get(
+        "/api/v1/submissions",
+        headers=auth_headers_student
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data["items"], list)

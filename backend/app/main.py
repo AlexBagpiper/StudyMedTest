@@ -2,17 +2,41 @@
 FastAPI Application Entry Point
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1 import router as api_v1_router
 from app.core.config import settings
 from app.core.database import engine
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.models import Base
+
+# Конфигурация логгера приложения: по умолчанию uvicorn настраивает только
+# свои логгеры (uvicorn.*), а сообщения от `logging.getLogger(__name__)` в
+# нашем коде теряются. Устанавливаем явный handler + формат.
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+# Громкие сторонние библиотеки приглушаем.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+# SQLAlchemy в dev использует echo=True и вешает собственный handler на
+# sqlalchemy.engine.* — если дать propagation до root, каждая строка печатается
+# дважды. Отключаем propagation, чтобы остался только родной SA-формат.
+for _sa_logger in ("sqlalchemy.engine", "sqlalchemy.engine.Engine",
+                   "sqlalchemy.pool", "sqlalchemy.dialects"):
+    logging.getLogger(_sa_logger).propagate = False
 
 
 @asynccontextmanager
@@ -72,6 +96,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiter (slowapi): регистрация + exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # Подключение роутеров
 app.include_router(api_v1_router, prefix="/api/v1")

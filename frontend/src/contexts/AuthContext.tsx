@@ -13,13 +13,25 @@ interface User {
   is_active: boolean
 }
 
+interface RegistrationAccepted {
+  message: string
+  email: string
+  resend_after: number
+}
+
+interface VerifyEmailResponse {
+  message: string
+  email: string
+  attempts_left?: number | null
+}
+
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, lastName: string, firstName: string, middleName?: string) => Promise<void>
-  verifyEmail: (email: string, code: string) => Promise<void>
-  resendVerification: (email: string) => Promise<void>
+  register: (email: string, password: string, lastName: string, firstName: string, middleName?: string) => Promise<RegistrationAccepted>
+  verifyEmail: (email: string, code: string) => Promise<VerifyEmailResponse>
+  resendVerification: (email: string) => Promise<RegistrationAccepted>
   logout: () => void
 }
 
@@ -80,22 +92,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     navigate('/')
   }
 
-  const register = async (email: string, password: string, lastName: string, firstName: string, middleName?: string) => {
-    await api.post('/auth/register', {
+  const register = async (
+    email: string,
+    password: string,
+    lastName: string,
+    firstName: string,
+    middleName?: string,
+  ): Promise<RegistrationAccepted> => {
+    const response = await api.post<RegistrationAccepted>('/auth/register', {
       email,
       password,
       last_name: lastName,
       first_name: firstName,
       middle_name: middleName || null,
     })
+    return response.data
   }
 
-  const verifyEmail = async (email: string, code: string) => {
-    await api.post('/auth/verify-email', { email, code })
+  const verifyEmail = async (email: string, code: string): Promise<VerifyEmailResponse> => {
+    const response = await api.post<VerifyEmailResponse>('/auth/verify-email', { email, code })
+    return response.data
   }
 
-  const resendVerification = async (email: string) => {
-    await api.post('/auth/resend-verification', { email })
+  const resendVerification = async (email: string): Promise<RegistrationAccepted> => {
+    const response = await api.post<RegistrationAccepted>('/auth/resend-verification', { email })
+    return response.data
   }
 
   const logout = () => {
