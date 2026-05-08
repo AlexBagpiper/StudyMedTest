@@ -148,6 +148,7 @@ class Settings(BaseSettings):
     
     # Logging
     LOG_LEVEL: str = "INFO"
+    AUDIT_LOG_RETENTION_DAYS: int = 180
     
     # Frontend
     REACT_APP_API_URL: str = "http://localhost:8000"

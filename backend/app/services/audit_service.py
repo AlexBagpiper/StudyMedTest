@@ -9,6 +9,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 class AuditService:
+    SENSITIVE_KEYS = {
+        "password", "password_hash", "token", "access_token", 
+        "refresh_token", "secret", "api_key", "credentials",
+        "old_password", "new_password"
+    }
+
+    @classmethod
+    def _mask_sensitive_data(cls, data: Any) -> Any:
+        """
+        Рекурсивно ищет чувствительные ключи в словарях и маскирует их.
+        """
+        if isinstance(data, dict):
+            return {
+                k: ("***MASKED***" if k.lower() in cls.SENSITIVE_KEYS else cls._mask_sensitive_data(v))
+                for k, v in data.items()
+            }
+        elif isinstance(data, list):
+            return [cls._mask_sensitive_data(item) for item in data]
+        return data
+
     @classmethod
     async def log_event(
         cls,
@@ -24,15 +44,15 @@ class AuditService:
         """
         Универсальный метод для логирования событий.
         """
-        # Превращаем UUID в строки для JSONB если нужно, 
-        # хотя SQLAlchemy обычно справляется если настроен json_serializer
+        # Маскируем чувствительные данные перед сохранением
+        masked_details = cls._mask_sensitive_data(details) if details else None
         
         audit_entry = AuditLog(
             user_id=user_id,
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
-            details=details,
+            details=masked_details,
             ip_address=ip_address,
             user_agent=user_agent,
             timestamp=datetime.utcnow()

@@ -4,11 +4,14 @@ Admin API - CRUD операции для всех сущностей
 """
 
 from datetime import datetime
+import csv
+import io
 import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -18,6 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.database import get_db
 from app.core.security import get_current_user, get_password_hash
 from app.core.storage import storage_service
+from app.services.audit_service import audit_service
 from app.models.user import User, Role
 from app.models.question import Question, ImageAsset
 from app.models.system_config import SystemConfig
@@ -123,6 +127,7 @@ async def get_admin_stats(
 
 @router.get("/users", response_model=PaginatedResponse[AdminUserResponse])
 async def list_users(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     role: Optional[Role] = None,
@@ -173,6 +178,15 @@ async def list_users(
     result = await db.execute(query)
     users = result.scalars().all()
     
+    await audit_service.log_request(
+        action="admin.user_list_read",
+        request=request,
+        db=db,
+        user_id=admin.id,
+        details={"skip": skip, "limit": limit, "search": search, "role": role}
+    )
+    await db.commit()
+    
     return PaginatedResponse(
         items=users,
         total=total or 0,
@@ -184,6 +198,7 @@ async def list_users(
 @router.get("/users/{user_id}", response_model=AdminUserResponse)
 async def get_user(
     user_id: UUID,
+    request: Request,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
@@ -193,6 +208,17 @@ async def get_user(
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    await audit_service.log_request(
+        action="admin.user_read",
+        request=request,
+        db=db,
+        user_id=admin.id,
+        resource_type="user",
+        resource_id=user_id,
+        details={"email": user.email}
+    )
+    await db.commit()
     
     return user
 
@@ -677,6 +703,7 @@ async def delete_test(
 
 @router.get("/submissions", response_model=PaginatedResponse[AdminSubmissionResponse])
 async def list_submissions(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     student_id: Optional[UUID] = None,
@@ -719,12 +746,22 @@ async def list_submissions(
     result = await db.execute(query)
     submissions = result.scalars().all()
     
+    await audit_service.log_request(
+        action="admin.submission_list_read",
+        request=request,
+        db=db,
+        user_id=admin.id,
+        details={"skip": skip, "limit": limit, "student_id": student_id, "status": status}
+    )
+    await db.commit()
+    
     return PaginatedResponse(items=submissions, total=total or 0, skip=skip, limit=limit)
 
 
 @router.get("/submissions/{submission_id}", response_model=AdminSubmissionResponse)
 async def get_submission(
     submission_id: UUID,
+    request: Request,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
@@ -742,6 +779,17 @@ async def get_submission(
     
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    
+    await audit_service.log_request(
+        action="admin.submission_read",
+        request=request,
+        db=db,
+        user_id=admin.id,
+        resource_type="submission",
+        resource_id=submission_id,
+        details={"student_email": submission.student.email if submission.student else None}
+    )
+    await db.commit()
     
     return submission
 
@@ -915,6 +963,71 @@ async def delete_image(
 
 
 # ==================== AUDIT LOGS ====================
+
+@router.get("/audit-logs/export")
+async def export_audit_logs(
+    user_id: Optional[UUID] = None,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    search: Optional[str] = None,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Экспорт логов аудита в CSV"""
+    query = select(AuditLog).options(selectinload(AuditLog.user))
+    
+    if user_id:
+        query = query.where(AuditLog.user_id == user_id)
+    if action:
+        query = query.where(AuditLog.action.ilike(f"%{action}%"))
+    if resource_type:
+        query = query.where(AuditLog.resource_type == resource_type)
+    if search:
+        search_filter = or_(
+            AuditLog.details["email"].astext.ilike(f"%{search}%"),
+            AuditLog.ip_address.ilike(f"%{search}%"),
+            AuditLog.action.ilike(f"%{search}%"),
+        )
+        query = query.where(search_filter)
+    
+    query = query.order_by(AuditLog.timestamp.desc())
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    output = io.StringIO()
+    # Add BOM for Excel Russian characters support
+    output.write('\ufeff')
+    writer = csv.writer(output, delimiter=';')
+    
+    # Header
+    writer.writerow([
+        "Timestamp", "User Email", "Action", "Resource Type", 
+        "Resource ID", "IP Address", "User Agent", "Details"
+    ])
+    
+    for log in logs:
+        user_email = log.user.email if log.user else (log.details.get("email") if log.details else "System")
+        writer.writerow([
+            log.timestamp.isoformat(),
+            user_email,
+            log.action,
+            log.resource_type or "",
+            str(log.resource_id) if log.resource_id else "",
+            log.ip_address or "",
+            log.user_agent or "",
+            str(log.details) if log.details else ""
+        ])
+    
+    output.seek(0)
+    
+    filename = f"audit_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
 @router.get("/audit-logs", response_model=PaginatedResponse[AdminAuditLogResponse])
 async def list_audit_logs(

@@ -137,6 +137,14 @@ export const adminApi = {
     const response = await api.get('/admin/audit-logs', { params })
     return response.data
   },
+
+  exportAuditLogs: async (params?: any) => {
+    const response = await api.get('/admin/audit-logs/export', { 
+      params,
+      responseType: 'blob'
+    })
+    return response
+  },
 }
 
 // Questions API

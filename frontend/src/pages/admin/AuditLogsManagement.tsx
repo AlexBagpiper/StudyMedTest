@@ -19,11 +19,13 @@ import {
   useTheme,
   Tooltip,
   Collapse,
+  Button,
 } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import ClearIcon from '@mui/icons-material/Clear'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import DownloadIcon from '@mui/icons-material/Download'
 import { adminApi } from '../../lib/api'
 import { useLocale } from '../../contexts/LocaleContext'
 import { TablePaginationActions } from '../../components/common/TablePaginationActions'
@@ -93,7 +95,7 @@ function Row(props: { log: AuditLog }) {
         <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ margin: 1, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-              <Typography variant="h6" gutterBottom component="div" size="small">
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom component="div">
                 Детали события
               </Typography>
               <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
@@ -123,6 +125,7 @@ export default function AuditLogsManagement() {
   const [pageSize, setPageSize] = useState(25)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -159,9 +162,57 @@ export default function AuditLogsManagement() {
     }
   }
 
+  const handleExport = async () => {
+    try {
+      setExporting(true)
+      const params: any = {}
+      if (debouncedSearch) {
+        params.search = debouncedSearch
+      }
+      
+      const response = await adminApi.exportAuditLogs(params)
+      
+      // Create a blob from the response data
+      const blob = new Blob([response.data], { type: 'text/csv' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      // Try to get filename from headers
+      const contentDisposition = response.headers['content-disposition']
+      let filename = 'audit_logs.csv'
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename=(.+)/)
+        if (filenameMatch && filenameMatch.length > 1) {
+          filename = filenameMatch[1]
+        }
+      }
+      
+      link.setAttribute('download', filename)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export audit logs', err)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 3 }}>Журналы аудита</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4">Журналы аудита</Typography>
+        <Button
+          variant="outlined"
+          startIcon={exporting ? <CircularProgress size={20} /> : <DownloadIcon />}
+          onClick={handleExport}
+          disabled={exporting}
+        >
+          Экспорт в CSV
+        </Button>
+      </Box>
 
       <Paper sx={{ mb: 3, p: 2 }}>
         <TextField

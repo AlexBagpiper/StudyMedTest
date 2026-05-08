@@ -3,6 +3,7 @@ Celery application configuration
 """
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -14,6 +15,7 @@ celery_app = Celery(
     include=[
         "app.tasks.evaluation_tasks",
         "app.tasks.email_tasks",
+        "app.tasks.maintenance_tasks",
     ]
 )
 
@@ -34,12 +36,21 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
 )
 
+# Beat schedule
+celery_app.conf.beat_schedule = {
+    "rotate-audit-logs-daily": {
+        "task": "maintenance.rotate_audit_logs",
+        "schedule": crontab(hour=3, minute=0),  # 3:00 AM daily
+    },
+}
+
 # Routes для разных типов задач
 celery_app.conf.task_routes = {
     "app.tasks.evaluation_tasks.evaluate_text_answer": {"queue": "celery"},
     "app.tasks.evaluation_tasks.evaluate_annotation_answer": {"queue": "celery"},
     "app.tasks.evaluation_tasks.evaluate_choice_answer": {"queue": "celery"},
     "app.tasks.evaluation_tasks.evaluate_submission": {"queue": "celery"},
+    "maintenance.*": {"queue": "celery"},
     # Email tasks use names declared via @task(name=...) — see app/tasks/email_tasks.py
     "email.*": {"queue": "email"},
 }

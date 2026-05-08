@@ -13,6 +13,7 @@ psycopg2-binary==2.9.9
 redis==5.0.1
 celery==5.3.6
 flower==2.0.1
+nest-asyncio==1.6.0
 
 # Authentication & Security
 python-jose[cryptography]==3.4.0

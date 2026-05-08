@@ -3,8 +3,8 @@
 -r requirements.txt
 
 # Development & Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
+pytest>=7.4.4,<10
+pytest-asyncio>=0.25.0,<2
 pytest-cov==4.1.0
 black==24.3.0
 isort==5.13.2
