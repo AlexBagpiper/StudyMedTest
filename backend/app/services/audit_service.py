@@ -4,7 +4,6 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit import AuditLog
-from app.core.database import get_db
 import logging
 
 logger = logging.getLogger(__name__)
