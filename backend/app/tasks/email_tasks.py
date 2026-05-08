@@ -26,8 +26,26 @@ from app.services.email.templates import (
     render_verification_email,
 )
 from app.tasks.celery_app import celery_app
+from app.core.database import AsyncSessionLocal
+from app.services.audit_service import audit_service
+import asyncio
 
 logger = logging.getLogger(__name__)
+
+def run_async(coro):
+    """Безопасный запуск асинхронного кода из синхронной среды Celery"""
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    if loop.is_running():
+        import nest_asyncio
+        nest_asyncio.apply()
+        return loop.run_until_complete(coro)
+    else:
+        return loop.run_until_complete(coro)
 
 _RETRY_EXCEPTIONS = (
     smtplib.SMTPException,
@@ -50,7 +68,28 @@ _RETRY_EXCEPTIONS = (
 )
 def send_verification_email_task(self, to_email: str, code: str) -> None:
     rendered = render_verification_email(code)
-    send_blocking(to_email, rendered)
+    
+    async def _log_and_send():
+        async with AsyncSessionLocal() as db:
+            try:
+                # В Celery у нас нет Request, поэтому используем log_event напрямую
+                send_blocking(to_email, rendered)
+                await audit_service.log_event(
+                    db=db,
+                    action="email.sent",
+                    details={"email": to_email, "type": "verification"}
+                )
+                await db.commit()
+            except Exception as e:
+                await audit_service.log_event(
+                    db=db,
+                    action="email.failed",
+                    details={"email": to_email, "type": "verification", "error": str(e)}
+                )
+                await db.commit()
+                raise e
+
+    run_async(_log_and_send())
 
 
 @celery_app.task(
@@ -66,7 +105,27 @@ def send_verification_email_task(self, to_email: str, code: str) -> None:
 )
 def send_email_change_task(self, to_email: str, code: str) -> None:
     rendered = render_email_change(code, to_email)
-    send_blocking(to_email, rendered)
+    
+    async def _log_and_send():
+        async with AsyncSessionLocal() as db:
+            try:
+                send_blocking(to_email, rendered)
+                await audit_service.log_event(
+                    db=db,
+                    action="email.sent",
+                    details={"email": to_email, "type": "email_change"}
+                )
+                await db.commit()
+            except Exception as e:
+                await audit_service.log_event(
+                    db=db,
+                    action="email.failed",
+                    details={"email": to_email, "type": "email_change", "error": str(e)}
+                )
+                await db.commit()
+                raise e
+
+    run_async(_log_and_send())
 
 
 @celery_app.task(

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # API Settings
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "MedTest Platform"
-    VERSION: str = "1.3.0"
+    VERSION: str = "1.4.0"
     
     # Security
     SECRET_KEY: str = "6067b57b6f633519c6295b958e805d21a57c5e5b3b3a6d4b9b9c9d9e9f0a1b2c"  # Stable key for dev
@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     YANDEX_FOLDER_ID: Optional[str] = None
     
     # Versioning
-    APP_VERSION: str = "1.2.0"
+    APP_VERSION: str = "1.4.0"
     APP_REVISION: str = "dev"
     
     # Yandex Search API (for plagiarism check)
@@ -128,7 +128,7 @@ class Settings(BaseSettings):
     OTP_RESEND_COOLDOWN_SECONDS: int = 60
     OTP_MAX_RESENDS_PER_HOUR: int = 5
     REGISTRATION_DRAFT_TTL_SECONDS: int = 900     # 15 min
-    REGISTER_RATE_LIMIT_PER_IP: str = "10/hour"
+    REGISTER_RATE_LIMIT_PER_IP: str = "40/hour"
     RESEND_RATE_LIMIT_PER_IP: str = "20/hour"
     VERIFY_RATE_LIMIT_PER_IP: str = "30/minute"
 

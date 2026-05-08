@@ -4,6 +4,7 @@ import PeopleIcon from '@mui/icons-material/People'
 import SettingsIcon from '@mui/icons-material/Settings'
 import EmailIcon from '@mui/icons-material/Email'
 import AssignmentIcon from '@mui/icons-material/Assignment'
+import HistoryIcon from '@mui/icons-material/History'
 import { useLocale } from '../../contexts/LocaleContext'
 import { useLocation } from 'react-router-dom'
 import UsersManagement from './UsersManagement'
@@ -11,8 +12,9 @@ import SystemSettings, { SettingsSection } from './SystemSettings'
 import CVSettings from './CVSettings'
 import LLMSettings from './LLMSettings'
 import TeacherApplicationsManagement from './TeacherApplicationsManagement'
+import AuditLogsManagement from './AuditLogsManagement'
 
-type AdminSection = 'main' | 'users' | 'settings' | 'mail' | 'teacher-applications'
+type AdminSection = 'main' | 'users' | 'settings' | 'mail' | 'teacher-applications' | 'audit-logs'
 
 export default function AdminPage() {
   const { t } = useLocale()
@@ -45,6 +47,13 @@ export default function AdminPage() {
       description: 'Рассмотрение заявок на регистрацию',
       icon: <AssignmentIcon sx={{ fontSize: 40 }} />,
       color: '#F59E0B',
+    },
+    {
+      id: 'audit-logs' as AdminSection,
+      title: 'Журналы аудита',
+      description: 'Просмотр системных событий и ошибок',
+      icon: <HistoryIcon sx={{ fontSize: 40 }} />,
+      color: '#8B5CF6',
     },
     {
       id: 'settings' as AdminSection,
@@ -112,6 +121,9 @@ export default function AdminPage() {
       
       case 'teacher-applications':
         return <TeacherApplicationsManagement />
+      
+      case 'audit-logs':
+        return <AuditLogsManagement />
       
       case 'settings':
         if (activeSettingsSection === 'cv') {

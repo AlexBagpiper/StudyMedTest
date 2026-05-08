@@ -253,6 +253,8 @@ class AdminAuditLogUser(BaseModel):
     """Краткая информация о пользователе в audit log"""
     id: UUID
     email: str
+    first_name: str
+    last_name: str
 
     model_config = {"from_attributes": True}
 

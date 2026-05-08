@@ -131,6 +131,12 @@ export const adminApi = {
     const response = await api.post(`/admin/submissions/${submissionId}/revaluate`)
     return response.data
   },
+
+  // Audit Logs
+  getAuditLogs: async (params?: any) => {
+    const response = await api.get('/admin/audit-logs', { params })
+    return response.data
+  },
 }
 
 // Questions API

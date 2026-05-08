@@ -121,7 +121,15 @@ class OtpService:
         if self._verify_sha:
             return self._verify_sha
         client = await get_redis_client()
-        self._verify_sha = await client.script_load(_VERIFY_CONSUME_LUA)
+        # В тестах с fakeredis команда SCRIPT LOAD может не поддерживаться 
+        # или возвращать ошибку. Для тестов используем fallback.
+        try:
+            self._verify_sha = await client.script_load(_VERIFY_CONSUME_LUA)
+        except Exception as e:
+            if "unknown command `script`" in str(e):
+                logger.warning("SCRIPT LOAD not supported by Redis client, using direct EVAL fallback")
+                return ""
+            raise
         return self._verify_sha
 
     async def issue(
@@ -224,12 +232,18 @@ class OtpService:
 
         sha = await self._ensure_script()
         try:
-            raw = await client.evalsha(sha, 1, key, code_hash, str(max_attempts))
+            if sha:
+                raw = await client.evalsha(sha, 1, key, code_hash, str(max_attempts))
+            else:
+                raw = await client.eval(_VERIFY_CONSUME_LUA, 1, key, code_hash, str(max_attempts))
         except Exception:
             # If script was evicted, reload and retry once.
             self._verify_sha = None
             sha = await self._ensure_script()
-            raw = await client.evalsha(sha, 1, key, code_hash, str(max_attempts))
+            if sha:
+                raw = await client.evalsha(sha, 1, key, code_hash, str(max_attempts))
+            else:
+                raw = await client.eval(_VERIFY_CONSUME_LUA, 1, key, code_hash, str(max_attempts))
 
         tag = raw[0] if isinstance(raw, (list, tuple)) else raw
         if isinstance(tag, bytes):

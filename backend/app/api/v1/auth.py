@@ -52,6 +52,7 @@ from app.schemas.user import (
     VerifyEmailResponse,
 )
 from app.services.email import get_email_sender
+from app.services.audit_service import audit_service
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,17 @@ async def register(
     # Issue (or reuse) an OTP.
     outcome = await otp_service.issue(email)
 
+    await audit_service.log_request(
+        request=request,
+        db=db,
+        action="auth.register_start",
+        details={
+            "email": email,
+            "reused": outcome.reused,
+            "limited": outcome.limited
+        }
+    )
+
     if outcome.limited:
         # Hourly cap reached — treat as "please wait" but uniform shape.
         return RegistrationAccepted(
@@ -157,6 +169,12 @@ async def register(
             await sender.send_verification(email, outcome.code)
         except Exception as exc:  # noqa: BLE001 — transport layer handles retries
             logger.error("register.email_dispatch_failed email=%s error=%s", email, exc)
+            await audit_service.log_request(
+                request=request,
+                db=db,
+                action="auth.email_dispatch_failed",
+                details={"email": email, "error": str(exc)}
+            )
             # Best-effort: keep draft + OTP so user can resend; don't leak error.
 
         if settings.ENVIRONMENT == "development":
@@ -203,6 +221,12 @@ async def verify_email(
         if draft is None:
             # OTP was valid but draft expired — race, we must ask them to start
             # over. Very unlikely but possible if TTLs differ.
+            await audit_service.log_request(
+                request=request,
+                db=db,
+                action="auth.verify_failed",
+                details={"email": email, "reason": "draft_expired"}
+            )
             raise HTTPException(
                 status_code=status.HTTP_410_GONE,
                 detail="Данные регистрации устарели. Зарегистрируйтесь заново.",
@@ -221,15 +245,34 @@ async def verify_email(
         db.add(user)
         try:
             await db.commit()
+            await audit_service.log_request(
+                request=request,
+                db=db,
+                action="auth.verify_success",
+                user_id=user.id,
+                details={"email": email}
+            )
         except IntegrityError:
             # Someone else won the race and created the user — treat as success.
             await db.rollback()
+            await audit_service.log_request(
+                request=request,
+                db=db,
+                action="auth.verify_success",
+                details={"email": email, "note": "race_won_by_other"}
+            )
         finally:
             await _drop_draft(email)
 
         return VerifyEmailResponse(message="Email успешно подтверждён.", email=email)
 
     if outcome.result is OtpResult.INVALID_CODE:
+        await audit_service.log_request(
+            request=request,
+            db=db,
+            action="auth.verify_failed",
+            details={"email": email, "reason": "invalid_code", "attempts_left": outcome.attempts_left}
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Неверный код подтверждения. Осталось попыток: {outcome.attempts_left}.",
@@ -237,6 +280,12 @@ async def verify_email(
 
     if outcome.result is OtpResult.TOO_MANY_ATTEMPTS:
         await _drop_draft(email)
+        await audit_service.log_request(
+            request=request,
+            db=db,
+            action="auth.verify_failed",
+            details={"email": email, "reason": "too_many_attempts"}
+        )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Слишком много неверных попыток. Зарегистрируйтесь заново.",
@@ -283,6 +332,12 @@ async def resend_verification(
 
     draft = await _load_draft(email)
     if draft is None:
+        await audit_service.log_request(
+            request=request,
+            db=db,
+            action="auth.resend_failed",
+            details={"email": email, "reason": "no_draft"}
+        )
         return RegistrationAccepted(
             message="Если email корректен, код подтверждения отправлен.",
             email=email,
@@ -290,11 +345,23 @@ async def resend_verification(
         )
 
     outcome = await otp_service.issue(email)
+    await audit_service.log_request(
+        request=request,
+        db=db,
+        action="auth.resend_start",
+        details={"email": email, "limited": outcome.limited}
+    )
     if outcome.code is not None and not outcome.limited:
         try:
             await sender.send_verification(email, outcome.code)
         except Exception as exc:  # noqa: BLE001
             logger.error("resend.email_dispatch_failed email=%s error=%s", email, exc)
+            await audit_service.log_request(
+                request=request,
+                db=db,
+                action="auth.email_dispatch_failed",
+                details={"email": email, "error": str(exc), "context": "resend"}
+            )
 
         if settings.ENVIRONMENT == "development":
             logger.info("resend.dev_code email=%s code=%s", email, outcome.code)

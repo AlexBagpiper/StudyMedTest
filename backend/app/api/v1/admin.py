@@ -923,10 +923,11 @@ async def list_audit_logs(
     user_id: Optional[UUID] = None,
     action: Optional[str] = None,
     resource_type: Optional[str] = None,
+    search: Optional[str] = None,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Список audit логов"""
+    """Список audit логов с расширенным поиском"""
     query = select(AuditLog).options(selectinload(AuditLog.user))
     count_query = select(func.count(AuditLog.id))
     
@@ -941,6 +942,16 @@ async def list_audit_logs(
     if resource_type:
         query = query.where(AuditLog.resource_type == resource_type)
         count_query = count_query.where(AuditLog.resource_type == resource_type)
+
+    if search:
+        # Поиск по email в details или по IP
+        search_filter = or_(
+            AuditLog.details["email"].astext.ilike(f"%{search}%"),
+            AuditLog.ip_address.ilike(f"%{search}%"),
+            AuditLog.action.ilike(f"%{search}%"),
+        )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
     
     total = await db.scalar(count_query)
     

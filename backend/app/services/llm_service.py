@@ -286,10 +286,23 @@ class YandexGPTProvider(BaseLLMProvider):
                 
                 if response.status_code != 200:
                     hint = ""
-                    if response.status_code == 401:
-                        hint = " (Убедитесь, что API Key начинается на 'AQVN'. Указанный вами ключ похож на ID ресурса, а не на секретный ключ)"
-                    elif response.status_code == 403:
-                        hint = " (Проверьте права доступа сервисного аккаунта и Folder ID 'b1...')"
+                    error_data = {}
+                    try:
+                        error_data = response.json()
+                        error_msg = error_data.get("message", "")
+                        if any(word in error_msg.lower() for word in ["billing", "payment", "suspended", "account", "balance"]):
+                            hint = " (Вероятно, облако заблокировано из-за задолженности или проблем с биллингом)"
+                        elif "permission" in error_msg.lower() or "denied" in error_msg.lower():
+                            hint = " (Проверьте права доступа сервисного аккаунта. Требуется роль 'ai.languageModels.user')"
+                    except:
+                        pass
+                        
+                    if not hint:
+                        if response.status_code == 401:
+                            hint = " (Ошибка авторизации: проверьте API Key)"
+                        elif response.status_code == 403:
+                            hint = " (Доступ запрещен: проверьте права или Folder ID)"
+                            
                     raise Exception(f"YandexGPT error: {response.status_code} {response.text}{hint}")
                 
                 result_text = response.json()["result"]["alternatives"][0]["message"]["text"]
@@ -771,7 +784,7 @@ class LLMService:
             )
             
             # Проверяем, не вернул ли провайдер ошибку внутри результата
-            if result.get("total_score") == 0 and "Error" in result.get("feedback", ""):
+            if result.get("total_score") == 0 and ("Error" in result.get("feedback", "") or "ошибка" in result.get("feedback", "").lower()):
                 raise Exception(result["feedback"])
                 
             # Применяем integrity_score из ответа LLM или наш manual
@@ -847,6 +860,10 @@ class LLMService:
                     criteria=criteria,
                     config=db_config
                 )
+                
+                # Если и fallback вернул ошибку, добавим инфо об ошибке основного провайдера
+                if result.get("total_score") == 0 and ("Error" in result.get("feedback", "") or "ошибка" in result.get("feedback", "").lower()):
+                    result["feedback"] = f"Основной сервис ({provider.__class__.__name__}) недоступен: {str(e)}. Запасной сервис также вернул ошибку: {result['feedback']}"
                 
                 # Применяем integrity_score к итоговому баллу в fallback
                 llm_integrity = result.get("integrity_score")
