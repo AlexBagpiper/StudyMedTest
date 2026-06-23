@@ -55,7 +55,7 @@ services:
 
   # Backend API (FastAPI)
   backend:
-    image: medtest-backend:${APP_VERSION:-latest}
+    image: medtest-backend:${APP_VERSION:-1.4.3}
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -64,34 +64,9 @@ services:
     env_file: .env
     volumes:
       - ../docs/wiki:/app/docs/wiki:ro
-    # Migrations + Start server
     command: >
-      sh -c "alembic upgrade head && 
-            python init_db.py &&
+      sh -c "sh /app/scripts/init.sh && 
             uvicorn app.main:app --host 0.0.0.0 --port 8000"
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      SECRET_KEY: ${SECRET_KEY}
-      APP_VERSION: ${APP_VERSION:-1.4.2}
-      APP_REVISION: ${APP_REVISION:-dev}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      MINIO_BUCKET: ${MINIO_BUCKET}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      LOCAL_LLM_ENABLED: ${LOCAL_LLM_ENABLED}
-      LOCAL_LLM_URL: ${LOCAL_LLM_URL}
-      YANDEX_API_KEY: ${YANDEX_API_KEY}
-      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID}
-      YANDEX_SEARCH_API_KEY: ${YANDEX_SEARCH_API_KEY}
-      YANDEX_SEARCH_FOLDER_ID: ${YANDEX_SEARCH_FOLDER_ID}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      QWEN_API_KEY: ${QWEN_API_KEY}
-      GIGACHAT_CREDENTIALS: ${GIGACHAT_CREDENTIALS}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
     depends_on:
       db:
         condition: service_healthy
@@ -102,136 +77,81 @@ services:
     networks:
       - medtest-network
 
-  # Celery Worker (тот же образ, что backend — сборка только у backend)
+  # Celery Worker
   celery_worker:
-    image: medtest-backend:${APP_VERSION:-latest}
+    image: medtest-backend:${APP_VERSION:-1.4.3}
     container_name: medtest-celery-worker
     restart: always
     env_file: .env
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d celery@$$HOSTNAME"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    # Явно указываем очередь 'celery' — чтобы не конкурировать с email-воркером.
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --queues=celery
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      APP_VERSION: ${APP_VERSION:-1.4.2}
-      APP_REVISION: ${APP_REVISION:-dev}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
-      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      LOCAL_LLM_ENABLED: ${LOCAL_LLM_ENABLED}
-      LOCAL_LLM_URL: ${LOCAL_LLM_URL}
-      YANDEX_API_KEY: ${YANDEX_API_KEY}
-      YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID}
-      YANDEX_SEARCH_API_KEY: ${YANDEX_SEARCH_API_KEY}
-      YANDEX_SEARCH_FOLDER_ID: ${YANDEX_SEARCH_FOLDER_ID}
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
-      QWEN_API_KEY: ${QWEN_API_KEY}
-      GIGACHAT_CREDENTIALS: ${GIGACHAT_CREDENTIALS}
-      GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
     depends_on:
       - redis
       - db
     networks:
       - medtest-network
 
-  # Celery Email Worker — выделенная очередь для отправки писем (регистрация, верификация).
-  # Короткие задачи, prefetch повыше, concurrency невысокий (SMTP не любит параллелизма).
+  # Celery Email Worker
   celery_email_worker:
-    image: medtest-backend:${APP_VERSION:-latest}
+    image: medtest-backend:${APP_VERSION:-1.4.3}
     container_name: medtest-celery-email-worker
     restart: always
     env_file: .env
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping -d email@$$HOSTNAME"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    command: >
-      celery -A app.tasks.celery_app worker
-      --loglevel=info
-      --concurrency=2
-      --queues=email
-      --prefetch-multiplier=4
-      -n email@%h
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      APP_VERSION: ${APP_VERSION:-1.4.2}
-      APP_REVISION: ${APP_REVISION:-dev}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      SMTP_FROM: ${SMTP_FROM}
-      EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-celery}
-      ENVIRONMENT: ${ENVIRONMENT:-production}
-      SECRET_KEY: ${SECRET_KEY}
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 --queues=email --prefetch-multiplier=4 -n email@%h
     depends_on:
       - redis
     networks:
       - medtest-network
 
-  # Frontend (React) - Production stage
+  # Frontend (React)
   frontend:
-    image: medtest-frontend:${APP_VERSION:-latest}
+    image: medtest-frontend:${APP_VERSION:-1.4.3}
     build:
       context: ../frontend
       dockerfile: Dockerfile
       target: production
       args:
         VITE_API_URL: ${VITE_API_URL:-/api/v1}
-        VITE_APP_VERSION: ${APP_VERSION:-1.4.2}
+        VITE_APP_VERSION: ${APP_VERSION:-1.4.3}
     container_name: medtest-frontend
     restart: always
     networks:
       - medtest-network
 
-    # Nginx (Reverse Proxy)
+  # Nginx (Reverse Proxy with Auto-SSL)
   nginx:
-    image: nginx:alpine
+    image: jonasal/nginx-certbot:latest
     container_name: medtest-nginx
     restart: always
+    environment:
+      - CERTBOT_EMAIL=${CERTBOT_EMAIL}
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/certs:/etc/nginx/certs
       - ./certbot/www:/var/www/certbot:ro
     ports:
       - "80:80"
       - "443:443"
+    env_file: .env
     depends_on:
       - backend
       - frontend
     networks:
       - medtest-network
 
-    # Mail Server (Mox) - Lightweight all-in-one SMTP, IMAP, Webmail
+  # Mail Server (Mox)
   mail:
     image: r.xmox.nl/mox:latest
     container_name: medtest-mail
     restart: always
     working_dir: /data
     extra_hosts:
-      - "med-testing.ru:127.0.0.1"
-      - "mail.med-testing.ru:127.0.0.1"
-    # Mox handles its own TLS if ports 80/443 are available, 
-    # but since we have Nginx, we'll let Nginx handle webmail proxying 
-    # and Mox handle SMTP/IMAP directly.
+      - "${DOMAIN_NAME}:127.0.0.1"
+      - "${MAIL_DOMAIN_NAME}:127.0.0.1"
     ports:
-      - "25:25"     # SMTP
-      - "465:465"   # SMTP (TLS)
-      - "587:587"   # Submission (STARTTLS)
-      - "993:993"   # IMAP (TLS)
+      - "25:25"
+      - "465:465"
+      - "587:587"
+      - "993:993"
     volumes:
       - ./mox-data:/data
       - ./nginx/certs:/certs:ro

@@ -1,359 +1,107 @@
 # Deployment Guide - MedTest Platform
 
+Этот гид описывает процесс развертывания платформы MedTest в Production окружении с использованием Docker Compose, автоматическим получением SSL-сертификатов и автоматической инициализацией базы данных.
+
 ## Предварительные требования
 
-### Минимальные системные требования (On-Premise)
+### Минимальные системные требования
 
-- **Сервер приложений**: 8 CPU cores, 16 GB RAM, 100 GB SSD
-- **Сервер БД**: 4 CPU cores, 8 GB RAM, 200 GB SSD (может быть тот же сервер)
-- **Сервер storage**: 4 CPU cores, 8 GB RAM, 500 GB+ HDD/SSD
-- **GPU сервер (опционально для локальных LLM)**: NVIDIA A100/H100, 32 GB+ VRAM
+- **CPU**: 4+ ядра (рекомендуется 8 для LLM)
+- **RAM**: 8 GB+ (рекомендуется 16 GB)
+- **Disk**: 100 GB+ SSD
+- **ОС**: Ubuntu 22.04+ (или любая система с поддержкой Docker)
 
 ### Софт
 
 - Docker 24.0+
 - Docker Compose 2.20+
-- Nginx (если не используется Docker Compose nginx)
-- PostgreSQL 16 (если не через Docker)
 - Git
 
-## Быстрый старт (Development)
+## Быстрое развертывание (Production)
 
+Развертывание полностью автоматизировано и управляется через файл `.env`.
+
+### 1. Подготовка
 ```bash
-# 1. Клонирование репозитория
 git clone <repository-url>
-cd StudyMedTest
-
-# 2. Копирование и настройка переменных окружения
-cp .env.example .env
-# Отредактируйте .env с вашими настройками
-
-# 3. Запуск всех сервисов
-docker-compose up -d
-
-# 4. Применение миграций БД
-docker-compose exec backend alembic upgrade head
-
-# 5. Создание первого администратора
-docker-compose exec backend python -m app.cli create-admin
-
-# 6. Открытие в браузере
-# Frontend: http://localhost
-# Backend API: http://localhost:8000/docs
+cd StudyMedTest/deployment
+cp env.example .env
 ```
 
-## Production Deployment
-
-### 1. Подготовка сервера
-
-```bash
-# Установка Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Установка Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-# Проверка установки
-docker --version
-docker-compose --version
-```
-
-### 2. Настройка переменных окружения
-
-Создайте `.env` файл с production настройками:
-
+### 2. Настройка .env
+Отредактируйте `.env`, указав ваш домен и почту для SSL:
 ```env
-# Database (используйте сильные пароли!)
-POSTGRES_PASSWORD=<strong-random-password>
-DATABASE_URL=postgresql://medtest_user:<strong-password>@db:5432/medtest
+DOMAIN_NAME=your-domain.com
+MAIL_DOMAIN_NAME=mail.your-domain.com
+CERTBOT_EMAIL=admin@your-domain.com
 
-# Security
-SECRET_KEY=<generate-with-openssl-rand-hex-32>
-
-# MinIO
-MINIO_ROOT_PASSWORD=<strong-random-password>
-
-# LLM API Keys (если используете облачные)
-OPENAI_API_KEY=<your-key>
-ANTHROPIC_API_KEY=<your-key>
-
-# Email (для уведомлений)
-SMTP_HOST=smtp.your-domain.com
-SMTP_USER=noreply@your-domain.com
-SMTP_PASSWORD=<smtp-password>
-
-# Monitoring
-SENTRY_DSN=<your-sentry-dsn>
-ENVIRONMENT=production
+# Сгенерируйте секретный ключ
+SECRET_KEY=openssl rand -hex 32
 ```
 
-### 3. SSL сертификаты
-
+### 3. Запуск
 ```bash
-# Используйте Let's Encrypt для бесплатных SSL сертификатов
-sudo apt-get install certbot
-
-# Получение сертификата
-sudo certbot certonly --standalone -d your-domain.com
-
-# Копирование сертификатов
-sudo cp /etc/letsencrypt/live/your-domain.com/fullchain.pem nginx/certs/
-sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem nginx/certs/
-
-# Раскомментируйте SSL блок в nginx/nginx.conf
+docker compose up -d --build
 ```
 
-### 4. Запуск production
+**Что произойдет автоматически:**
+1.  **SSL**: Контейнер Nginx сам запросит сертификаты у Let's Encrypt для вашего домена.
+2.  **База данных**: Бэкенд дождется готовности Postgres и сам применит все миграции.
+3.  **Инициализация**: Будет создан первый администратор (данные из `.env`) и настроены бакеты MinIO.
+4.  **Nginx**: Конфигурация будет сгенерирована из шаблона с подстановкой вашего домена.
 
-```bash
-# Сборка и запуск
-docker-compose -f docker-compose.yml up -d --build
+## Архитектура автоматизации
 
-# Проверка статуса
-docker-compose ps
+### Автоматический SSL
+Используется образ `jonasal/nginx-certbot`. Он объединяет Nginx и Certbot в одном контейнере. 
+- Конфигурация лежит в `deployment/nginx/templates/default.conf.template`.
+- Сертификаты обновляются автоматически каждые 60 дней.
 
-# Просмотр логов
-docker-compose logs -f backend
-docker-compose logs -f frontend
-```
+### Умный старт бэкенда
+Бэкенд использует скрипт `backend/scripts/init.sh` в качестве точки входа. Он гарантирует, что приложение не запустится, пока база данных не будет готова и полностью обновлена.
 
-### 5. Миграции и инициализация
-
-```bash
-# Применение миграций
-docker-compose exec backend alembic upgrade head
-
-# Создание администратора
-docker-compose exec backend python -c "
-from app.core.database import AsyncSessionLocal
-from app.models.user import User
-from app.core.security import get_password_hash
-import asyncio
-
-async def create_admin():
-    async with AsyncSessionLocal() as db:
-        admin = User(
-            email='admin@your-domain.com',
-            password_hash=get_password_hash('your-secure-password'),
-            full_name='System Administrator',
-            role='admin',
-            is_active=True,
-            is_verified=True
-        )
-        db.add(admin)
-        await db.commit()
-        print('Admin created successfully')
-
-asyncio.run(create_admin())
-"
-```
-
-## Мониторинг
-
-### Prometheus + Grafana
-
-```bash
-# Добавьте в docker-compose.yml
-  prometheus:
-    image: prom/prometheus
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana
-    volumes:
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    ports:
-      - "3001:3000"
-```
-
-### Логи
-
-```bash
-# Просмотр логов в реальном времени
-docker-compose logs -f
-
-# Экспорт логов
-docker-compose logs > logs_$(date +%Y%m%d).txt
-
-# Ротация логов (настроить в docker-compose.yml)
-logging:
-  driver: "json-file"
-  options:
-    max-size: "10m"
-    max-file: "3"
-```
-
-## Бэкапы
-
-### Автоматический бэкап (cron)
-
-```bash
-# Создайте скрипт /usr/local/bin/medtest-backup.sh
-#!/bin/bash
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR=/backups/medtest
-
-# PostgreSQL backup
-docker-compose exec -T db pg_dump -U medtest_user medtest | gzip > $BACKUP_DIR/db_$DATE.sql.gz
-
-# MinIO backup
-docker-compose exec -T minio mc mirror minio/medtest-storage $BACKUP_DIR/minio_$DATE/
-
-# Удаление старых бэкапов (старше 30 дней)
-find $BACKUP_DIR -name "db_*.sql.gz" -mtime +30 -delete
-find $BACKUP_DIR -name "minio_*" -mtime +30 -exec rm -rf {} \;
-
-echo "Backup completed: $DATE"
-```
-
-```bash
-# Добавьте в crontab
-sudo crontab -e
-# Добавьте строку (бэкап каждый день в 2:00 AM):
-0 2 * * * /usr/local/bin/medtest-backup.sh >> /var/log/medtest-backup.log 2>&1
-```
-
-## Масштабирование
-
-### Горизонтальное масштабирование backend
-
-```yaml
-# В docker-compose.yml увеличьте replicas
-  backend:
-    ...
-    deploy:
-      replicas: 3
-      resources:
-        limits:
-          cpus: '2'
-          memory: 4G
-```
-
-### Load Balancer (Nginx)
-
-Nginx автоматически распределяет нагрузку между репликами backend.
-
-### Celery Workers
-
-```bash
-# Увеличьте количество workers
-docker-compose scale celery_worker=4
-```
+### Почтовый сервер (Mox)
+Mox настроен как легковесный почтовый сервер внутри Docker.
+- Веб-интерфейс доступен по адресу: `https://mail.your-domain.com/webmail/`
+- Админка: `https://mail.your-domain.com/admin/`
 
 ## Обновление системы
 
+Для обновления до последней версии из репозитория:
 ```bash
-# 1. Создайте бэкап
-/usr/local/bin/medtest-backup.sh
-
-# 2. Получите обновления
 git pull origin main
+docker compose up -d --build
+```
+Бэкенд автоматически применит новые миграции при перезапуске.
 
-# 3. Остановите сервисы
-docker-compose down
+## Мониторинг и логи
 
-# 4. Пересоберите образы
-docker-compose build
+### Просмотр логов
+```bash
+# Все логи
+docker compose logs -f
 
-# 5. Запустите обновлённую версию
-docker-compose up -d
+# Только бэкенд
+docker compose logs -f backend
 
-# 6. Примените новые миграции
-docker-compose exec backend alembic upgrade head
-
-# 7. Проверьте работоспособность
-docker-compose ps
-docker-compose logs -f
+# Только ошибки SSL/Nginx
+docker compose logs -f nginx
 ```
 
-## Troubleshooting
-
-### Backend недоступен
-
+### Статус сервисов
 ```bash
-# Проверка логов
-docker-compose logs backend
-
-# Проверка состояния контейнера
-docker-compose ps backend
-
-# Перезапуск
-docker-compose restart backend
-```
-
-### База данных недоступна
-
-```bash
-# Проверка подключения
-docker-compose exec backend python -c "
-from app.core.database import engine
-import asyncio
-asyncio.run(engine.connect())
-print('DB connection OK')
-"
-
-# Восстановление из бэкапа
-gunzip < backup.sql.gz | docker-compose exec -T db psql -U medtest_user medtest
-```
-
-### Медленная работа LLM
-
-```bash
-# Проверка очереди Celery
-docker-compose exec backend celery -A app.tasks.celery_app inspect active
-
-# Увеличение количества workers
-docker-compose scale celery_worker=6
+docker compose ps
 ```
 
 ## Безопасность
 
-### Регулярные обновления
+1.  **Firewall**: Убедитесь, что порты 80 и 443 открыты для входящего трафика. Для работы почты должны быть открыты порты 25, 465, 587, 993.
+2.  **Секреты**: Никогда не коммитьте файл `.env`. Используйте `env.example` как шаблон.
+3.  **Пароли**: При первом развертывании обязательно смените стандартные пароли в `.env`.
 
-```bash
-# Обновление образов
-docker-compose pull
-docker-compose up -d
+## Бэкапы
 
-# Обновление системных пакетов
-sudo apt update && sudo apt upgrade -y
-```
-
-### Firewall
-
-```bash
-# Разрешить только необходимые порты
-sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
-sudo ufw enable
-```
-
-### Аудит безопасности
-
-```bash
-# Docker security scan
-docker scan medtest-backend:latest
-
-# Проверка уязвимостей в зависимостях
-docker-compose exec backend pip install safety
-docker-compose exec backend safety check
-```
-
-## Поддержка
-
-Для получения помощи:
-- Документация: `/docs`
-- Issues: GitHub Issues
-- Email: support@your-domain.com
-
+Рекомендуется настроить ежедневный бэкап папок:
+- `deployment/postgres_data` (База данных)
+- `deployment/minio_data` (Файлы/Изображения)
+- `deployment/mox-data` (Почта)

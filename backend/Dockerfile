@@ -17,8 +17,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Копирование приложения
 COPY . .
 
-# Создание непривилегированного пользователя
-RUN useradd -m -u 1000 appuser && \
+# Создание скриптов и прав
+RUN chmod +x scripts/*.sh && \
+    useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 USER appuser
 

@@ -1,18 +1,19 @@
 #!/bin/bash
 
 # StudyMedTest Deployment Script for Linux Server
+# This script automates the deployment process using Docker Compose.
 
 # Exit on error
 set -e
 
-echo "🚀 Starting deployment of StudyMedTest..."
+echo "🚀 Starting automated deployment of StudyMedTest..."
 
 # 1. Check for .env file
 if [ ! -f .env ]; then
     if [ -f env.example ]; then
         echo "⚠️  .env file not found. Creating from env.example..."
         cp env.example .env
-        echo "‼️  Please edit the .env file with your secrets and run this script again."
+        echo "‼️  Please edit the .env file with your DOMAIN_NAME and secrets, then run this script again."
         exit 1
     else
         echo "❌ Error: .env or env.example not found!"
@@ -22,32 +23,22 @@ fi
 
 # 2. Pull latest changes if it's a git repo
 if [ -d "../.git" ]; then
-    echo "📥 Pulling latest changes..."
+    echo "📥 Pulling latest changes from repository..."
     git -C .. pull
 fi
 
-# 3. Cleanup unwanted files (like IDE configs)
-echo "🧹 Cleaning up deployment environment..."
-rm -rf ../.cursor
-rm -rf ../.vscode
-rm -rf ../.idea
-
-# 4. Build and start containers
-echo "🏗️  Building and starting containers..."
-docker compose pull
+# 3. Build and start containers
+echo "🏗️  Building and starting containers in automated mode..."
+# Note: Migrations, admin creation and SSL are now handled automatically by containers
 docker compose up -d --build
 
-# 4. Wait for database to be ready
-echo "⏳ Waiting for database to be ready..."
-sleep 5
-
-# 5. Run migrations and create admin (handled by docker-compose command, but we double check)
-# docker compose exec backend alembic upgrade head
-# docker compose exec backend python create_admin.py
-
-echo "✅ Deployment successful!"
+echo "✅ Deployment initiated successfully!"
 echo "------------------------------------------------"
-echo "API: http://$(hostname -I | awk '{print $1}')/api/docs"
-echo "Frontend: http://$(hostname -I | awk '{print $1}')/"
+echo "The system is now performing automatic setup:"
+echo "1. Requesting SSL certificates via Certbot"
+echo "2. Waiting for Database readiness"
+echo "3. Running migrations and creating admin user"
 echo "------------------------------------------------"
-echo "Logs: docker compose logs -f"
+echo "Monitoring progress: docker compose logs -f backend"
+echo "Check SSL status: docker compose logs -f nginx"
+echo "------------------------------------------------"

@@ -39,52 +39,30 @@
 - Nginx (reverse proxy + load balancer)
 - Prometheus + Grafana (мониторинг)
 
-## Быстрый старт
-
-> 💡 **Альтернатива**: Если вы предпочитаете установку без Docker:
-> - **Windows**: [INSTALL_WINDOWS.md](INSTALL_WINDOWS.md) (упрощенная инструкция)
-> - **Все ОС**: [INSTALL_NATIVE.md](INSTALL_NATIVE.md) (полная инструкция)
-
-### Предварительные требования
-
-- Docker 24.0+
-- Docker Compose 2.20+
-- Git
-- (Опционально) NVIDIA GPU + nvidia-docker для локальных LLM
-
-### Установка
+## Быстрый старт (Production)
 
 1. Клонируйте репозиторий:
 ```bash
 git clone <repository-url>
-cd StudyMedTest
+cd StudyMedTest/deployment
 ```
 
-2. Создайте `.env` файл:
+2. Создайте и настройте `.env`:
 ```bash
-cp .env.example .env
-# Отредактируйте .env с вашими настройками
+cp env.example .env
+# Укажите DOMAIN_NAME и CERTBOT_EMAIL в .env
 ```
 
-3. Запустите инфраструктуру:
+3. Запустите всё одной командой:
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
+*Система сама получит SSL, применит миграции и создаст админа.*
 
-4. Примените миграции базы данных:
-```bash
-docker-compose exec backend alembic upgrade head
-```
-
-5. Создайте суперпользователя:
-```bash
-docker-compose exec backend python -m app.cli create-admin
-```
-
-6. Откройте браузер:
-- Frontend: http://localhost
-- Backend API Docs: http://localhost:8000/docs
-- MinIO Console: http://localhost:9001
+4. Откройте браузер:
+- Frontend: `https://your-domain.com`
+- API Docs: `https://your-domain.com/api/docs`
+- Webmail: `https://mail.your-domain.com/webmail/`
 
 ## Разработка
 
