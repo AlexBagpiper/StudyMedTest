@@ -26,10 +26,20 @@ DEPLOY="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="$(cd "$DEPLOY/.." && pwd)"
 cd "$DEPLOY"
 
-# shellcheck disable=SC1091
-set -a
-source .env
-set +a
+_env_get() {
+  grep -E "^${1}=" .env | head -1 | cut -d= -f2- | tr -d '\r'
+}
+
+POSTGRES_USER="$(_env_get POSTGRES_USER)"
+POSTGRES_DB="$(_env_get POSTGRES_DB)"
+VERSION="$(_env_get VERSION)"
+DOMAIN_NAME="$(_env_get DOMAIN_NAME)"
+MINIO_BUCKET="$(_env_get MINIO_BUCKET)"
+
+if [[ -z "$POSTGRES_USER" || -z "$POSTGRES_DB" ]]; then
+  echo "ERROR: POSTGRES_USER / POSTGRES_DB missing in deployment/.env"
+  exit 1
+fi
 
 STAMP="$(date +%Y-%m-%d_%H%M)"
 OUT_ROOT="${BACKUP_ROOT:-/home/medtest/backups}/cold-staging"
