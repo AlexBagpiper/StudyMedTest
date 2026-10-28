@@ -1,10 +1,22 @@
 #!/bin/sh
 
-# Wait for database
+# Wait for database (no netcat required in slim image)
 echo "Waiting for database..."
-while ! nc -z db 5432; do
-  sleep 1
-done
+python - <<'PY'
+import socket
+import sys
+import time
+
+host, port = "db", 5432
+for _ in range(120):
+    try:
+        with socket.create_connection((host, port), timeout=2):
+            break
+    except OSError:
+        time.sleep(1)
+else:
+    sys.exit("database not ready after 120s")
+PY
 echo "Database is up!"
 
 # Run migrations

@@ -71,6 +71,7 @@ logs/
 
 # Backups
 backup/
+backups/
 *.sql.gz
 
 # Secrets

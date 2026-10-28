@@ -36,10 +36,14 @@ services:
 
   # MinIO Object Storage (S3-compatible)
   minio:
-    image: minio/minio:latest
+    image: medtest-minio:2025-09-07
+    build:
+      context: ./minio
+      dockerfile: Dockerfile
+      args:
+        MINIO_RELEASE: RELEASE.2025-09-07T16-13-09Z
     container_name: medtest-minio
     restart: always
-    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -139,6 +143,8 @@ services:
       - medtest-network
 
   # Mail Server (Mox)
+  # Yandex Cloud drops outbound TCP/25 except Yandex Mail MX.
+  # Outbound OTP: Яндекс 360 smtp.yandex.ru:465 (SMTP_RELAY_*), never HTTP.
   mail:
     image: r.xmox.nl/mox:latest
     container_name: medtest-mail

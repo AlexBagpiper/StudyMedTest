@@ -106,10 +106,18 @@ class Settings(BaseSettings):
     
     # Email (опционально)
     SMTP_HOST: Optional[str] = None
-    SMTP_PORT: Optional[int] = 587
+    SMTP_PORT: Optional[int] = 465
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: Optional[EmailStr] = None
+    # Yandex Cloud drops outbound TCP/25 except Yandex MX. Gmail/Mail.ru need SMTPS
+    # 465 via Яндекс 360 (smtp.yandex.ru), not HTTP APIs and not Postbox REST.
+    SMTP_RELAY_HOST: Optional[str] = None
+    SMTP_RELAY_PORT: Optional[int] = 465
+    SMTP_RELAY_USER: Optional[str] = None
+    SMTP_RELAY_PASSWORD: Optional[str] = None
+    # True on Yandex Cloud (blocks outbound :25 to Gmail/Mail.ru). Reg.ru + mox: leave False.
+    SMTP_REQUIRE_RELAY: bool = False
     
     # Monitoring
     SENTRY_DSN: Optional[str] = None

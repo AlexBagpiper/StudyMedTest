@@ -72,7 +72,8 @@ docker run -it --rm \
     --email $EMAIL \
     --agree-tos \
     --no-eff-email \
-    -d $DOMAIN
+    -d $DOMAIN \
+    -d www.$DOMAIN
 
 # 8. Copy certificates to nginx certs directory
 echo "📋 Setting up certificates..."

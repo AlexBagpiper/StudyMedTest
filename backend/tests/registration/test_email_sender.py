@@ -105,6 +105,139 @@ async def test_celery_sender_dispatches_task_non_blocking(monkeypatch):
     )
 
 
+def test_send_blocking_skips_reserved_example_com(monkeypatch):
+    from app.core.config import settings as s
+    from app.services.email.smtp_backend import send_blocking
+
+    monkeypatch.setattr(s, "ENVIRONMENT", "production")
+    monkeypatch.setattr(s, "SMTP_HOST", "mail")
+    rendered = templates.render_verification_email("123456")
+    assert send_blocking("dns-smoke-d15a067e@example.com", rendered) is True
+
+
+def test_send_blocking_uses_relay_not_mox(monkeypatch):
+    import smtplib
+
+    from app.core.config import settings as s
+    from app.services.email.smtp_backend import send_blocking
+
+    monkeypatch.setattr(s, "ENVIRONMENT", "production")
+    monkeypatch.setattr(s, "SMTP_HOST", "mail")
+    monkeypatch.setattr(s, "SMTP_PORT", 465)
+    monkeypatch.setattr(s, "SMTP_USER", "account@med-testing.ru")
+    monkeypatch.setattr(s, "SMTP_PASSWORD", "mox-pass")
+    monkeypatch.setattr(s, "SMTP_FROM", "account@med-testing.ru")
+    monkeypatch.setattr(s, "SMTP_RELAY_HOST", "smtp.yandex.ru")
+    monkeypatch.setattr(s, "SMTP_RELAY_PORT", 465)
+    monkeypatch.setattr(s, "SMTP_RELAY_USER", "key-id")
+    monkeypatch.setattr(s, "SMTP_RELAY_PASSWORD", "key-secret")
+
+    seen = {}
+
+    class FakeSMTP_SSL:
+        def __init__(self, host, port, timeout=None):
+            seen["host"] = host
+            seen["port"] = port
+            seen["timeout"] = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def login(self, user, password):
+            seen["user"] = user
+            seen["password"] = password
+
+        def sendmail(self, frm, to, msg):
+            seen["to"] = to
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP_SSL)
+    monkeypatch.setattr(
+        smtplib, "SMTP", lambda *a, **k: (_ for _ in ()).throw(AssertionError("OTP must use SMTP_SSL 465"))
+    )
+
+    rendered = templates.render_verification_email("123456")
+    assert send_blocking("user@gmail.com", rendered) is True
+    assert seen["host"] == "smtp.yandex.ru"
+    assert seen["port"] == 465
+    assert seen["user"] == "key-id"
+    assert seen["to"] == ["user@gmail.com"]
+
+
+def test_send_blocking_rejects_non_smtps_port(monkeypatch):
+    from app.core.config import settings as s
+    from app.services.email.smtp_backend import send_blocking
+
+    monkeypatch.setattr(s, "ENVIRONMENT", "production")
+    monkeypatch.setattr(s, "SMTP_HOST", "mail")
+    monkeypatch.setattr(s, "SMTP_PORT", 587)
+    monkeypatch.setattr(s, "SMTP_FROM", "account@med-testing.ru")
+    monkeypatch.setattr(s, "SMTP_RELAY_HOST", None)
+    rendered = templates.render_verification_email("123456")
+    try:
+        send_blocking("user@yandex.ru", rendered)
+        raise AssertionError("expected ValueError")
+    except ValueError as exc:
+        assert "465" in str(exc)
+
+
+def test_send_blocking_allows_gmail_via_mox_when_relay_not_required(monkeypatch):
+    import smtplib
+
+    from app.core.config import settings as s
+    from app.services.email.smtp_backend import send_blocking
+
+    monkeypatch.setattr(s, "ENVIRONMENT", "production")
+    monkeypatch.setattr(s, "SMTP_HOST", "mail")
+    monkeypatch.setattr(s, "SMTP_PORT", 465)
+    monkeypatch.setattr(s, "SMTP_FROM", "account@med-testing.ru")
+    monkeypatch.setattr(s, "SMTP_RELAY_HOST", None)
+    monkeypatch.setattr(s, "SMTP_REQUIRE_RELAY", False)
+
+    seen = {}
+
+    class FakeSMTP_SSL:
+        def __init__(self, host, port, timeout=None):
+            seen["host"] = host
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def login(self, user, password):
+            pass
+
+        def sendmail(self, frm, to, msg):
+            seen["to"] = to
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP_SSL)
+    rendered = templates.render_verification_email("123456")
+    assert send_blocking("user@gmail.com", rendered) is True
+    assert seen["host"] == "mail"
+
+
+def test_send_blocking_blocks_gmail_without_yandex360_relay(monkeypatch):
+    from app.core.config import settings as s
+    from app.services.email.smtp_backend import send_blocking
+
+    monkeypatch.setattr(s, "ENVIRONMENT", "production")
+    monkeypatch.setattr(s, "SMTP_HOST", "mail")
+    monkeypatch.setattr(s, "SMTP_PORT", 465)
+    monkeypatch.setattr(s, "SMTP_FROM", "account@med-testing.ru")
+    monkeypatch.setattr(s, "SMTP_RELAY_HOST", None)
+    monkeypatch.setattr(s, "SMTP_REQUIRE_RELAY", True)
+    rendered = templates.render_verification_email("123456")
+    try:
+        send_blocking("user@gmail.com", rendered)
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "smtp.yandex.ru" in str(exc)
+
+
 @pytest.mark.asyncio
 async def test_sync_sender_calls_smtp_backend_in_thread(monkeypatch):
     from app.services.email import sync_sender as mod

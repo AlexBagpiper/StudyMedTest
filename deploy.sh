@@ -43,7 +43,11 @@ fi
 
 cd "$(dirname "$0")"
 
-COMPOSE="docker compose -f deployment/docker-compose.yml"
+COMPOSE_ARGS=(-f deployment/docker-compose.yml)
+if [[ -f deployment/docker-compose.override.yml ]]; then
+  COMPOSE_ARGS+=(-f deployment/docker-compose.override.yml)
+fi
+COMPOSE=(docker compose "${COMPOSE_ARGS[@]}")
 REDIS_CONTAINER="medtest-redis"
 
 # --- Rollback: берём предыдущий коммит и делаем обычный деплой.
@@ -101,6 +105,17 @@ _require_real_secret() {
 _require_real_secret SECRET_KEY
 _require_real_secret SMTP_PASSWORD
 
+RELAY_HOST=$(grep -E "^SMTP_RELAY_HOST=" deployment/.env | head -1 | cut -d'=' -f2- || true)
+RELAY_REQUIRED=$(grep -E "^SMTP_REQUIRE_RELAY=" deployment/.env | head -1 | cut -d'=' -f2- || true)
+if [[ "${RELAY_REQUIRED}" == "true" || "${RELAY_REQUIRED}" == "1" ]]; then
+  if [[ -z "${RELAY_HOST}" ]]; then
+    echo "❌ SMTP_REQUIRE_RELAY=1 but SMTP_RELAY_HOST empty (Yandex Cloud / no direct :25)."
+    exit 1
+  fi
+elif [[ -z "${RELAY_HOST}" ]]; then
+  echo "ℹ️  Outbound OTP via mox (SMTP_HOST). Set SMTP_RELAY_* + SMTP_REQUIRE_RELAY=1 only on Yandex Cloud."
+fi
+
 # --- 4. Снимок очередей ДО деплоя (на случай если что-то пойдёт не так).
 _redis_is_up() {
   docker ps --format '{{.Names}}' | grep -q "^${REDIS_CONTAINER}$"
@@ -133,15 +148,15 @@ _queue_snapshot "before deploy"
 
 # --- 5. Сборка и запуск.
 if [[ $CLEAN -eq 1 ]]; then
-  $COMPOSE down
+  "${COMPOSE[@]}" down
   docker rmi "medtest-backend:${APP_VERSION}" "medtest-frontend:${APP_VERSION}" 2>/dev/null || true
   docker rmi medtest-backend:latest medtest-frontend:latest 2>/dev/null || true
-  $COMPOSE build --no-cache
+  "${COMPOSE[@]}" build --no-cache
 else
-  $COMPOSE build
+  "${COMPOSE[@]}" build
 fi
 
-$COMPOSE up -d --remove-orphans --force-recreate
+"${COMPOSE[@]}" up -d --remove-orphans --force-recreate
 
 # --- 6. Ожидание готовности и smoke-checks.
 echo "⏳ Waiting for services to stabilise (15s)..."
@@ -149,7 +164,7 @@ sleep 15
 
 echo ""
 echo "📊 Service status:"
-$COMPOSE ps
+"${COMPOSE[@]}" ps
 
 echo ""
 echo "🩺 Backend health check:"
@@ -158,7 +173,7 @@ if [ "$(docker inspect --format='{{.State.Health.Status}}' medtest-backend)" == 
   echo "  ✅ Backend is healthy (internal docker check)"
 else
   echo "  ⚠️  Backend health check failed or container is starting."
-  echo "     Check logs: $COMPOSE logs backend --tail=50"
+  echo "     Check logs: ${COMPOSE[*]} logs backend --tail=50"
   exit 1
 fi
 
@@ -169,7 +184,7 @@ _check_worker_queues() {
   local service=$1
   local expected_queue=$2
   local output
-  if ! output=$($COMPOSE exec -T "$service" celery -A app.tasks.celery_app inspect active_queues 2>&1); then
+  if ! output=$("${COMPOSE[@]}" exec -T "$service" celery -A app.tasks.celery_app inspect active_queues 2>&1); then
     echo "  ⚠️  $service: не отвечает"
     return 1
   fi
@@ -189,7 +204,7 @@ if [[ $MIGRATE_LEGACY -eq 1 ]]; then
   echo ""
   echo "🔄 Migrating legacy pending_reg:* → reg:draft:* ..."
   # Выполняется внутри уже запущенного backend-контейнера — там есть access к app.*
-  $COMPOSE exec -T backend python scripts/dev_diag.py --migrate-legacy || {
+  "${COMPOSE[@]}" exec -T backend python scripts/dev_diag.py --migrate-legacy || {
     echo "⚠️  Миграция не завершилась успешно. Логи выше."
   }
 elif [[ $CLEANUP_LEGACY -eq 1 ]]; then
@@ -209,6 +224,8 @@ fi
 if [[ $SMOKE -eq 1 ]]; then
   echo ""
   echo "🔬 Registration smoke test:"
+  # example.com publishes a null MX (RFC 7505). smtp_backend skips reserved
+  # domains so this does not bounce to postmaster. OTP is still written to Redis.
   SMOKE_EMAIL="smoke_$(date +%s)@example.com"
 
   # Стучимся через Nginx (порт 80), так как 8000 закрыт
@@ -249,7 +266,7 @@ echo ""
 echo "=========================================="
 echo "✅ Deployment complete: $APP_VERSION ($APP_REVISION)"
 echo "=========================================="
-echo "Logs:     $COMPOSE logs -f backend celery_email_worker"
+echo "Logs:     ${COMPOSE[*]} logs -f backend celery_email_worker"
 echo "Health:   curl https://your-domain/health"
 echo "Rollback: ./deploy.sh --rollback"
 echo "Diag:     docker compose -f deployment/docker-compose.yml exec backend python scripts/dev_diag.py"

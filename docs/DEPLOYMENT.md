@@ -64,6 +64,12 @@ docker compose up -d --build
 Mox настроен как легковесный почтовый сервер внутри Docker.
 - Веб-интерфейс доступен по адресу: `https://mail.your-domain.com/webmail/`
 - Админка: `https://mail.your-domain.com/admin/`
+- Smoke/deploy: `deployment/scripts/patch_mox_null_mx.sh` — отклоняет `example.com` (null MX), чтобы `./deploy.sh --smoke` не генерировал DSN.
+- **Reg.ru / свой VPS:** OTP через `SMTP_HOST=mail`, `SMTP_PORT=465`, `SMTP_REQUIRE_RELAY=false`.
+- **Yandex Cloud:** исходящий `:25` к Gmail/Mail.ru заблокирован — `SMTP_REQUIRE_RELAY=true` и `SMTP_RELAY_*` (Яндекс 360 SMTPS 465).
+
+### MinIO (Docker Hub недоступен)
+Образ собирается из `deployment/minio/Dockerfile` (бинарник с GitHub, тег `RELEASE.2025-09-07T16-13-09Z`). Не меняйте release без проверки совместимости с существующим `minio_data`.
 
 ## Обновление системы
 
