@@ -227,9 +227,12 @@ if [[ $SMOKE -eq 1 ]]; then
   # example.com publishes a null MX (RFC 7505). smtp_backend skips reserved
   # domains so this does not bounce to postmaster. OTP is still written to Redis.
   SMOKE_EMAIL="smoke_$(date +%s)@example.com"
+  SMOKE_DOMAIN=$(grep -E "^DOMAIN_NAME=" deployment/.env | head -1 | cut -d'=' -f2- || true)
+  SMOKE_DOMAIN=${SMOKE_DOMAIN:-localhost}
 
-  # Стучимся через Nginx (порт 80), так как 8000 закрыт
-  RESPONSE=$(curl -sS -X POST http://localhost/api/v1/auth/register \
+  # Через Nginx HTTPS (HTTP → 301). 8000 с хоста недоступен.
+  RESPONSE=$(curl -skS --resolve "${SMOKE_DOMAIN}:443:127.0.0.1" \
+    -X POST "https://${SMOKE_DOMAIN}/api/v1/auth/register" \
     -H "Content-Type: application/json" \
     -d "{\"email\":\"$SMOKE_EMAIL\",\"password\":\"Smoke123!\",\"last_name\":\"Smoke\",\"first_name\":\"Test\"}")
   echo "  register response: $RESPONSE"
