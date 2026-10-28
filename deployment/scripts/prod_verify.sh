@@ -26,7 +26,8 @@ USER_ID=$(python3 -c 'import json; print(json.load(open("/tmp/create_user.json")
 DEL=$(curl -skS --resolve "${DOM}:443:127.0.0.1" -o /dev/null -w '%{http_code}' \
   -X DELETE "https://${DOM}/api/v1/admin/users/$USER_ID" -H "Authorization: Bearer $TOK")
 echo "delete_user http=$DEL"
-docker compose -f "$ROOT/deployment/docker-compose.yml" exec -T backend python -c \
+cd "$ROOT/deployment"
+docker compose exec -T backend python -c \
   'from app.services.email import templates; from app.services.email.smtp_backend import send_blocking; print(send_blocking("x@example.com", templates.render_verification_email("123456")))'
 docker exec medtest-mail /bin/mox config test
 echo "prod_verify ok"
