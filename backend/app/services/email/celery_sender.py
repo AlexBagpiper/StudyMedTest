@@ -32,11 +32,17 @@ class CeleryEmailSender(EmailSender):
         send_teacher_application_notification_task.delay(admin_email, teacher_email, full_name)
 
     async def send_teacher_account_created(
-        self, teacher_email: str, full_name: str, temporary_password: str
+        self,
+        teacher_email: str,
+        full_name: str,
+        temporary_password: str,
+        admin_comment: Optional[str] = None,
     ) -> None:
         from app.tasks.email_tasks import send_teacher_account_created_task
 
-        send_teacher_account_created_task.delay(teacher_email, full_name, temporary_password)
+        send_teacher_account_created_task.delay(
+            teacher_email, full_name, temporary_password, admin_comment
+        )
 
     async def send_teacher_application_rejected(
         self,

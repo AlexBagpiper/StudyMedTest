@@ -128,8 +128,28 @@ def render_teacher_application_notification(
     return RenderedEmail(subject=subject, text=text, html=html)
 
 
+def _optional_labeled_message(
+    label: str,
+    message: Optional[str],
+    *,
+    html_attrs: str = "",
+) -> tuple[str, str]:
+    """Text/HTML blocks for an optional admin message; empty if blank after strip."""
+    body = (message or "").strip()
+    if not body:
+        return "", ""
+    text_block = f"\n\n{label}:\n{body}\n"
+    html_block = (
+        f'<p{html_attrs}><strong>{escape(label)}:</strong> {escape(body)}</p>'
+    )
+    return text_block, html_block
+
+
 def render_teacher_account_created(
-    full_name: str, teacher_email: str, temporary_password: str
+    full_name: str,
+    teacher_email: str,
+    temporary_password: str,
+    admin_comment: Optional[str] = None,
 ) -> RenderedEmail:
     project = escape(settings.PROJECT_NAME)
     safe_name = escape(full_name)
@@ -138,9 +158,13 @@ def render_teacher_account_created(
     subject = _guard_header_value(
         f"Ваш аккаунт преподавателя создан - {settings.PROJECT_NAME}"
     )
+    comment_block_text, comment_block_html = _optional_labeled_message(
+        "Сообщение администратора", admin_comment
+    )
     text = (
         f"Здравствуйте, {full_name}!\n\n"
-        "Ваша заявка на регистрацию одобрена.\n\n"
+        "Ваша заявка на регистрацию одобрена."
+        f"{comment_block_text}\n"
         f"Email: {teacher_email}\n"
         f"Временный пароль: {temporary_password}\n\n"
         "ВАЖНО: При первом входе смените пароль.\n"
@@ -150,6 +174,8 @@ def render_teacher_account_created(
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
     <h2 style="color: #10B981;">Аккаунт преподавателя создан</h2>
     <p>Здравствуйте, <strong>{safe_name}</strong>!</p>
+    <p>Ваша заявка на регистрацию одобрена.</p>
+    {comment_block_html}
     <p><strong>Email:</strong> {safe_email}</p>
     <p><strong>Временный пароль:</strong></p>
     <div style="background: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px;">
@@ -168,17 +194,15 @@ def render_teacher_application_rejected(
     safe_name = escape(full_name)
     subject = _guard_header_value(f"Заявка на регистрацию - {settings.PROJECT_NAME}")
 
-    comment_block_text = f"\n\nКомментарий: {admin_comment}" if admin_comment else ""
+    comment_block_text, comment_block_html = _optional_labeled_message(
+        "Комментарий",
+        admin_comment,
+        html_attrs=' style="color: #991b1b;"',
+    )
     text = (
         f"Здравствуйте, {full_name}!\n\n"
         "К сожалению, ваша заявка не была одобрена."
         f"{comment_block_text}\n"
-    )
-
-    comment_block_html = (
-        f'<p style="color: #991b1b;"><strong>Комментарий:</strong> {escape(admin_comment)}</p>'
-        if admin_comment
-        else ""
     )
     html = f"""<!doctype html>
 <html lang="ru">

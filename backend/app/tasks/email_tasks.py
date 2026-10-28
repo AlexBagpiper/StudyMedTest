@@ -158,9 +158,15 @@ def send_teacher_application_notification_task(
     queue="email",
 )
 def send_teacher_account_created_task(
-    self, teacher_email: str, full_name: str, temporary_password: str
+    self,
+    teacher_email: str,
+    full_name: str,
+    temporary_password: str,
+    admin_comment: Optional[str] = None,
 ) -> None:
-    rendered = render_teacher_account_created(full_name, teacher_email, temporary_password)
+    rendered = render_teacher_account_created(
+        full_name, teacher_email, temporary_password, admin_comment
+    )
     send_blocking(teacher_email, rendered)
 
 

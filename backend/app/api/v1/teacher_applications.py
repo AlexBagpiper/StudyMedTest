@@ -5,7 +5,7 @@ Teacher Applications endpoints
 import secrets
 import string
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,6 +25,14 @@ from app.schemas.teacher_application import (
 from app.services.email import get_email_sender
 
 router = APIRouter()
+
+
+def normalize_optional_comment(value: Optional[str]) -> Optional[str]:
+    """None or whitespace-only → None (omit from emails and store cleanly)."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
 
 
 def generate_temporary_password(length: int = 12) -> str:
@@ -199,8 +207,9 @@ async def approve_teacher_application(
     application.status = ApplicationStatus.APPROVED
     application.reviewed_by = current_user.id
     application.reviewed_at = datetime.utcnow()
-    application.admin_comment = review_data.admin_comment
-    
+    admin_message = normalize_optional_comment(review_data.admin_comment)
+    application.admin_comment = admin_message
+
     try:
         await db.commit()
         await db.refresh(application)
@@ -211,16 +220,16 @@ async def approve_teacher_application(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error creating teacher account"
         )
-    
-    # Отправка письма преподавателю с временным паролем
+
     full_name = f"{application.last_name} {application.first_name}"
     if application.middle_name:
         full_name += f" {application.middle_name}"
-    
+
     await get_email_sender().send_teacher_account_created(
         application.email,
         full_name,
-        temp_password
+        temp_password,
+        admin_message,
     )
     
     return application
@@ -258,20 +267,20 @@ async def reject_teacher_application(
     application.status = ApplicationStatus.REJECTED
     application.reviewed_by = current_user.id
     application.reviewed_at = datetime.utcnow()
-    application.admin_comment = review_data.admin_comment
-    
+    admin_message = normalize_optional_comment(review_data.admin_comment)
+    application.admin_comment = admin_message
+
     await db.commit()
     await db.refresh(application)
-    
-    # Отправка письма преподавателю об отклонении
+
     full_name = f"{application.last_name} {application.first_name}"
     if application.middle_name:
         full_name += f" {application.middle_name}"
-    
+
     await get_email_sender().send_teacher_application_rejected(
         application.email,
         full_name,
-        review_data.admin_comment
+        admin_message,
     )
     
     return application

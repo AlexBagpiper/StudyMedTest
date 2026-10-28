@@ -37,9 +37,15 @@ class SyncEmailSender(EmailSender):
         await asyncio.to_thread(send_blocking, admin_email, rendered)
 
     async def send_teacher_account_created(
-        self, teacher_email: str, full_name: str, temporary_password: str
+        self,
+        teacher_email: str,
+        full_name: str,
+        temporary_password: str,
+        admin_comment: Optional[str] = None,
     ) -> None:
-        rendered = render_teacher_account_created(full_name, teacher_email, temporary_password)
+        rendered = render_teacher_account_created(
+            full_name, teacher_email, temporary_password, admin_comment
+        )
         await asyncio.to_thread(send_blocking, teacher_email, rendered)
 
     async def send_teacher_application_rejected(

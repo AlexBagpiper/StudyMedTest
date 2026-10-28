@@ -30,7 +30,11 @@ class EmailSender(ABC):
 
     @abstractmethod
     async def send_teacher_account_created(
-        self, teacher_email: str, full_name: str, temporary_password: str
+        self,
+        teacher_email: str,
+        full_name: str,
+        temporary_password: str,
+        admin_comment: Optional[str] = None,
     ) -> None:
         ...
 

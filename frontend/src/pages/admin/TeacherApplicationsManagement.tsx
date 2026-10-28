@@ -323,11 +323,12 @@ export default function TeacherApplicationsManagement() {
               </Alert>
               <TextField
                 fullWidth
-                label="Комментарий администратора (необязательно)"
+                label="Сообщение преподавателю (необязательно)"
                 multiline
                 rows={3}
                 value={adminComment}
                 onChange={(e) => setAdminComment(e.target.value)}
+                helperText="Попадёт в письмо с доступом к аккаунту. Пустое поле — в письме не будет."
               />
             </>
           )}

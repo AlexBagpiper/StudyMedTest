@@ -34,6 +34,47 @@ def test_crlf_in_subject_is_rejected(monkeypatch):
         templates.render_verification_email("123456")
 
 
+def test_teacher_account_created_omits_empty_admin_comment():
+    rendered = templates.render_teacher_account_created(
+        full_name="Test User",
+        teacher_email="t@example.com",
+        temporary_password="pw",
+        admin_comment=None,
+    )
+    assert "Сообщение администратора" not in rendered.text
+    assert "Сообщение администратора" not in rendered.html
+
+    rendered_ws = templates.render_teacher_account_created(
+        full_name="Test User",
+        teacher_email="t@example.com",
+        temporary_password="pw",
+        admin_comment="   ",
+    )
+    assert "Сообщение администратора" not in rendered_ws.text
+
+
+def test_teacher_account_created_includes_admin_comment():
+    rendered = templates.render_teacher_account_created(
+        full_name="Test User",
+        teacher_email="t@example.com",
+        temporary_password="pw",
+        admin_comment="Добро пожаловать!",
+    )
+    assert "Добро пожаловать!" in rendered.text
+    assert "Сообщение администратора" in rendered.html
+
+
+def test_teacher_account_created_strips_admin_comment():
+    rendered = templates.render_teacher_account_created(
+        full_name="Test User",
+        teacher_email="t@example.com",
+        temporary_password="pw",
+        admin_comment="  trimmed  ",
+    )
+    assert "trimmed" in rendered.text
+    assert "  trimmed  " not in rendered.text
+
+
 def test_xss_in_name_escaped_in_html():
     rendered = templates.render_teacher_account_created(
         full_name="<script>alert(1)</script>",

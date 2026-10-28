@@ -64,11 +64,19 @@ class InMemoryEmailSender(EmailSender):
         ))
 
     async def send_teacher_account_created(
-        self, teacher_email: str, full_name: str, temporary_password: str
+        self,
+        teacher_email: str,
+        full_name: str,
+        temporary_password: str,
+        admin_comment: Optional[str] = None,
     ) -> None:
         self.sink.append(CapturedEmail(
             "teacher_account_created", teacher_email,
-            {"full_name": full_name, "password": temporary_password},
+            {
+                "full_name": full_name,
+                "password": temporary_password,
+                "admin_comment": admin_comment,
+            },
         ))
 
     async def send_teacher_application_rejected(
@@ -123,7 +131,10 @@ def email_sender(captured_emails, monkeypatch):
     reset_email_sender_cache()
     monkeypatch.setattr(email_pkg, "get_email_sender", lambda: sender)
     import app.api.v1.auth as auth_module
+    import app.api.v1.teacher_applications as teacher_apps_module
+
     monkeypatch.setattr(auth_module, "get_email_sender", lambda: sender)
+    monkeypatch.setattr(teacher_apps_module, "get_email_sender", lambda: sender)
     yield sender
     reset_email_sender_cache()
 
@@ -137,7 +148,10 @@ def flaky_email_sender(captured_emails, monkeypatch):
         sender = InMemoryEmailSender(captured_emails, fail_times=fail_times)
         import app.api.v1.auth as auth_module
         monkeypatch.setattr(email_pkg, "get_email_sender", lambda: sender)
+        import app.api.v1.teacher_applications as teacher_apps_module
+
         monkeypatch.setattr(auth_module, "get_email_sender", lambda: sender)
+        monkeypatch.setattr(teacher_apps_module, "get_email_sender", lambda: sender)
         return sender
     return factory
 
