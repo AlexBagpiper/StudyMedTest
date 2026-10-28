@@ -13,8 +13,28 @@ from app.api.v1.teacher_applications import normalize_optional_comment
 from app.models.teacher_application import ApplicationStatus, TeacherApplication
 from app.models.user import User
 from app.services.email import templates
+from app.services.email.factory import reset_email_sender_cache
+from tests.registration.conftest import InMemoryEmailSender
 
-pytest_plugins = ("tests.registration.conftest",)
+
+@pytest.fixture
+def captured_emails():
+    return []
+
+
+@pytest.fixture
+def email_sender(captured_emails, monkeypatch):
+    import app.api.v1.auth as auth_module
+    import app.api.v1.teacher_applications as teacher_apps_module
+    from app.services import email as email_pkg
+
+    sender = InMemoryEmailSender(captured_emails)
+    reset_email_sender_cache()
+    monkeypatch.setattr(email_pkg, "get_email_sender", lambda: sender)
+    monkeypatch.setattr(auth_module, "get_email_sender", lambda: sender)
+    monkeypatch.setattr(teacher_apps_module, "get_email_sender", lambda: sender)
+    yield sender
+    reset_email_sender_cache()
 
 
 async def _pending_application(db: AsyncSession) -> TeacherApplication:
