@@ -3,11 +3,12 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 const packageJson = require('./package.json')
+const appVersion = process.env.VITE_APP_VERSION || packageJson.version
 
 // https://vitejs.dev/config/
 export default defineConfig({
   define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
   },
   plugins: [react()],
   resolve: {
