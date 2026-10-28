@@ -95,13 +95,26 @@ backup_volume() {
 backup_volume minio_data minio_data.tar.gz
 backup_volume redis_data redis_data.tar.gz
 
-# --- Bind mounts (mox, nginx) ---
-echo "mox-data..."
-tar -czf "$OUT/mox-data.tar.gz" -C "$DEPLOY" mox-data
+# --- Bind mounts (mox, nginx) — через Docker: root в контейнере читает каталоги от mox/nginx ---
+backup_bind_dir() {
+  local src=$1
+  local archive=$2
+  local name=$3
+  if [[ ! -d "$src" ]]; then
+    echo "WARN: $src missing, skip $archive"
+    return 0
+  fi
+  echo "$archive ($name)..."
+  docker run --rm \
+    -v "${src}:/data:ro" \
+    -v "${OUT}:/backup" \
+    alpine:3.20 \
+    tar -czf "/backup/${archive}" -C /data .
+}
 
-echo "nginx certs/templates..."
-tar -czf "$OUT/nginx_certs.tar.gz" -C "$DEPLOY/nginx" certs
-tar -czf "$OUT/nginx_templates.tar.gz" -C "$DEPLOY/nginx" templates
+backup_bind_dir "$DEPLOY/mox-data" mox-data.tar.gz "mox mail"
+backup_bind_dir "$DEPLOY/nginx/certs" nginx_certs.tar.gz "nginx certs"
+backup_bind_dir "$DEPLOY/nginx/templates" nginx_templates.tar.gz "nginx templates"
 
 # --- Secrets (только offline; не коммитить) ---
 cp .env "$OUT/.env"
